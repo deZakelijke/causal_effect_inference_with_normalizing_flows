@@ -3,7 +3,9 @@ import tensorflow as tf
 from tensorflow.keras import layers, Model
 from tensorflow.keras.activations import softplus
 from tensorflow_probability import distributions as tfd
+
 from fc_net import FC_net
+from dataset import IHDP
 
 
 def make_cevae(x_bin_size, x_cont_size, z_size, hidden_size=512):
@@ -73,8 +75,12 @@ def make_cevae(x_bin_size, x_cont_size, z_size, hidden_size=512):
 
 
 
-def train_cevae(args):
+def train_cevae(config):
     x_bin_size = 10
     x_cont_size = 10
     z_size = 64
     encoder, decoder = make_cevae(x_bin_size, x_cont_size, z_size)
+    if config.dataset == "IHDP"
+        dataset = tf.data.Dataset.from_generator(IHDP, tf.float32)
+
+
