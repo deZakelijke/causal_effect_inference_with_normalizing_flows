@@ -73,14 +73,34 @@ def make_cevae(x_bin_size, x_cont_size, z_size, hidden_size=512):
 
     return encode, decode
 
+def model_fn(features, labels, mode, params, config):
+    """Builds the model function for use in an estimator.
+
+    Arguments:
+        features: The input features for the estimator.
+        labels: The labels, unused here.
+        mode: Signifies whether it is train or test or predict.
+        params: Some hyperparameters as a dictionary.
+        config: The RunConfig, unused here.
+
+    Returns:
+        EstimatorSpec: A tf.estimator.EstimatorSpec instance.
+    """
+    del labels, config
+
+    encoder, decoder = make_cevae(x_bin_size, x_cont_size, z_size)
+    
+    qt, qy, qz = encoder(features)
+    qz_sample = qz.sample(1) # number of samples of z
+    data_likelihood = decoder(qz_sample)
 
 
-def train_cevae(config):
+
+def train_cevae(params):
     x_bin_size = 10
     x_cont_size = 10
     z_size = 64
-    encoder, decoder = make_cevae(x_bin_size, x_cont_size, z_size)
-    if config.dataset == "IHDP":
+    if params["dataset"] == "IHDP":
         dataset = tf.data.Dataset.from_generator(IHDP, tf.float32)
 
 

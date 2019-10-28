@@ -28,7 +28,7 @@ def parse_arguments():
         print(f"Argument: {arg:<8} {value:<5}")
     print()
 
-    return args
+    return vars(args)
 
 def train(config):
     if config.model == "cevae":
@@ -38,9 +38,9 @@ def test(config):
     pass
 
 if __name__ == "__main__":
-    config = parse_arguments()
+    params = parse_arguments()
 
-    if config.mode == "train":
-        train(config)
+    if params["mode"] == "train":
+        train(params)
     else:
-        test(config)
+        test(params)
