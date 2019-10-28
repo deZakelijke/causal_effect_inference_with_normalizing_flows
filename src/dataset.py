@@ -7,7 +7,7 @@ def IHDP(path_data="../datasets/IHDP/csv/", file_prefix="ihdp_npci_"):
 
     nr_files = 10
     for i in range(nr_files):
-        data = np.loadtxt(f"{path_data}{file_prefix}{i}.csv}", delimiter=',')
+        data = np.loadtxt(f"{path_data}{file_prefix}{i}.csv", delimiter=',')
         for line in data:
             t = line[0]
             y = line[1]

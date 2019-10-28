@@ -80,7 +80,7 @@ def train_cevae(config):
     x_cont_size = 10
     z_size = 64
     encoder, decoder = make_cevae(x_bin_size, x_cont_size, z_size)
-    if config.dataset == "IHDP"
+    if config.dataset == "IHDP":
         dataset = tf.data.Dataset.from_generator(IHDP, tf.float32)
 
 

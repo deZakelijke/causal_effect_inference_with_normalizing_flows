@@ -5,6 +5,7 @@ import torch
 from cevae import train_cevae
 
 VALID_MODELS = ["cevae"]
+VALID_DATASETS = ["IHDP"]
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Causal effect Normalizing Flow trainer")
@@ -19,6 +20,9 @@ def parse_arguments():
 
     if not args.model in VALID_MODELS:
        raise NotImplementedError(f"Model {args.model} is not implemented")
+
+   if not args.dataset in VALID_DATASETS:
+       raise NotImplementedError(f"Dataset {args.dataset} is not implemented")
 
     for arg, value in vars(args).items():
         print(f"Argument: {arg:<8} {value:<5}")
