@@ -1,3 +1,6 @@
+# Test code for quick tests
+test/
+
 # Compiled latex stuff
 *.pdf
 
