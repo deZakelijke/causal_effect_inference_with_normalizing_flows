@@ -1,0 +1,26 @@
+\documentclass{standalone}
+\usepackage{tikz}
+
+\begin{document}
+\begin{tikzpicture}
+    \node[circle, draw=black, fill=lightgray] (x) at (-1, 0) {$\mathbf{x}$};
+    \node[circle, draw=black, fill=white] (zx) at (0.5, 0) {$\mathbf{Z_x}$};
+    \node[circle, draw=black, fill=lightgray] (t) at (2, 0) {$\mathbf{t}$};
+    \node[circle, draw=black, fill=lightgray] (y) at (0.5, 2) {$\mathbf{y}$};
+    \node[circle, draw=black, fill=white] (zy) at (2, 2) {$\mathbf{Z_y}$}; 
+    \node[circle, draw=black, fill=white]  (z) at (0.5, -2) {$\mathbf{Z}$};
+    
+    \node[draw=black, minimum width=4cm] (fx) at (0.5, -1) {$f_x(\mathbf{Z})$};
+    \node[draw=black, minimum width=2.5cm] (fy) at (1.25, 1)  {$f_y(\mathbf{t}, \mathbf{Z_x})$};
+    
+    \draw[->, line width=0.2mm] (z) -- (fx);
+    \draw[->, line width=0.2mm] (fx) -- (x);
+    \draw[->, line width=0.2mm] (fx) -- (zx);
+    \draw[->, line width=0.2mm] (fx) -- (t);
+    \draw[->, line width=0.2mm] (t) -- (fy);
+    \draw[->, line width=0.2mm] (zx) -- (fy);
+    \draw[->, line width=0.2mm] (fy) -- (y);
+    \draw[->, line width=0.2mm] (fy) -- (zy);
+
+\end{tikzpicture}
+\end{document}

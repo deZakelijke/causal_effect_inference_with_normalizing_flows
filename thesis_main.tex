@@ -1,0 +1,137 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{tikz}
+\usepackage{standalone}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{graphicx, color}
+\usepackage[a4paper,margin=2cm]{geometry}
+
+\newcommand{\red}[1]{{\color{red}{#1}}}
+
+
+\newcommand{\Norm}{\mathcal{N}}
+\newcommand{\Loss}{\mathcal{L}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\bt}{\mathbf{t}}
+\newcommand{\bU}{\mathbb{U}}
+\newcommand{\bX}{\mathbf{X}}
+\newcommand{\bx}{\mathbf{x}}
+\newcommand{\by}{\mathbf{y}}
+\newcommand{\bZ}{\mathbf{Z}}
+\newcommand{\bz}{\mathbf{z}}
+
+\newcommand{\parfrac}[2]{\frac{\partial #1}{\partial#2}}
+
+
+\title{Causal Effect Inference using Normalizing Flows}
+\author{Micha de Groot}
+
+
+\begin{document}
+
+\begin{titlepage}
+
+\newcommand{\HRule}{\rule{\linewidth}{0.5mm}} % Defines a new command for the horizontal lines, change thickness here
+\center % Center everything on the page
+ 
+%----------------------------------------------------------------------------------------
+%	HEADING SECTIONS
+%----------------------------------------------------------------------------------------
+
+\includegraphics[width=\linewidth]{uvaENG}\\[2.5cm]
+\textsc{\Large MSc Artificial Intelligence}\\[0.2cm]
+% \textsc{\normalsize Track: \red{track}}\\[1.0cm] % track
+\textsc{\Large Master Thesis}\\[0.5cm] 
+
+%----------------------------------------------------------------------------------------
+%	TITLE SECTION
+%----------------------------------------------------------------------------------------
+
+\HRule \\[0.4cm]
+{ \huge \bfseries Causal Effect Inference\\ using Normalising Flows}\\[0.4cm] % Title of your document
+\HRule \\[0.5cm]
+ 
+%----------------------------------------------------------------------------------------
+%	AUTHOR SECTION
+%----------------------------------------------------------------------------------------
+
+by\\[0.2cm]
+\textsc{\Large Micha de Groot}\\[0.2cm] %you name
+10434410\\[1cm]
+
+
+%----------------------------------------------------------------------------------------
+%	DATE SECTION
+%----------------------------------------------------------------------------------------
+
+{\Large \today}\\[1cm] % Date, change the \today to a set date if you want to be precise
+
+48 EC\\ %
+October 2019 - June 2020\\[1cm]%
+
+%----------------------------------------------------------------------------------------
+%	COMMITTEE SECTION
+%----------------------------------------------------------------------------------------
+\begin{minipage}[t]{0.4\textwidth}
+\begin{flushleft} \large
+\emph{Supervisor:} \\
+dr. Efstratios Gavves% Supervisor's Name
+\end{flushleft}
+\end{minipage}
+~
+\begin{minipage}[t]{0.4\textwidth}
+\begin{flushright} \large
+\emph{Assessor:} \\
+\red{Dr A  \textsc{Person}}\\
+\end{flushright}
+\end{minipage}\\[2cm]
+
+%----------------------------------------------------------------------------------------
+%	LOGO SECTION
+%----------------------------------------------------------------------------------------
+
+\framebox{\rule{0pt}{2.5cm}\rule{2.5cm}{0pt}}\\[0.5cm]
+%\includegraphics[width=2.5cm]{figure}\\ % Include a department/university logo - this will require the graphicx package
+\textsc{\large Instituut voor Informatica}\\[1.0cm] % 
+ 
+%----------------------------------------------------------------------------------------
+
+\vfill % Fill the rest of the page with whitespace
+
+\end{titlepage}
+
+
+\tableofcontents
+\newpage
+
+\section{Introduction}
+Measuring the causal effect of an action on certain parts of the world and the people in it is a question that form the cornerstone of most sciences\footnote{\label{note:citation}Citation needed}. Most disciplines of science try to isolate and quantify such effects, to allow predictions of the future. One of the problems faced in practice is the difficulty in isolating the causal effect of an action from the influence of any background variables. 
+
+In recent years the work by Pearl et al.\cite{pearl2009causal} \cite{pearl1995causal} has yielded a framework in which these causal effects can be modelled in terms of probability densities and in which it is theoretically possible to isolate a direct causal effect of a variable $\bt$ on an outcome variable $\by$ if there are one ore more confounding variables $\bZ$. Classically this is done through the use of randomised trials or other methods to isolate what is to be measured physically form any interference and by that preventing the existence of any possible confounder $\bZ$. Unfortunately this is not always possible and for those cases we shift our approach to the so-called \textit{do}-calculus. 
+
+In cases where it is not possible to directly use equation \ref{equation:do_operation}, we use a proxy variable $\bx$ instead. The work of Louizos et al. \cite{louizos2017causal} has show that this can to some extend be done by using VAEs \cite{kingma2013auto}. This approach ahd the problem that the variational lower bound did not become as high as theoretically possible. To circumvent that problem we propose an alternative approach by using Normalising Flows \cite{rezende2016variational} to model the posterior distribution of $\bZ$ and use that to calculate the Average Treatment Effect.
+
+\section{Related work}
+
+\subsection{The \textit{do}-calculus and its use in causal inference}
+The rules of \textit{do}-calculus allow us to quantify the effect of $\bt$ on $\by$ when there are one or more confounding variables. This only requires the probability distributions and the structure of the causal graph defining the relation between all variables, such as the one in Figure \ref{fig:graph_observed_confounder}. In this graph we can see what the confounding variables are that cause the two variables who's effect we want to measure and correct for that by using the famous \textit{do}-operator equation:
+
+\begin{figure}
+    \centering
+    \includestandalone{Figures/observed_confounder}
+    \caption{A causal Bayesian graph, where all observed variables are coloured grey and the causal relations are represented as arrows}
+    \label{fig:graph_observed_confounder}
+\end{figure}
+
+
+\begin{equation}\label{equation:do_operation}
+   p(\by | do(\bt)) = \int_{pa_\bt} p(\by | \bt, pa_{\bt}) p(pa_{\bt}) \text{d} pa_\bt
+\end{equation}
+The set $\text{pa}_\bt$ denotes the set of ancestor nodes from $\bt$ that satisfy the backdoor-criterion\footnotemark[\ref{note:citation}], which is only $\bZ$ in the case of graph in Figure \ref{fig:graph_observed_confounder}. But in most real world scenarios we don't know what $\bZ$ is exactly and how these probabilities are shaped: it is a \textit{latent} confounder\footnotemark[\ref{note:citation}]. To circumvent this issue the idea of using a proxy variable instead of the actual $\bZ$ has been proposed\footnotemark[\ref{note:citation}]. The general principle is that the latent confounder is most likely also the cause of another set of variables that we can measure. These variables can be used to infer the state of the latent confounder and through that measure the causal effect we want to measure.
+
+
+\bibliography{references.bib}
+\bibliographystyle{apalike}
+
+\end{document}
