@@ -1,0 +1,26 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+
+% \title{Causal Effect Inference using Normalizing Flows}
+% \author{Micha de Groot}
+% \date{August 2019}
+
+\begin{document}
+
+\section{Expected results}
+Same numbers as in the paper. On par with Balancing Neural Nets\cite{johansson2016learning}. In this benchmark the Precision in Estimation of Heterogeneous Effect (PEHE) is used: $PEHE = \frac{1}{N}\sum^N_{i=1} ((y_{i1}  - y_{i0}) - (\hat{y}_{i1} - \hat{y}_{i0}))^2$. This score measures the (sum of squared) difference between the real difference between intervening or not $(y_{i1}  - y_{i0})$ and the difference between the intervention estimations of the model $(\hat{y}_{i1} - \hat{y}_{i0})$. This score minimises when a model estimates the outcome $y$ near the real values for both intervening with $t=1$ and not intervening with $t=0$. This metric might be less indicative of a model's strength when the real effect of an intervention is small.
+
+For synthetic dataset an ATE  error of less than $0.05$.
+
+\section{Running code in repository}
+Code in \begin{verbatim}
+    https://github.com/AMLab-Amsterdam/CEVAE
+\end{verbatim}
+Python version 3.5, rest of requirements in README. No comments in code. Code is incomplete for running their code with the synthetic twins experiment. 
+
+IHDP code produces PEHE scores comparable to the ones reported in the paper when the mode is retrained from scratch.
+
+
+\bibliography{references.bib}
+\bibliographystyle{abbrv}
+\end{document}
