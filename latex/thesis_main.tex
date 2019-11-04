@@ -15,6 +15,8 @@
 \newcommand{\R}{\mathbb{R}}
 \newcommand{\bt}{\mathbf{t}}
 \newcommand{\bU}{\mathbb{U}}
+\newcommand{\bu}{\mathbf{u}}
+\newcommand{\bw}{\mathbf{w}}
 \newcommand{\bX}{\mathbf{X}}
 \newcommand{\bx}{\mathbf{x}}
 \newcommand{\by}{\mathbf{y}}
@@ -130,6 +132,31 @@ The rules of \textit{do}-calculus allow us to quantify the effect of $\bt$ on $\
 \end{equation}
 The set $\text{pa}_\bt$ denotes the set of ancestor nodes from $\bt$ that satisfy the backdoor-criterion\footnotemark[\ref{note:citation}], which is only $\bZ$ in the case of graph in Figure \ref{fig:graph_observed_confounder}. But in most real world scenarios we don't know what $\bZ$ is exactly and how these probabilities are shaped: it is a \textit{latent} confounder\footnotemark[\ref{note:citation}]. To circumvent this issue the idea of using a proxy variable instead of the actual $\bZ$ has been proposed\footnotemark[\ref{note:citation}]. The general principle is that the latent confounder is most likely also the cause of another set of variables that we can measure. These variables can be used to infer the state of the latent confounder and through that measure the causal effect we want to measure.
 
+\subsection{Normalising Flows}
+The research in generative models has yielded a model type called Normalising Flows, first thought of by Tabak et al. \cite{tabak2013family} and later popularised by Rezende et al. \cite{rezende2016variational}. The approach of this class of models is to learn an invertible series of mappings from a prior distribution of a simple form to the data likelihood. By using the change of variable rule, in Equation \ref{equation:change_of_variables}, it is guaranteed that before and after the transformations we have a valid probability distribution. Through the use of the inverse of these mappings one can perform exact posterior inference. 
+
+\begin{equation}\label{equation:change_of_variables}
+    \bx = f(\bz) \qquad p(\bx) = p(\bz) \left|\text{det} \parfrac{f}{\bz} \right|^{-1}
+\end{equation}
+The reason we talk about a series of transformations is to split the the potentially complex mapping in Equation \ref{equation:change_of_variables} into smaller, simpler transformations. This results then in Equation \ref{equation:change_of_variables_log_chain}, given in log-space, as is conventional. Here we have $K$ functions $f_k$ mapping from latent variables $\bz_{k-1}$ to $\bz_k$ and ending with the mapping from $\bz_{K-1}$ to $\bx$.
+
+\begin{equation}\label{equation:change_of_variables_log_chain}
+    \ln p(\bx) = \ln p(\bz_0) - \sum\limits^K_{k=1}\ln \left| \text{det} \parfrac{f_k}{\bz_{k-1}} \right|
+\end{equation}
+
+To make this work in practice the (log)determinant of the Jacobian of each mapping $f_k$ has to computed efficiently. The most straightforward way to do this is to enforce that each mapping has a triangular Jacobian. This immediately solves the second practical criterion of having a tractable inverse of each $f_k$. Another more implicit requirement for our mappings is that they are parameterised functions on which we can use gradient descent methods to learn the parameters. Several implementations of Normalising Flows have been made so far, the simplest of which is the planar flow and radial flow
+
+\subsubsection{Planar flow and radial flow}
+In the original work of Rezende et al. \cite{rezende2016variational}, two possible implementations were proposed. The first one is the planar flow, in which each mapping has the form:
+\begin{equation}\label{equation:planar_flow}
+    f(\bz) = \bz + \bu h(\bw^T\bz + b)
+\end{equation}
+where $\bw \in \mathbb{R}^D$, $\bu \in \mathbb{R}^D$ and $b \in \mathbb{R}$ are learnable parameters and $h(\cdot)$ is a smooth element-wise non-linearity with derivative $h'(\cdot)$. The log-likelihood under a series of such transformations is defined as:
+\begin{equation}\label{equation:planar_flow_logdet}
+    \ln p(\bx) = \ln p(\bz_0) - \sum\limits^K_{k=1} \ln \left|1 + \bu_k^T h'(\bw_k^T \bz_{k-1} + b) \right|
+\end{equation}
+
+Each transformation here can be seen as a layer in a neural network that consists of a skip connection and a single-node dense layer followed by an expansion back to the original number of dimensions. The downside of this is the limited transformative capabilities of each mapping in the flow.
 
 \bibliography{references.bib}
 \bibliographystyle{apalike}
