@@ -199,6 +199,9 @@ First off I think the split into at least two normalising flows is unavoidable s
 Where they differ is in the split of the normalising flow from $\bz$ to $\bx$ and $\bt$ into two separate flows. When this is kept in one normalising flow we have the advantage that when we infer $\bz$, all our observed variables are taken into account directly. We cannot have the case that $\bz$ inferred from $\bx$ (and $\bZ_x$) is different from the inference based on $\bt, \by$ (and $\bZ_y, \bZ_t)$. The disadvantage is that it is therefore not possible to infer $\bz$ only based on $\bx$ and $\bZ_x$. We would need to generate a sample of $\bt$. In the general case this would be a problem, but in this problem $\bt$ is a binary variable and we might just infer $\bz$ for both values of $\bt$ and either average the two values of $\bz$ or use both in any downstream task.
 
 
+\subsubsection{One flow}
+The simplest idea, and the one we should start with is one where we keep the CEVAE as is and augment the inference network with a Normalising Flow. We use the encoder of the CEVAE to infer $\bz_0$ and then a (planar) flow to get a better $\bz$, which we then use in the decoder stage. This approach is more in line with earlier work on Normalising Flows, and is also how Rezende and Mohamed \cite{rezende2016variational} proposed to use planar and radial flow.
+
 \subsection{Loss functions and Normalising Flow design}
 These equations are sufficient for modelling the intervention probability in equation \ref{equation:intervention} and to estimate the ITE in equation \ref{equation:ITE}. In broad terms there are two other components to choose/design: the type of normalising flow used to model $f_x, f_t, f_y$ and the definition of the loss function(s). We start with the loss function and what it will be composed of.
 

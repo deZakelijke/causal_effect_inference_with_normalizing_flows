@@ -1,4 +1,4 @@
-\documentclass{article}
+\documentclass{report}
 \usepackage[utf8]{inputenc}
 \usepackage{tikz}
 \usepackage{standalone}
@@ -32,6 +32,7 @@
 
 \begin{document}
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{titlepage}
 
 \newcommand{\HRule}{\rule{\linewidth}{0.5mm}} % Defines a new command for the horizontal lines, change thickness here
@@ -51,7 +52,7 @@
 %----------------------------------------------------------------------------------------
 
 \HRule \\[0.4cm]
-{ \huge \bfseries Causal Effect Inference\\ using Normalising Flows}\\[0.4cm] % Title of your document
+{ \huge \bfseries Causal Effect Inference\\ with Normalising Flows}\\[0.4cm] % Title of your document
 \HRule \\[0.5cm]
  
 %----------------------------------------------------------------------------------------
@@ -105,18 +106,22 @@ dr. Efstratios Gavves% Supervisor's Name
 
 
 \tableofcontents
-\newpage
 
-\section{Introduction}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{Introduction}
 Measuring the causal effect of an action on certain parts of the world and the people in it is a question that form the cornerstone of most sciences\footnote{\label{note:citation}Citation needed}. Most disciplines of science try to isolate and quantify such effects, to allow predictions of the future. One of the problems faced in practice is the difficulty in isolating the causal effect of an action from the influence of any background variables. 
 
 In recent years the work by Pearl et al.\cite{pearl2009causal} \cite{pearl1995causal} has yielded a framework in which these causal effects can be modelled in terms of probability densities and in which it is theoretically possible to isolate a direct causal effect of a variable $\bt$ on an outcome variable $\by$ if there are one ore more confounding variables $\bZ$. Classically this is done through the use of randomised trials or other methods to isolate what is to be measured physically form any interference and by that preventing the existence of any possible confounder $\bZ$. Unfortunately this is not always possible and for those cases we shift our approach to the so-called \textit{do}-calculus. 
 
 In cases where it is not possible to directly use equation \ref{equation:do_operation}, we use a proxy variable $\bx$ instead. The work of Louizos et al. \cite{louizos2017causal} has show that this can to some extend be done by using VAEs \cite{kingma2013auto}. This approach ahd the problem that the variational lower bound did not become as high as theoretically possible. To circumvent that problem we propose an alternative approach by using Normalising Flows \cite{rezende2016variational} to model the posterior distribution of $\bZ$ and use that to calculate the Average Treatment Effect.
 
-\section{Related work}
 
-\subsection{The \textit{do}-calculus and its use in causal inference}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{Causal effect inference}
+In the cau
+
+\section{The \textit{do}-calculus and its use in causal inference}
 The rules of \textit{do}-calculus allow us to quantify the effect of $\bt$ on $\by$ when there are one or more confounding variables. This only requires the probability distributions and the structure of the causal graph defining the relation between all variables, such as the one in Figure \ref{fig:graph_observed_confounder}. In this graph we can see what the confounding variables are that cause the two variables who's effect we want to measure and correct for that by using the famous \textit{do}-operator equation:
 
 \begin{figure}
@@ -132,8 +137,11 @@ The rules of \textit{do}-calculus allow us to quantify the effect of $\bt$ on $\
 \end{equation}
 The set $\text{pa}_\bt$ denotes the set of ancestor nodes from $\bt$ that satisfy the backdoor-criterion\footnotemark[\ref{note:citation}], which is only $\bZ$ in the case of graph in Figure \ref{fig:graph_observed_confounder}. But in most real world scenarios we don't know what $\bZ$ is exactly and how these probabilities are shaped: it is a \textit{latent} confounder\footnotemark[\ref{note:citation}]. To circumvent this issue the idea of using a proxy variable instead of the actual $\bZ$ has been proposed\footnotemark[\ref{note:citation}]. The general principle is that the latent confounder is most likely also the cause of another set of variables that we can measure. These variables can be used to infer the state of the latent confounder and through that measure the causal effect we want to measure.
 
-\subsection{Normalising Flows}
-The research in generative models has yielded a model type called Normalising Flows, first thought of by Tabak et al. \cite{tabak2013family} and later popularised by Rezende et al. \cite{rezende2016variational}. The approach of this class of models is to learn an invertible series of mappings from a prior distribution of a simple form to the data likelihood. By using the change of variable rule, in Equation \ref{equation:change_of_variables}, it is guaranteed that before and after the transformations we have a valid probability distribution. Through the use of the inverse of these mappings one can perform exact posterior inference. 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{Generative modelling and variational inference}
+\section{Normalising Flows}
+The research in generative models has yielded a model type called Normalising Flows, first thought of by Tabak and Turner \cite{tabak2013family} and later popularised by Rezende and Mohamed \cite{rezende2016variational}. The approach of this class of models is to learn an invertible series of mappings from a prior distribution of a simple form to the data likelihood. By using the change of variable rule, in Equation \ref{equation:change_of_variables}, it is guaranteed that before and after the transformations we have a valid probability distribution. Through the use of the inverse of these mappings one can perform exact posterior inference. 
 
 \begin{equation}\label{equation:change_of_variables}
     \bx = f(\bz) \qquad p(\bx) = p(\bz) \left|\text{det} \parfrac{f}{\bz} \right|^{-1}
@@ -146,8 +154,8 @@ The reason we talk about a series of transformations is to split the the potenti
 
 To make this work in practice the (log)determinant of the Jacobian of each mapping $f_k$ has to computed efficiently. The most straightforward way to do this is to enforce that each mapping has a triangular Jacobian. This immediately solves the second practical criterion of having a tractable inverse of each $f_k$. Another more implicit requirement for our mappings is that they are parameterised functions on which we can use gradient descent methods to learn the parameters. Several implementations of Normalising Flows have been made so far, the simplest of which is the planar flow and radial flow
 
-\subsubsection{Planar flow and radial flow}
-In the original work of Rezende et al. \cite{rezende2016variational}, two possible implementations were proposed. The first one is the planar flow, in which each mapping has the form:
+\subsection{Planar flow and radial flow}
+In the original work of Rezende and Mohamed \cite{rezende2016variational}, two possible implementations were proposed. The first one is the planar flow, in which each mapping has the form:
 \begin{equation}\label{equation:planar_flow}
     f(\bz) = \bz + \bu h(\bw^T\bz + b)
 \end{equation}
@@ -158,7 +166,34 @@ where $\bw \in \mathbb{R}^D$, $\bu \in \mathbb{R}^D$ and $b \in \mathbb{R}$ are 
 
 Each transformation here can be seen as a layer in a neural network that consists of a skip connection and a single-node dense layer followed by an expansion back to the original number of dimensions. The downside of this is the limited transformative capabilities of each mapping in the flow.
 
+\subsection{Real-valued Non-Volume Preserving transformations}
+A type of Normalising Flow is the Real-valued Non-Volume Preserving transformations (real NVP) \cite{dinh2016density}. By using so-called coupling layers, this model type encompasses a more powerful type of Normalising Flows. Each transformation in this model consists of two coupling layers, where each coupling layers transforms one half of the current variable vector $\bz_k \in \mathbb{R}^D$ and keeps the other half fixed, done in the following way:
+\begin{align}\label{equation:real_nvp_coupling}
+    \bz_{k+1, 1:d} &= \bz_{k, 1:d} \\
+    \bz_{k+1, d+1:D} &= \bz_{k, d+1:D} \odot \exp \left(s(\bz_{k, 1:d}) \right) + t(\bz_{k, 1:d})
+\end{align}
+where $s$ and $t$ are scale and translation functions respectively, from $\mathbb{R}^{d} \rightarrow \mathbb{R}^{D-d}$. By having one coupling layer transforming $\bz_{d+1:D}$ and the next layer transforming $\bz_{1:d}$ the whole variable is transformed. The Jacobian of one coupling layer is triangular:
+\begin{equation}
+    \parfrac{\bz_{k+1}}{\bz_k^T} = \begin{bmatrix}
+    \mathbb{I}_d & 0\\
+    \parfrac{\bz_{k+1, d+1:D}}{\bz_{k, 1:d}^T} & \text{diag}(\exp(s(\bz_{k, 1:d}))
+    \end{bmatrix}
+\end{equation}
+which gives an easy to compute log determinant: $\sum\limits^d_{i=1} s(\bz_{k, 1:d})_i$. The log-determinant Jacobian  does not require us to compute a Jacobian or determinant of either $s$ or $t$. Computing the inverse of each coupling layer doesn't require the inverse of $s$ or $t$ either, as we only need to invert the multiplication and addition:
+\begin{align}\label{equation:real_nvp_coupling_inverse}
+    \bz_{k, 1:d} &= \bz_{k+1, 1:d} \\
+    \bz_{k, d+1:D} &= (\bz_{k+1, d+1:D} - t(\bz_{k+1, 1:d})) \odot \exp \left(- s(\bz_{k+1, 1:d}) \right) 
+\end{align}
+The simplicity of these equations allow us to choose $s$ and $t$ arbitrarily complex, by choosing a deep neural network for example. The split of each vector $\bz_k$ into two halves can be done arbitrarily, not requiring the elements of the two halves to be consecutive elements. The pattern in from which the two halves are constructed have a variety op options. The authors of \cite{dinh2016density} suggest to  either use a checkerboard pattern, if the data consists of images, or to reshape the input to contain a multiple of the original number of channels and alternate between channels to which half of the split they belong. In all cases is is pertinent to transform values every other coupling layer.
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
 \bibliography{references.bib}
 \bibliographystyle{apalike}
+
 
 \end{document}
