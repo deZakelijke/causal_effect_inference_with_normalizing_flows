@@ -3,10 +3,11 @@
 
 \begin{document}
 \begin{tikzpicture}
-    \node[circle, draw=black, fill=lightgray] (x) at (0, 0) {$\mathbf{X}$};
-    \node[circle, draw=black, fill=lightgray] (y) at (1, 1) {$\mathbf{y}$};
-    \node[circle, draw=black, fill=lightgray] (t) at (2, 0) {$\mathbf{t}$};
-    \node[circle, draw=black, fill=white]     (z) at (1, -1){$\mathbf{Z}$};
+    \node[circle, draw=black, fill=lightgray, minimum size=0.7cm] (t) at (0, 0) {$\mathbf{t}$};
+    \node[circle, draw=black, fill=lightgray, minimum size=0.7cm] (y) at (1.6, 0) {$\mathbf{y}$};
+    \node[circle, draw=black, fill=white, minimum size=0.7cm] (z) at (0.8, 1) {$\mathbf{Z}$};
+    \node[circle, draw=black, fill=lightgray, minimum size=0.7cm] (x) at (2.4, 1) {$\mathbf{X}$};
+
     
     \draw[->] (z) -- (x);
     \draw[->] (z) -- (y);

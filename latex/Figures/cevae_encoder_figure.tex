@@ -12,9 +12,9 @@
 
 \begin{document}
 \begin{tikzpicture}
-    \node[draw, minimum width=0.7cm, minimum height=3.5cm, rounded corners, label=$p(\bx)$, fill=black!10!white] (x) at (0, 0) {};
-    \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners] (x1) at (2, 1) {};
-    \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners] (x2) at (2, -1) {};
+    \node[draw, minimum width=0.7cm, minimum height=3.5cm, rounded corners, label=$p(\bx)$, fill=black!10!white] (x) at (0.5, 0) {};
+    \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners] (x1) at (2.5, 1) {};
+    \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners] (x2) at (2.5, -1) {};
     \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners] (x11) at (4, 1) {};
     \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners, label=below:$q(\bt|\bx)$,fill=black!10!white] (qt) at (4, -1) {};
     
@@ -23,13 +23,13 @@
     
     \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners] (x13) at (6.5, 1) {};
     \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners] (x23) at (6.5, -1) {};
-    \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners, label={$q(\by|\bt \eq 0, \bx)$}, fill=black!10!white] (qyt0) at (8.5, 1) {};
-    \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners, label=below:{$q(\by | \bt=1,\bx)$}, fill=black!10!white] (qyt1) at (8.5, -1) {};
+    \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners, label={$q(\by|\bt \eq 0, \bx)$}, fill=black!10!white] (qyt0) at (8.0, 1) {};
+    \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners, label=below:{$q(\by | \bt=1,\bx)$}, fill=black!10!white] (qyt1) at (8.0, -1) {};
     
-    \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners] (x14) at (10.5, 1) {};
-    \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners] (x24) at (10.5, -1) {};
-    \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners, label={$q(\bz | \by,\bt \eq 0, \bx)$}, fill=black!10!white] (qzt0) at (12.5, 1) {};
-    \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners, label=below:{$q(\bz | \by, \bt=1,\bx)$}, fill=black!10!white] (qzt1) at (12.5, -1) {};
+    \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners] (x14) at (9.5, 1) {};
+    \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners] (x24) at (9.5, -1) {};
+    \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners, label={$q(\bz | \by,\bt \eq 0, \bx)$}, fill=black!10!white] (qzt0) at (11.0, 1) {};
+    \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners, label=below:{$q(\bz | \by, \bt=1,\bx)$}, fill=black!10!white] (qzt1) at (11.0, -1) {};
 
 
     \draw[->] (x) to (x1);

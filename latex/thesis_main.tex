@@ -23,6 +23,7 @@
 \newcommand{\bZ}{\mathbf{Z}}
 \newcommand{\bz}{\mathbf{z}}
 
+\newcommand{\eq}{=}
 \newcommand{\parfrac}[2]{\frac{\partial #1}{\partial#2}}
 
 
@@ -79,7 +80,7 @@ October 2019 - June 2020\\[1cm]%
 \begin{minipage}[t]{0.4\textwidth}
 \begin{flushleft} \large
 \emph{Supervisor:} \\
-dr. Efstratios Gavves% Supervisor's Name
+Dr. Efstratios Gavves% Supervisor's Name
 \end{flushleft}
 \end{minipage}
 ~
@@ -114,28 +115,35 @@ Measuring the causal effect of an action on certain parts of the world and the p
 
 In recent years the work by Pearl et al.\cite{pearl2009causal} \cite{pearl1995causal} has yielded a framework in which these causal effects can be modelled in terms of probability densities and in which it is theoretically possible to isolate a direct causal effect of a variable $\bt$ on an outcome variable $\by$ if there are one ore more confounding variables $\bZ$. Classically this is done through the use of randomised trials or other methods to isolate what is to be measured physically form any interference and by that preventing the existence of any possible confounder $\bZ$. Unfortunately this is not always possible and for those cases we shift our approach to the so-called \textit{do}-calculus. 
 
-In cases where it is not possible to directly use equation \ref{equation:do_operation}, we use a proxy variable $\bx$ instead. The work of Louizos et al. \cite{louizos2017causal} has show that this can to some extend be done by using VAEs \cite{kingma2013auto}. This approach ahd the problem that the variational lower bound did not become as high as theoretically possible. To circumvent that problem we propose an alternative approach by using Normalising Flows \cite{rezende2016variational} to model the posterior distribution of $\bZ$ and use that to calculate the Average Treatment Effect.
+In cases where it is not possible to directly use equation \ref{equation:do_operation}, we use a proxy variable $\bx$ instead. The work of Louizos et al. \cite{louizos2017causal} has show that this can to some extend be done by using VAEs \cite{kingma2013auto}. This approach had the problem that the variational lower bound did not become as high as theoretically possible. To circumvent that problem we propose an alternative approach by using Normalising Flows \cite{rezende2016variational} to model the posterior distribution of $\bZ$ and use that to calculate the Average Treatment Effect.
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \chapter{Causal effect inference}
-In the cau
+In the discipline of causal inference there are several questions that are commonly of interest. In this context we assume the framework of reasoning about causality as described by Pearl et al. \cite{pearl2009causal}, where relations between events are modelled as a Directed Acyclic Graph (DAG), and the state of each event is defined as a function of all its parents in said graph. What is interesting to know then are of course the structure of graphs and the form and parameters of each connection function. If the true graphs and functions would be know we would be able to precisely predict all causal effects. Of course such a bold claim follows by the observation that the search space of potential DAGs grows exponentially with the number of vertices, growing to $29281$ possible graphs when there are five vertices \cite{robinson1977counting}. Some methods have been developed to address this problem, under some assumptions, but that goes beyond the scope of this research.
+
+In this research we assume a given structure of the DAG and focus on finding the relation between the random variables in the graph. Specifically the effect of one variable, called the treatment and denoted with $\bt$, on one other variable, called the outcome and denoted with $\by$. 
 
 \section{The \textit{do}-calculus and its use in causal inference}
-The rules of \textit{do}-calculus allow us to quantify the effect of $\bt$ on $\by$ when there are one or more confounding variables. This only requires the probability distributions and the structure of the causal graph defining the relation between all variables, such as the one in Figure \ref{fig:graph_observed_confounder}. In this graph we can see what the confounding variables are that cause the two variables who's effect we want to measure and correct for that by using the famous \textit{do}-operator equation:
+The rules of \textit{do}-calculus allow us to quantify the effect of $\bt$ on $\by$ when there are one or more confounding variables, which is usually the case. This only requires the probability distributions and the structure of the causal graph defining the relation between all variables. As we assume the graph structure to be known we only need a correct factorisation of the joint distribution of all variables and we are practically done. An example is drawn in Figure \ref{fig:graph_observed_confounder_and_latent_with_proxy}. In this graph we can see what the confounding variables are that cause the two variables who's effect we want to measure, and correct for that by using the famous \textit{do}-operator equation:
 
 \begin{figure}
     \centering
     \includestandalone{Figures/observed_confounder}
-    \caption{A causal Bayesian graph, where all observed variables are coloured grey and the causal relations are represented as arrows}
-    \label{fig:graph_observed_confounder}
+    \hspace{2cm}
+    \includestandalone{Figures/causal_graph_one_proxy_one_confounder}
+    \caption{Two causal Bayesian graphs, where all observed variables are coloured grey, unobserved variables are white and the causal relations are represented as arrows. The left hand side models an observed confounder and the right hand side a latent confounder with a proxy variable.}
+    \label{fig:graph_observed_confounder_and_latent_with_proxy}
 \end{figure}
 
 
 \begin{equation}\label{equation:do_operation}
    p(\by | do(\bt)) = \int_{pa_\bt} p(\by | \bt, pa_{\bt}) p(pa_{\bt}) \text{d} pa_\bt
 \end{equation}
-The set $\text{pa}_\bt$ denotes the set of ancestor nodes from $\bt$ that satisfy the backdoor-criterion\footnotemark[\ref{note:citation}], which is only $\bZ$ in the case of graph in Figure \ref{fig:graph_observed_confounder}. But in most real world scenarios we don't know what $\bZ$ is exactly and how these probabilities are shaped: it is a \textit{latent} confounder\footnotemark[\ref{note:citation}]. To circumvent this issue the idea of using a proxy variable instead of the actual $\bZ$ has been proposed\footnotemark[\ref{note:citation}]. The general principle is that the latent confounder is most likely also the cause of another set of variables that we can measure. These variables can be used to infer the state of the latent confounder and through that measure the causal effect we want to measure.
+The set $\text{pa}_\bt$ denotes the set of ancestor nodes from $\bt$ that satisfy the backdoor-criterion\footnotemark[\ref{note:citation}], which is only $\bZ$ in the case of left hand side graph in Figure \ref{fig:graph_observed_confounder_and_latent_with_proxy}. The problem is that in most real world scenarios we don't know what $\bZ$ is exactly and how these probabilities are shaped: it is a \textit{latent} confounder\footnotemark[\ref{note:citation}]. Most scientific disciplines that implicitly use this framework, such a double-blind medical trials, circumvent this problem by eliminating all possible latent confounders by making the cause of $\bt$ independent of everything else: a random assignment.
+
+But in general this is not possible, and instead the principle of proxy variables is introduced. These proxy variables, denoted with $\bX$, can be anything that can be measured and from which we can assume that it is directly caused by $\bZ$. The right hand side of Figure \ref{fig:graph_observed_confounder_and_latent_with_proxy} represent such a situation. The underlying principle of proxy variables is that it allows us to correct for the latent confounder in an approximate way. There has been extensive research in this area in recent years but most methods either assume that the latent confounder is categorical or 
+% \cite{kuroki2014measurement} \cite{miao2018identifying}
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -190,8 +198,22 @@ The simplicity of these equations allow us to choose $s$ and $t$ arbitrarily com
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+\chapter{Causal effect inference with generative models}
+The idea of using a generative model in causal effect inference was proposed by Louizos et al. \cite{louizos2017causal}. They leveraged the power of VAEs to make it possible to infer latent confounders from data without any prior knowledge on the confounder itself.
+
+\begin{figure}
+    \centering
+    \includestandalone[width=0.49\textwidth]{Figures/cevae_encoder_figure}
+    \includestandalone[width=0.49\textwidth]{Figures/cevae_decoder_figure}
+    \caption{The graphical model of the CEVAE with the encoder on the left hand side and the decoder on the right hand side. Grey nodes indicate sampling steps and white nodes indicate deterministic neural networks. In both the encoder and the decoder there is a clear distinction between the two values of $\bt$ for $\by$ and $\bz$ but in practice these are computed in one operation.}%Nog een ref naar formule oid?
+    \label{fig:cevae_graphical_model}
+\end{figure}
+
+\section{Causal effect inference with Normalising Flows}
+This can be potentially be improved upon by using Normalising Flows. Their ability to reproduce the true posterior over the latent confounder is an improvement on the CEVAE
 
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \bibliography{references.bib}
 \bibliographystyle{apalike}
 
