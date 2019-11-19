@@ -1,7 +1,7 @@
 import argparse
 import numpy as np
 import sys
-import torch
+import tensorflow as tf
 from cevae import train_cevae
 
 VALID_MODELS = ["cevae"]
@@ -15,13 +15,17 @@ def parse_arguments():
                         help="The type of model used for predictions (default=cevae)")
     parser.add_argument("--dataset", type=str, default="IHDP",
                         help="Dataset used (default=IHDP")
+    parser.add_argument("--model_dir", type=str, default="~/logs/",
+                        help="The directory to save the model to (default=~/logs/)")
+    parser.add_argument("--save_steps", type=int, default=100,
+                        help="Save/print log every n steps (default=10)")
 
     args = parser.parse_args()
 
     if not args.model in VALID_MODELS:
        raise NotImplementedError(f"Model {args.model} is not implemented")
 
-   if not args.dataset in VALID_DATASETS:
+    if not args.dataset in VALID_DATASETS:
        raise NotImplementedError(f"Dataset {args.dataset} is not implemented")
 
     for arg, value in vars(args).items():
@@ -31,7 +35,7 @@ def parse_arguments():
     return vars(args)
 
 def train(config):
-    if config.model == "cevae":
+    if config["model"] == "cevae":
         train_cevae(config)
 
 def test(config):

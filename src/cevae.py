@@ -5,7 +5,7 @@ from tensorflow.keras.activations import softplus
 from tensorflow_probability import distributions as tfd
 
 from fc_net import FC_net
-from dataset import IHDP
+from dataset import IHDP_dataset
 
 
 def make_cevae(x_bin_size, x_cont_size, z_size, hidden_size=512):
@@ -42,7 +42,7 @@ def make_cevae(x_bin_size, x_cont_size, z_size, hidden_size=512):
     #y       = tfd.Normal(loc=t * mu_y_t1 + (1. - t) * mu_y_t0, scale=tf.ones_like(mu_y_t0))
 
 
-    def encode(self, x, y, t):
+    def encode(x, y, t):
         qt = tfd.Bernoulli(logits=qt_logits(x))
         mu_qy0 = mu_qy_t0(hqy(qt))
         mu_qy1 = mu_qy_t1(hqy(qt))
@@ -56,7 +56,7 @@ def make_cevae(x_bin_size, x_cont_size, z_size, hidden_size=512):
                 scale=qt * softplus(qz1[:, z_size:]) + (1. - qt) * softplus(qz0[:, z_size:]))
         return qt, qy, qz
 
-    def decode(self, z):
+    def decode(z):
         hidden_x = hx(z)
         x_bin = tfd.Bernoulli(logits=x_bin_logits(hidden_x))
         x_cont_l = x_cont_logits(hidden_x)
@@ -88,19 +88,36 @@ def model_fn(features, labels, mode, params, config):
     """
     del labels, config
 
-    encoder, decoder = make_cevae(x_bin_size, x_cont_size, z_size)
-    
-    qt, qy, qz = encoder(features)
+    encoder, decoder = make_cevae(params["x_bin_size"], 
+                                  params["x_cont_size"], 
+                                  params["z_size"])
+
+    qt, qy, qz = encoder(*features)
     qz_sample = qz.sample(1) # number of samples of z
     data_likelihood = decoder(qz_sample)
 
 
 
 def train_cevae(params):
-    x_bin_size = 10
-    x_cont_size = 10
-    z_size = 64
+    params["x_bin_size"] = 10
+    params["x_cont_size"] = 10
+    params["z_size"] = 64
+
     if params["dataset"] == "IHDP":
-        dataset = tf.data.Dataset.from_generator(IHDP, tf.float32)
+        #dataset = tf.data.Dataset.from_generator(IHDP, tf.float32)
+        dataset_fn = IHDP_dataset()
+
+
+    estimator = tf.estimator.Estimator(
+        model_fn,
+        params=params,
+        config=tf.estimator.RunConfig(
+            model_dir=params["model_dir"],
+            save_checkpoints_steps=params["save_steps"],
+        ),
+    )
+
+    for i in range(10):
+        estimator.train(dataset_fn, steps=10)
 
 
