@@ -7,8 +7,12 @@ from cevae import train_cevae
 VALID_MODELS = ["cevae"]
 VALID_DATASETS = ["IHDP"]
 
+tf.keras.backend.set_floatx('float64')
+
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Causal effect Normalizing Flow trainer")
+    parser.add_argument("--batch_size", type=int, default=16,
+                        help="Batch size (default=10")
     parser.add_argument("--mode", type=str, default="train",
                         help="Switch between train and test mode (default=train)")
     parser.add_argument("--model", type=str, default="cevae",

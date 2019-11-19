@@ -105,7 +105,7 @@ def train_cevae(params):
 
     if params["dataset"] == "IHDP":
         #dataset = tf.data.Dataset.from_generator(IHDP, tf.float32)
-        dataset_fn = IHDP_dataset()
+        dataset_fn = IHDP_dataset(batch_size=params["batch_size"])
 
 
     estimator = tf.estimator.Estimator(

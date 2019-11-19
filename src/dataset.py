@@ -1,7 +1,7 @@
 import tensorflow as tf
 import numpy as np
 
-def IHDP_dataset(path_data="datasets/IHDP/csv/", file_prefix="ihdp_npci_"):
+def IHDP_dataset(batch_size=10, path_data="datasets/IHDP/csv/", file_prefix="ihdp_npci_"):
     binfeats = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
     contfeats = [i for i in range(25) if i not in binfeats]
     nr_files = 10
@@ -28,9 +28,7 @@ def IHDP_dataset(path_data="datasets/IHDP/csv/", file_prefix="ihdp_npci_"):
 
     x_cont = np.array(x_cont)
     def IHDP():
-        #return tf.data.Dataset.from_tensor_slices((t, y, y_cf, mu_0, mu_1, x_bin, x_cont))
-        print("#####################")
-        return tf.data.Dataset.from_tensor_slices(((x_cont, y, t), ()))
+        return tf.data.Dataset.from_tensor_slices(((x_cont, y, t), ())).batch(batch_size)
 
     return IHDP
 

@@ -10,13 +10,13 @@ class FC_net(Model):
             print("Must have at leas one hidden layer")
             return None
 
-        nn_layers = [layers.Dense(hidden_dims, activation=activation)]
+        nn_layers = [layers.Dense(hidden_dims, activation=activation, dtype="float64")]
 
         for i in range(nr_hidden - 1):
-            new_layer = layers.Dense(hidden_dims, activation=activation)
+            new_layer = layers.Dense(hidden_dims, activation=activation, dtype="float64")
             nn_layers.append(new_layer)
  
-        nn_layers.append(layers.Dense(out_dims, activation=None))
+        nn_layers.append(layers.Dense(out_dims, activation=None, dtype="float64"))
         self.nn_layers = tf.keras.Sequential(nn_layers)
 
     def call(self, x):
