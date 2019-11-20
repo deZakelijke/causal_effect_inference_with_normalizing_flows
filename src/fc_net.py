@@ -19,5 +19,6 @@ class FC_net(Model):
         nn_layers.append(layers.Dense(out_dims, activation=None, dtype="float64"))
         self.nn_layers = tf.keras.Sequential(nn_layers)
 
+    @tf.function
     def call(self, x):
         return self.nn_layers(x)
