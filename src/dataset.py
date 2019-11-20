@@ -14,21 +14,34 @@ def IHDP_dataset(batch_size=10, path_data="datasets/IHDP/csv/", file_prefix="ihd
     x_bin = []
     x_cont = []
     for i in range(1, nr_files + 1):
-        data = np.loadtxt(f"{path_data}{file_prefix}{i}.csv", delimiter=',')
+        data = np.loadtxt(f"{path_data}{file_prefix}{i}.csv", delimiter=',', dtype=np.float64)
         for line in data:
-            t.append(line[0])
-            y.append(line[1])
-            y_cf.append(line[2])
-            mu_0.append(line[3])
-            mu_1.append(line[4])
-            x = line[5:]
-            x[13] -= 1 # Value is in [1, 2] instead of [0, 1]
+            t.append(line[0])       # Treatment true/false
+            y.append(line[1])       # Outcome
+            y_cf.append(line[2])    # Counterfactual outcome
+            mu_0.append(line[3])    # Still not sure what these are 
+            mu_1.append(line[4])    # ?????
+            x = line[5:]            # Proxy features
+            x[13] -= 1              # Value is in [1, 2] instead of [0, 1]
             x_bin.append(x[binfeats])
             x_cont.append(x[contfeats])
 
     x_cont = np.array(x_cont)
+    x_bin = np.array(x_bin)
+    t = np.array(t)
+    y = np.array(y)
+    y_cf = np.array(y_cf)
+    mu_0 = np.array(mu_0)
+    mu_1 = np.array(mu_1)
     def IHDP():
-        return tf.data.Dataset.from_tensor_slices(((x_cont, y, t), ())).batch(batch_size)
+        return tf.data.Dataset.from_tensor_slices(((x_bin, 
+                                                    x_cont, 
+                                                    t, 
+                                                    y, 
+                                                    y_cf, 
+                                                    mu_0, 
+                                                    mu_1), 
+                                                   ())).batch(batch_size)
 
     return IHDP
 
