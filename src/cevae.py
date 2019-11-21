@@ -140,12 +140,14 @@ class CEVAE(Model):
     @tf.function
     def elbo(self, distortion_x, distortion_t, distortion_y, rate, variational_t, variational_y):
         elbo_local = -(rate + distortion_x + distortion_t + distortion_y)
-        return tf.reduce_mean(input_tensor=elbo_local)
+        elbo = tf.reduce_mean(input_tensor=elbo_local)
+        return -elbo
 
     def grad(self, features, _, epoch):
         with tf.GradientTape() as tape:
             model_output = self(features, epoch)
             loss = self.elbo(*model_output)
+            tf.summary.scalar("loss", loss, step=epoch)
         return loss, tape.gradient(loss, self.trainable_variables)
 
 def train_cevae(params):
@@ -156,7 +158,8 @@ def train_cevae(params):
     if params["dataset"] == "IHDP":
         dataset = IHDP_dataset(batch_size=params["batch_size"])
 
-    writer = tf.summary.create_file_writer(params["model_dir"])
+    logdir = f"{params['model_dir']}cevae/{params['dataset']}/"
+    writer = tf.summary.create_file_writer(logdir)
 
 
     cevae = CEVAE(params["x_bin_size"], 
@@ -164,10 +167,13 @@ def train_cevae(params):
                   params["z_size"])
     optimizer = tf.keras.optimizers.Adam(learning_rate=params["learning_rate"])
 
+    tf.summary.trace_on(graph=True, profiler=True)
+
     with writer.as_default():
         for epoch in range(params["epochs"]):
             print(f"Epoch: {epoch}")
             for features in dataset.batch(params["batch_size"]):
                 loss_value, grads = cevae.grad(*features, epoch)
+                #tf.summary.trace_export(name="test?", step=epoch, profiler_outdir=logdir)
                 optimizer.apply_gradients(zip(grads, cevae.trainable_variables))
 
