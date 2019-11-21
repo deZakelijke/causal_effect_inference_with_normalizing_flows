@@ -15,15 +15,15 @@ def parse_arguments():
                         help="Batch size (default=16")
     parser.add_argument("--learning_rate", type=float, default=1e-4,
                         help="Learning rate of hte optmiser (default: 1e-4)")
-    parser.add_argument("--max_steps", type=int, default=100,
-                        help="Maximum number of training steps (default: 100)")
+    parser.add_argument("--epochs", type=int, default=100,
+                        help="Number of training iterations (default: 100)")
     parser.add_argument("--mode", type=str, default="train",
                         help="Switch between train and test mode (default: train)")
     parser.add_argument("--model", type=str, default="cevae",
                         help="The type of model used for predictions (default: cevae)")
     parser.add_argument("--dataset", type=str, default="IHDP",
                         help="Dataset used (default: IHDP")
-    parser.add_argument("--model_dir", type=str, default="~/logs/",
+    parser.add_argument("--model_dir", type=str, default="/home/mdegroot/logs/",
                         help="The directory to save the model to (default: ~/logs/)")
     parser.add_argument("--save_steps", type=int, default=100,
                         help="Save/print log every n steps (default: 10)")

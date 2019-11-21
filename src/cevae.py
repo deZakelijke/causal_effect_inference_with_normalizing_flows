@@ -10,7 +10,7 @@ from dataset import IHDP_dataset
 
 class CEVAE(Model):
 
-    def __init__(self, x_bin_size, x_cont_size, z_size, hidden_size=512):
+    def __init__(self, x_bin_size, x_cont_size, z_size, hidden_size=128):
         super().__init__()
         """ CEVAE model with fc nets between random variables.
         https://github.com/tensorflow/probability/blob/master/tensorflow_probability/examples/vae.py
@@ -25,173 +25,149 @@ class CEVAE(Model):
         self.x_cont_size = x_cont_size 
         self.z_size = z_size
 
-        # Encoder part
-        self.qt_logits = FC_net(1, hidden_size)
-        self.hqy       = FC_net(hidden_size, hidden_size)
-        self.mu_qy_t0  = FC_net(1, hidden_size)
-        self.mu_qy_t1  = FC_net(1, hidden_size)
+        self.latent_prior = tfd.Independent(tfd.Normal(
+                                                loc=tf.zeros([1, z_size], dtype=tf.float64),
+                                                scale=tf.ones([1, z_size], dtype=tf.float64)),
+                                   reinterpreted_batch_ndims=1)
 
-        self.hqz   = FC_net(z_size, hidden_size)
-        self.qz_t0 = FC_net(z_size * 2, hidden_size) 
-        self.qz_t1 = FC_net(z_size * 2, hidden_size) 
+
+        # Encoder part
+        self.qt_logits = FC_net(1, hidden_size=hidden_size)
+        self.hqy       = FC_net(hidden_size, hidden_size=hidden_size)
+        self.mu_qy_t0  = FC_net(1, hidden_size=hidden_size)
+        self.mu_qy_t1  = FC_net(1, hidden_size=hidden_size)
+
+        self.hqz   = FC_net(z_size, hidden_size=hidden_size)
+        self.qz_t0 = FC_net(z_size * 2, hidden_size=hidden_size) 
+        self.qz_t1 = FC_net(z_size * 2, hidden_size=hidden_size) 
 
         # Decoder part
-        self.hx            = FC_net(x_bin_size + x_cont_size, hidden_size)
-        self.x_cont_logits = FC_net(x_cont_size * 2, hidden_size)
-        self.x_bin_logits  = FC_net(x_bin_size, hidden_size)
+        self.hx            = FC_net(x_bin_size + x_cont_size, hidden_size=hidden_size)
+        self.x_cont_logits = FC_net(x_cont_size * 2, hidden_size=hidden_size)
+        self.x_bin_logits  = FC_net(x_bin_size, hidden_size=hidden_size)
 
-        self.t_logits = FC_net(1, hidden_size)
-        self.mu_y_t0 = FC_net(1, hidden_size)
-        self.mu_y_t1 = FC_net(1, hidden_size)
+        self.t_logits = FC_net(1, hidden_size=hidden_size)
+        self.mu_y_t0 = FC_net(1, hidden_size=hidden_size)
+        self.mu_y_t1 = FC_net(1, hidden_size=hidden_size)
 
 
     def encode(self, x, t, y):
         qt = tfd.Independent(tfd.Bernoulli(logits=self.qt_logits(x)), 
                              reinterpreted_batch_ndims=1,
-                             name="qt").sample()
-        qt = tf.dtypes.cast(qt, tf.float64)
-        mu_qy0 = self.mu_qy_t0(self.hqy(qt))
-        mu_qy1 = self.mu_qy_t1(self.hqy(qt))
-        qy = tfd.Independent(tfd.Normal(loc=qt * mu_qy1 + (1. - qt) * mu_qy0, 
-                                        scale=tf.ones_like(mu_qy0)),
-                             reinterpreted_batch_ndims=2,
-                             name="qy").sample()
+                             name="qt")
+        qt_sample = tf.dtypes.cast(qt.sample(), tf.float64)
         
-        xy = tf.concat([x, qy], 1)
+        mu_qy0 = self.mu_qy_t0(self.hqy(qt_sample))
+        mu_qy1 = self.mu_qy_t1(self.hqy(qt_sample))
+        qy = tfd.Independent(tfd.Normal(loc=qt_sample * mu_qy1 + (1. - qt_sample) * mu_qy0, 
+                                        scale=tf.ones_like(mu_qy0)),
+                             reinterpreted_batch_ndims=1,
+                             name="qy")
+        
+        xy = tf.concat([x, qy.sample()], 1)
         hidden_z = self.hqz(xy)
         qz0 = self.qz_t0(hidden_z)
         qz1 = self.qz_t1(hidden_z)
-        qz = tfd.Independent(tfd.Normal(loc=qt * qz1[:, :self.z_size] + (1. - qt) * qz0[:, :self.z_size], 
-                                        scale=qt * softplus(qz1[:, self.z_size:]) + (1. - qt) * 
-                                        softplus(qz0[:, self.z_size:]),
+        qz = tfd.Independent(tfd.Normal(loc=qt_sample * qz1[:, :self.z_size] + 
+                                            (1. - qt_sample) * qz0[:, :self.z_size], 
+                                        scale=qt_sample * softplus(qz1[:, self.z_size:]) + 
+                                              (1. - qt_sample) * softplus(qz0[:, self.z_size:]),
                                        ),
-                             reinterpreted_batch_ndims=2,
+                             reinterpreted_batch_ndims=1,
                              name="qz")
         return qt, qy, qz
 
     def decode(self, z):
-
         hidden_x = self.hx(z)
         x_bin = tfd.Independent(tfd.Bernoulli(logits=self.x_bin_logits(hidden_x)),
-                                reinterpreted_batch_ndims=2,
-                                name="x_bin").sample()
-        x_bin = tf.dtypes.cast(x_bin, tf.float64)
+                                reinterpreted_batch_ndims=1,
+                                name="x_bin")
+
         x_cont_l = self.x_cont_logits(hidden_x)
         x_cont = tfd.Independent(tfd.Normal(loc=x_cont_l[:, :self.x_cont_size], 
                                             scale=softplus(x_cont_l[:, self.x_cont_size:])),
-                                 reinterpreted_batch_ndims=2,
-                                 name="x_cont").sample()
-        x = tf.concat([x_bin, x_cont], 1)
+                                 reinterpreted_batch_ndims=1,
+                                 name="x_cont")
 
         t = tfd.Independent(tfd.Bernoulli(logits=self.t_logits(z)),
-                            reinterpreted_batch_ndims=2,
-                            name="t").sample()
-        t = tf.dtypes.cast(t, tf.float64)
+                            reinterpreted_batch_ndims=1,
+                            name="t")
+        t_sample = tf.dtypes.cast(t.sample(), tf.float64)
 
         mu_y0 = self.mu_y_t0(z)
         mu_y1 = self.mu_y_t1(z)
-        y = tfd.Independent(tfd.Normal(loc=t * mu_y1 + (1. - t) * mu_y0, 
+        y = tfd.Independent(tfd.Normal(loc=t_sample * mu_y1 + (1. - t_sample) * mu_y0, 
                                        scale=tf.ones_like(mu_y0)),
-                            reinterpreted_batch_ndims=2,
+                            reinterpreted_batch_ndims=1,
                             name="y")
-        return x, t, y
+        return x_bin, x_cont, t, y
 
+    @tf.function
+    def call(self, features, epoch, training=False):
+        x_bin, x_cont, t, y, y_cf, mu_0, mu_1 = features
+        x = tf.concat([x_bin, x_cont], 1)
 
-    def elbo(self, distortion, rate):
-        elbo_local = -(rate + distortion)
+        qt, qy, qz = self.encode(x, t, y)
+        qz_sample = qz.sample()
+        x_bin_likelihood, x_cont_likelihood, t_likelihood, y_likelihood = self.decode(qz_sample)
+
+        # Reconstruction
+        distortion_x = -x_bin_likelihood.log_prob(x_bin) - x_cont_likelihood.log_prob(x_cont)
+        distortion_t = -t_likelihood.log_prob(t)
+        distortion_y = -y_likelihood.log_prob(y)
+        avg_x_distortion = tf.reduce_mean(input_tensor=distortion_x)
+        avg_t_distortion = tf.reduce_mean(input_tensor=distortion_t)
+        avg_y_distortion = tf.reduce_mean(input_tensor=distortion_y)
+        tf.summary.scalar("distortion_x", avg_x_distortion, step=epoch)
+        tf.summary.scalar("distortion_t", avg_t_distortion, step=epoch)
+        tf.summary.scalar("distortion_y", avg_y_distortion, step=epoch)
+
+        # KL-divergence
+        rate = tfd.kl_divergence(qz, self.latent_prior)
+        avg_rate = tf.reduce_mean(input_tensor=rate)
+        tf.summary.scalar("rate_z", avg_rate, step=epoch)
+
+        # Auxillary distributions
+        variational_t = -qt.log_prob(t)
+        variational_y = -qy.log_prob(y)
+        avg_variational_t = tf.reduce_mean(variational_t)
+        avg_variational_y = tf.reduce_mean(variational_y)
+        tf.summary.scalar("variational_t", avg_variational_t, step=epoch)
+        tf.summary.scalar("variational_y", avg_variational_y, step=epoch)
+
+        return distortion_x, distortion_t, distortion_y, rate, variational_t, variational_y
+
+    @tf.function
+    def elbo(self, distortion_x, distortion_t, distortion_y, rate, variational_t, variational_y):
+        elbo_local = -(rate + distortion_x + distortion_t + distortion_y)
         return tf.reduce_mean(input_tensor=elbo_local)
 
+    def grad(self, features, _, epoch):
+        with tf.GradientTape() as tape:
+            model_output = self(features, epoch)
+            loss = self.elbo(*model_output)
+        return loss, tape.gradient(loss, self.trainable_variables)
 
-def model_fn(features, labels, mode, params, config):
-    """Builds the model function for use in an estimator.
+def train_cevae(params):
+    params["x_bin_size"] = 19
+    params["x_cont_size"] = 6
+    params["z_size"] = 32
 
-    Arguments:
-        features: The input features for the estimator.
-        labels: The labels, unused here.
-        mode: Signifies whether it is train or test or predict.
-        params: Some hyperparameters as a dictionary.
-        config: The RunConfig, unused here.
+    if params["dataset"] == "IHDP":
+        dataset = IHDP_dataset(batch_size=params["batch_size"])
 
-    Returns:
-        EstimatorSpec: A tf.estimator.EstimatorSpec instance.
-    """
-    del labels, config
+    writer = tf.summary.create_file_writer(params["model_dir"])
+
 
     cevae = CEVAE(params["x_bin_size"], 
                   params["x_cont_size"], 
                   params["z_size"])
+    optimizer = tf.keras.optimizers.Adam(learning_rate=params["learning_rate"])
 
-    latent_prior = tfd.Independent(tfd.Normal(loc=tf.zeros([1, params["z_size"]], dtype=tf.float64),
-                                              scale=tf.ones([1, params["z_size"]], dtype=tf.float64)),
-                                   reinterpreted_batch_ndims=2)
-
-
-    x_bin, x_cont, t, y, y_cf, mu_0, mu_1 = features
-    x = tf.concat([x_bin, x_cont], 1)
-
-    qt, qy, qz = cevae.encode(x, t, y)
-    qz_sample = qz.sample() # number of samples of z
-    x_likelihood, t_likelihood, y_likelihood = cevae.decode(qz_sample)
-
-    # Reconstruction - incomplete
-    distortion_y = -y_likelihood.log_prob(y)
-    avg_y_distortion = tf.reduce_mean(input_tensor=distortion_y)
-    tf.summary.scalar("distortion_y", avg_y_distortion)
-
-    # KL-divergence - incomplete
-    rate = tfd.kl_divergence(qz, latent_prior)
-    avg_rate = tf.reduce_mean(input_tensor=rate)
-    tf.summary.scalar("rate_z", avg_rate)
-
-    # Total elbo
-    #elbo_local = -(rate + distortion_y)
-    #elbo = tf.reduce_mean(input_tensor=elbo_local)
-    loss = -cevae.elbo(distortion_y, rate)
-    #tf.summary.scalar("elbo", elbo)
-
-    # Learning
-    #global_step = tf.train.get_or_create_global_step()
-    #global_step = tf.Variable(1, name="global_step")
-    #learning_rate = tf.train.cosine_decay(params["learning_rate"], 
-    #                                      global_step,
-    #                                      params["max_steps"])
-    #tf.summary.scalar("learning_rate", learning_rate)
-    optimizer = tf.optimizers.Adam(params["learning_rate"])
-    train_op = optimizer.minimize(loss, cevae)
-
-
-    return tf.estimator.EstimatorSpec(
-        mode=mode,
-        loss=loss,
-        train_op=train_op,
-        eval_metric_ops={
-            "elbo": tf.metrics.mean(elbo),
-            "rate_z": tf.metrics.mean(avg_rate),
-            "distortion_y": tf.metrics.mean(distortion_y),
-        },
-    )
-
-
-def train_cevae(params):
-    params["x_bin_size"] = 10
-    params["x_cont_size"] = 10
-    params["z_size"] = 64
-
-    if params["dataset"] == "IHDP":
-        dataset_fn = IHDP_dataset(batch_size=params["batch_size"])
-
-    #writer = tf.summary.create_file_writer(params["model_dir"])
-
-    estimator = tf.estimator.Estimator(
-        model_fn,
-        params=params,
-        config=tf.estimator.RunConfig(
-            model_dir=params["model_dir"],
-            save_checkpoints_steps=params["save_steps"],
-        ),
-    )
-
-    for i in range(10):
-        estimator.train(dataset_fn, steps=10)
-
+    with writer.as_default():
+        for epoch in range(params["epochs"]):
+            print(f"Epoch: {epoch}")
+            for features in dataset.batch(params["batch_size"]):
+                loss_value, grads = cevae.grad(*features, epoch)
+                optimizer.apply_gradients(zip(grads, cevae.trainable_variables))
 
