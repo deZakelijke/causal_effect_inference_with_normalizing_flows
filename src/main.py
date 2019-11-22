@@ -27,6 +27,8 @@ def parse_arguments():
                         help="The directory to save the model to (default: ~/logs/)")
     parser.add_argument("--save_steps", type=int, default=100,
                         help="Save/print log every n steps (default: 10)")
+    parser.add_argument("--debug", action="store_true", default=False,
+                        help="Turn on debugging mode. All it does now is turn off summary writer")
 
     args = parser.parse_args()
 

@@ -1,3 +1,5 @@
+import sys
+import time
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras import layers, Model
@@ -10,7 +12,7 @@ from dataset import IHDP_dataset
 
 class CEVAE(Model):
 
-    def __init__(self, x_bin_size, x_cont_size, z_size, hidden_size=128):
+    def __init__(self, x_bin_size, x_cont_size, z_size, hidden_size=128, debug=False):
         super().__init__()
         """ CEVAE model with fc nets between random variables.
         https://github.com/tensorflow/probability/blob/master/tensorflow_probability/examples/vae.py
@@ -24,6 +26,7 @@ class CEVAE(Model):
         self.x_bin_size = x_bin_size 
         self.x_cont_size = x_cont_size 
         self.z_size = z_size
+        self.debug = debug
 
         self.latent_prior = tfd.Independent(tfd.Normal(
                                                 loc=tf.zeros([1, z_size], dtype=tf.float64),
@@ -52,6 +55,8 @@ class CEVAE(Model):
 
 
     def encode(self, x, t, y):
+        if self.debug:
+            print("Encoding")
         qt = tfd.Independent(tfd.Bernoulli(logits=self.qt_logits(x)), 
                              reinterpreted_batch_ndims=1,
                              name="qt")
@@ -78,6 +83,8 @@ class CEVAE(Model):
         return qt, qy, qz
 
     def decode(self, z):
+        if self.debug:
+            print("Decoding")
         hidden_x = self.hx(z)
         x_bin = tfd.Independent(tfd.Bernoulli(logits=self.x_bin_logits(hidden_x)),
                                 reinterpreted_batch_ndims=1,
@@ -103,7 +110,9 @@ class CEVAE(Model):
         return x_bin, x_cont, t, y
 
     @tf.function
-    def call(self, features, epoch, training=False):
+    def call(self, features, step, training=False):
+        if self.debug:
+            print("Starting forward pass")
         x_bin, x_cont, t, y, y_cf, mu_0, mu_1 = features
         x = tf.concat([x_bin, x_cont], 1)
 
@@ -112,42 +121,52 @@ class CEVAE(Model):
         x_bin_likelihood, x_cont_likelihood, t_likelihood, y_likelihood = self.decode(qz_sample)
 
         # Reconstruction
+        if self.debug:
+            print("Calculating negative data log likelihood")
         distortion_x = -x_bin_likelihood.log_prob(x_bin) - x_cont_likelihood.log_prob(x_cont)
         distortion_t = -t_likelihood.log_prob(t)
         distortion_y = -y_likelihood.log_prob(y)
         avg_x_distortion = tf.reduce_mean(input_tensor=distortion_x)
         avg_t_distortion = tf.reduce_mean(input_tensor=distortion_t)
         avg_y_distortion = tf.reduce_mean(input_tensor=distortion_y)
-        tf.summary.scalar("distortion_x", avg_x_distortion, step=epoch)
-        tf.summary.scalar("distortion_t", avg_t_distortion, step=epoch)
-        tf.summary.scalar("distortion_y", avg_y_distortion, step=epoch)
+        tf.summary.scalar("distortion_x", avg_x_distortion, step=step)
+        tf.summary.scalar("distortion_t", avg_t_distortion, step=step)
+        tf.summary.scalar("distortion_y", avg_y_distortion, step=step)
 
         # KL-divergence
+        if self.debug:
+            print("Calculating KL-divergence")
         rate = tfd.kl_divergence(qz, self.latent_prior)
         avg_rate = tf.reduce_mean(input_tensor=rate)
-        tf.summary.scalar("rate_z", avg_rate, step=epoch)
+        tf.summary.scalar("rate_z", avg_rate, step=step)
 
         # Auxillary distributions
+        if self.debug:
+            print("Calculating negative log likelihood of auxillary distributions")
         variational_t = -qt.log_prob(t)
         variational_y = -qy.log_prob(y)
         avg_variational_t = tf.reduce_mean(variational_t)
         avg_variational_y = tf.reduce_mean(variational_y)
-        tf.summary.scalar("variational_t", avg_variational_t, step=epoch)
-        tf.summary.scalar("variational_y", avg_variational_y, step=epoch)
+        tf.summary.scalar("variational_t", avg_variational_t, step=step)
+        tf.summary.scalar("variational_y", avg_variational_y, step=step)
 
         return distortion_x, distortion_t, distortion_y, rate, variational_t, variational_y
 
     @tf.function
     def elbo(self, distortion_x, distortion_t, distortion_y, rate, variational_t, variational_y):
+        if self.debug:
+            print("Calculating loss")
         elbo_local = -(rate + distortion_x + distortion_t + distortion_y)
         elbo = tf.reduce_mean(input_tensor=elbo_local)
         return -elbo
 
-    def grad(self, features, _, epoch):
+    def grad(self, features, _, step):
         with tf.GradientTape() as tape:
-            model_output = self(features, epoch)
+            model_output = self(features, step)
             loss = self.elbo(*model_output)
-            tf.summary.scalar("loss", loss, step=epoch)
+            tf.summary.scalar("loss", loss, step=step)
+        if self.debug:
+            print(f"Forward pass complete, step: {step}")
         return loss, tape.gradient(loss, self.trainable_variables)
 
 def train_cevae(params):
@@ -157,23 +176,38 @@ def train_cevae(params):
 
     if params["dataset"] == "IHDP":
         dataset = IHDP_dataset(batch_size=params["batch_size"])
+    len_dataset = 0
+    for _ in dataset:
+        len_dataset +=1
 
-    logdir = f"{params['model_dir']}cevae/{params['dataset']}/"
-    writer = tf.summary.create_file_writer(logdir)
+    logdir = f"{params['model_dir']}cevae/{params['dataset']}/{int(time.time())}"
+    if not params["debug"]:
+        writer = tf.summary.create_file_writer(logdir)
 
 
     cevae = CEVAE(params["x_bin_size"], 
                   params["x_cont_size"], 
-                  params["z_size"])
+                  params["z_size"],
+                  debug=params["debug"])
     optimizer = tf.keras.optimizers.Adam(learning_rate=params["learning_rate"])
 
     tf.summary.trace_on(graph=True, profiler=True)
 
+    if params["debug"]:
+        for epoch in range(5):
+            print(f"Epoch: {epoch}")
+            for step, features in dataset.batch(params["batch_size"]).enumerate(epoch * len_dataset):
+                loss_value, grads = cevae.grad(*features, step)
+                #tf.summary.trace_export(name="test?", step=step, profiler_outdir=logdir)
+                optimizer.apply_gradients(zip(grads, cevae.trainable_variables))
+            print("Epoch done")
+        sys.exit(0)
+
     with writer.as_default():
         for epoch in range(params["epochs"]):
             print(f"Epoch: {epoch}")
-            for features in dataset.batch(params["batch_size"]):
-                loss_value, grads = cevae.grad(*features, epoch)
-                #tf.summary.trace_export(name="test?", step=epoch, profiler_outdir=logdir)
+            for step, features in dataset.batch(params["batch_size"]).enumerate(epoch * len_dataset):
+                loss_value, grads = cevae.grad(*features, step)
+                #tf.summary.trace_export(name="test?", step=step, profiler_outdir=logdir)
                 optimizer.apply_gradients(zip(grads, cevae.trainable_variables))
 
