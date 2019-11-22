@@ -191,23 +191,29 @@ def train_cevae(params):
                   debug=params["debug"])
     optimizer = tf.keras.optimizers.Adam(learning_rate=params["learning_rate"])
 
-    tf.summary.trace_on(graph=True, profiler=True)
+    tf.summary.trace_on(graph=True, profiler=False)
 
     if params["debug"]:
         for epoch in range(5):
             print(f"Epoch: {epoch}")
-            for step, features in dataset.batch(params["batch_size"]).enumerate(epoch * len_dataset):
+            step_start = epoch * (len_dataset // params["batch_size"] + 1)
+            for step, features in dataset.batch(params["batch_size"]).enumerate(step_start):
                 loss_value, grads = cevae.grad(*features, step)
                 #tf.summary.trace_export(name="test?", step=step, profiler_outdir=logdir)
                 optimizer.apply_gradients(zip(grads, cevae.trainable_variables))
+                if step == 0:
+                    tf.summary.trace_export("Profile")
             print("Epoch done")
         sys.exit(0)
 
     with writer.as_default():
         for epoch in range(params["epochs"]):
             print(f"Epoch: {epoch}")
-            for step, features in dataset.batch(params["batch_size"]).enumerate(epoch * len_dataset):
+            step_start = epoch * (len_dataset // params["batch_size"] + 1)
+            for step, features in dataset.batch(params["batch_size"]).enumerate(step_start):
                 loss_value, grads = cevae.grad(*features, step)
-                #tf.summary.trace_export(name="test?", step=step, profiler_outdir=logdir)
                 optimizer.apply_gradients(zip(grads, cevae.trainable_variables))
+                if step == 0:
+                    tf.summary.trace_export("Profile", step=step)
+
 
