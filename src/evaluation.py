@@ -1,4 +1,5 @@
 import numpy as np
+import tensorflow as tf
 
 
 class Evaluator(object):
@@ -12,8 +13,8 @@ class Evaluator(object):
             self.true_ite = mu1 - mu0
 
     def rmse_ite(self, ypred1, ypred0):
-        pred_ite = np.zeros_like(self.true_ite)
-        idx1, idx0 = np.where(self.t == 1), np.where(self.t == 0)
+        pred_ite = tf.zeros_like(self.true_ite)
+        idx1, idx0 = tf.where(self.t == 1), tf.where(self.t == 0)
         ite1, ite0 = self.y[idx1] - ypred0[idx1], ypred1[idx0] - self.y[idx0]
         pred_ite[idx1] = ite1
         pred_ite[idx0] = ite0

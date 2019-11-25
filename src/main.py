@@ -1,5 +1,7 @@
 import argparse
 import numpy as np
+import logging
+import os
 import sys
 import tensorflow as tf
 from cevae import train_cevae
@@ -31,6 +33,10 @@ def parse_arguments():
                         help="Turn on debugging mode. All it does now is turn off summary writer")
 
     args = parser.parse_args()
+
+    if not args.debug:
+        os.environ["TF_CPP_MIN_LOG_LEVEL"] = "1"
+        logging.getLogger("tensorflow").setLevel(logging.WARNING)
 
     if not args.model in VALID_MODELS:
        raise NotImplementedError(f"Model {args.model} is not implemented")

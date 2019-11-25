@@ -34,7 +34,6 @@ def IHDP_dataset(batch_size=10, path_data="datasets/IHDP/csv/", file_prefix="ihd
     mu_0 = np.array(mu_0)
     mu_1 = np.array(mu_1)
 
-    #def IHDP():
     return tf.data.Dataset.from_tensor_slices(((x_bin, 
                                                 x_cont, 
                                                 t, 
@@ -44,5 +43,4 @@ def IHDP_dataset(batch_size=10, path_data="datasets/IHDP/csv/", file_prefix="ihd
                                                 mu_1), 
                                                ()))
 
-    #return IHDP
 

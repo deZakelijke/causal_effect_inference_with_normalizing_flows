@@ -12,7 +12,7 @@ from dataset import IHDP_dataset
 
 class CEVAE(Model):
 
-    def __init__(self, x_bin_size, x_cont_size, z_size, hidden_size=128, debug=False):
+    def __init__(self, x_bin_size, x_cont_size, z_size, hidden_size=64, debug=False):
         super().__init__()
         """ CEVAE model with fc nets between random variables.
         https://github.com/tensorflow/probability/blob/master/tensorflow_probability/examples/vae.py
@@ -158,7 +158,7 @@ class CEVAE(Model):
     def elbo(self, distortion_x, distortion_t, distortion_y, rate, variational_t, variational_y):
         if self.debug:
             print("Calculating loss")
-        elbo_local = -(rate + distortion_x + distortion_t + distortion_y)
+        elbo_local = -(rate + distortion_x + distortion_t + distortion_y + variational_t + variational_y)
         elbo = tf.reduce_mean(input_tensor=elbo_local)
         return -elbo
 
@@ -166,7 +166,7 @@ class CEVAE(Model):
         with tf.GradientTape() as tape:
             model_output = self(features, step)
             loss = self.elbo(*model_output)
-            tf.summary.scalar("loss", loss, step=step)
+            tf.summary.scalar("metrics/loss", loss, step=step)
         if self.debug:
             print(f"Forward pass complete, step: {step}")
         return loss, tape.gradient(loss, self.trainable_variables)
@@ -174,7 +174,7 @@ class CEVAE(Model):
 def train_cevae(params):
     params["x_bin_size"] = 19
     params["x_cont_size"] = 6
-    params["z_size"] = 32
+    params["z_size"] = 16
 
     if params["dataset"] == "IHDP":
         dataset = IHDP_dataset(batch_size=params["batch_size"])
@@ -182,7 +182,8 @@ def train_cevae(params):
     for _ in dataset:
         len_dataset +=1
 
-    logdir = f"{params['model_dir']}cevae/{params['dataset']}/{int(time.time())}"
+    timestamp = str(int(time.time()))[2:] # Cut off the first two digits because this project wont take more than ten years
+    logdir = f"{params['model_dir']}cevae/{params['dataset']}/{params['learning_rate']}/{timestamp}"
     if not params["debug"]:
         writer = tf.summary.create_file_writer(logdir)
 
@@ -212,6 +213,7 @@ def train_cevae(params):
         for epoch in range(params["epochs"]):
             print(f"Epoch: {epoch}")
             step_start = epoch * (len_dataset // params["batch_size"] + 1)
+            dataset.shuffle(len_dataset)
             for step, features in dataset.batch(params["batch_size"]).enumerate(step_start):
                 loss_value, grads = cevae.grad(*features, step)
                 optimizer.apply_gradients(zip(grads, cevae.trainable_variables))
