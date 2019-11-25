@@ -25,6 +25,7 @@ class CEVAE(Model):
         """
         self.x_bin_size = x_bin_size 
         self.x_cont_size = x_cont_size 
+        x_size = x_bin_size + x_cont_size
         self.z_size = z_size
         self.debug = debug
 
@@ -35,44 +36,45 @@ class CEVAE(Model):
 
 
         # Encoder part
-        self.qt_logits = FC_net(1, hidden_size=hidden_size)
-        self.hqy       = FC_net(hidden_size, hidden_size=hidden_size)
-        self.mu_qy_t0  = FC_net(1, hidden_size=hidden_size)
-        self.mu_qy_t1  = FC_net(1, hidden_size=hidden_size)
+        self.qt_logits = FC_net(x_size, 1, "qt", hidden_size=hidden_size, debug=debug)
+        self.hqy       = FC_net(1, hidden_size, "hqy", hidden_size=hidden_size, debug=debug)
+        self.mu_qy_t0  = FC_net(hidden_size, 1, "mu_qy_t0", hidden_size=hidden_size, debug=debug)
+        self.mu_qy_t1  = FC_net(hidden_size, 1, "mu_qy_t1", hidden_size=hidden_size, debug=debug)
 
-        self.hqz   = FC_net(z_size, hidden_size=hidden_size)
-        self.qz_t0 = FC_net(z_size * 2, hidden_size=hidden_size) 
-        self.qz_t1 = FC_net(z_size * 2, hidden_size=hidden_size) 
+        self.hqz   = FC_net(x_size + 1, hidden_size, "hqz", hidden_size=hidden_size, debug=debug)
+        self.qz_t0 = FC_net(hidden_size, z_size * 2, "qz_t0", hidden_size=hidden_size, debug=debug) 
+        self.qz_t1 = FC_net(hidden_size, z_size * 2, "qz_t1", hidden_size=hidden_size, debug=debug) 
 
         # Decoder part
-        self.hx            = FC_net(x_bin_size + x_cont_size, hidden_size=hidden_size)
-        self.x_cont_logits = FC_net(x_cont_size * 2, hidden_size=hidden_size)
-        self.x_bin_logits  = FC_net(x_bin_size, hidden_size=hidden_size)
+        self.hx            = FC_net(z_size, hidden_size, "hx", hidden_size=hidden_size, debug=debug)
+        self.x_cont_logits = FC_net(hidden_size, x_cont_size * 2, "x_cont", hidden_size=hidden_size, debug=debug)
+        self.x_bin_logits  = FC_net(hidden_size, x_bin_size, "x_bin", hidden_size=hidden_size, debug=debug)
 
-        self.t_logits = FC_net(1, hidden_size=hidden_size)
-        self.mu_y_t0 = FC_net(1, hidden_size=hidden_size)
-        self.mu_y_t1 = FC_net(1, hidden_size=hidden_size)
+        self.t_logits = FC_net(z_size, 1, "t", hidden_size=hidden_size, debug=debug)
+        self.mu_y_t0 = FC_net(z_size, 1, "mu_y_t0", hidden_size=hidden_size, debug=debug)
+        self.mu_y_t1 = FC_net(z_size, 1, "mu_y_t1", hidden_size=hidden_size, debug=debug)
 
 
-    def encode(self, x, t, y):
+    def encode(self, x, t, y, step):
         if self.debug:
             print("Encoding")
-        qt = tfd.Independent(tfd.Bernoulli(logits=self.qt_logits(x)), 
+        qt = tfd.Independent(tfd.Bernoulli(logits=self.qt_logits(x,step)), 
                              reinterpreted_batch_ndims=1,
                              name="qt")
         qt_sample = tf.dtypes.cast(qt.sample(), tf.float64)
         
-        mu_qy0 = self.mu_qy_t0(self.hqy(qt_sample))
-        mu_qy1 = self.mu_qy_t1(self.hqy(qt_sample))
+        hqy = self.hqy(qt_sample, step)
+        mu_qy0 = self.mu_qy_t0(hqy, step)
+        mu_qy1 = self.mu_qy_t1(hqy, step)
         qy = tfd.Independent(tfd.Normal(loc=qt_sample * mu_qy1 + (1. - qt_sample) * mu_qy0, 
                                         scale=tf.ones_like(mu_qy0)),
                              reinterpreted_batch_ndims=1,
                              name="qy")
         
         xy = tf.concat([x, qy.sample()], 1)
-        hidden_z = self.hqz(xy)
-        qz0 = self.qz_t0(hidden_z)
-        qz1 = self.qz_t1(hidden_z)
+        hidden_z = self.hqz(xy, step)
+        qz0 = self.qz_t0(hidden_z, step)
+        qz1 = self.qz_t1(hidden_z, step)
         qz = tfd.Independent(tfd.Normal(loc=qt_sample * qz1[:, :self.z_size] + 
                                             (1. - qt_sample) * qz0[:, :self.z_size], 
                                         scale=qt_sample * softplus(qz1[:, self.z_size:]) + 
@@ -82,27 +84,27 @@ class CEVAE(Model):
                              name="qz")
         return qt, qy, qz
 
-    def decode(self, z):
+    def decode(self, z, step):
         if self.debug:
             print("Decoding")
-        hidden_x = self.hx(z)
-        x_bin = tfd.Independent(tfd.Bernoulli(logits=self.x_bin_logits(hidden_x)),
+        hidden_x = self.hx(z, step)
+        x_bin = tfd.Independent(tfd.Bernoulli(logits=self.x_bin_logits(hidden_x, step)),
                                 reinterpreted_batch_ndims=1,
                                 name="x_bin")
 
-        x_cont_l = self.x_cont_logits(hidden_x)
+        x_cont_l = self.x_cont_logits(hidden_x, step)
         x_cont = tfd.Independent(tfd.Normal(loc=x_cont_l[:, :self.x_cont_size], 
                                             scale=softplus(x_cont_l[:, self.x_cont_size:])),
                                  reinterpreted_batch_ndims=1,
                                  name="x_cont")
 
-        t = tfd.Independent(tfd.Bernoulli(logits=self.t_logits(z)),
+        t = tfd.Independent(tfd.Bernoulli(logits=self.t_logits(z, step)),
                             reinterpreted_batch_ndims=1,
                             name="t")
         t_sample = tf.dtypes.cast(t.sample(), tf.float64)
 
-        mu_y0 = self.mu_y_t0(z)
-        mu_y1 = self.mu_y_t1(z)
+        mu_y0 = self.mu_y_t0(z, step)
+        mu_y1 = self.mu_y_t1(z, step)
         y = tfd.Independent(tfd.Normal(loc=t_sample * mu_y1 + (1. - t_sample) * mu_y0, 
                                        scale=tf.ones_like(mu_y0)),
                             reinterpreted_batch_ndims=1,
@@ -116,9 +118,9 @@ class CEVAE(Model):
         x_bin, x_cont, t, y, y_cf, mu_0, mu_1 = features
         x = tf.concat([x_bin, x_cont], 1)
 
-        qt, qy, qz = self.encode(x, t, y)
+        qt, qy, qz = self.encode(x, t, y, step)
         qz_sample = qz.sample()
-        x_bin_likelihood, x_cont_likelihood, t_likelihood, y_likelihood = self.decode(qz_sample)
+        x_bin_likelihood, x_cont_likelihood, t_likelihood, y_likelihood = self.decode(qz_sample, step)
 
         # Reconstruction
         if self.debug:
@@ -129,16 +131,16 @@ class CEVAE(Model):
         avg_x_distortion = tf.reduce_mean(input_tensor=distortion_x)
         avg_t_distortion = tf.reduce_mean(input_tensor=distortion_t)
         avg_y_distortion = tf.reduce_mean(input_tensor=distortion_y)
-        tf.summary.scalar("distortion_x", avg_x_distortion, step=step)
-        tf.summary.scalar("distortion_t", avg_t_distortion, step=step)
-        tf.summary.scalar("distortion_y", avg_y_distortion, step=step)
+        tf.summary.scalar("distortion/x", avg_x_distortion, step=step)
+        tf.summary.scalar("distortion/t", avg_t_distortion, step=step)
+        tf.summary.scalar("distortion/y", avg_y_distortion, step=step)
 
         # KL-divergence
         if self.debug:
             print("Calculating KL-divergence")
         rate = tfd.kl_divergence(qz, self.latent_prior)
         avg_rate = tf.reduce_mean(input_tensor=rate)
-        tf.summary.scalar("rate_z", avg_rate, step=step)
+        tf.summary.scalar("rate/z", avg_rate, step=step)
 
         # Auxillary distributions
         if self.debug:
@@ -147,8 +149,8 @@ class CEVAE(Model):
         variational_y = -qy.log_prob(y)
         avg_variational_t = tf.reduce_mean(variational_t)
         avg_variational_y = tf.reduce_mean(variational_y)
-        tf.summary.scalar("variational_t", avg_variational_t, step=step)
-        tf.summary.scalar("variational_y", avg_variational_y, step=step)
+        tf.summary.scalar("variational_ll/t", avg_variational_t, step=step)
+        tf.summary.scalar("variational_ll/y", avg_variational_y, step=step)
 
         return distortion_x, distortion_t, distortion_y, rate, variational_t, variational_y
 
