@@ -37,7 +37,7 @@ class CEVAE(Model):
 
         # Encoder part
         self.qt_logits = FC_net(x_size, 1, "qt", hidden_size=hidden_size, debug=debug)
-        self.hqy       = FC_net(1, hidden_size, "hqy", hidden_size=hidden_size, debug=debug)
+        self.hqy       = FC_net(x_size, hidden_size, "hqy", hidden_size=hidden_size, debug=debug)
         self.mu_qy_t0  = FC_net(hidden_size, 1, "mu_qy_t0", hidden_size=hidden_size, debug=debug)
         self.mu_qy_t1  = FC_net(hidden_size, 1, "mu_qy_t1", hidden_size=hidden_size, debug=debug)
 
@@ -58,12 +58,12 @@ class CEVAE(Model):
     def encode(self, x, t, y, step):
         if self.debug:
             print("Encoding")
-        qt = tfd.Independent(tfd.Bernoulli(logits=self.qt_logits(x,step)), 
+        qt = tfd.Independent(tfd.Bernoulli(logits=self.qt_logits(x, step)), 
                              reinterpreted_batch_ndims=1,
                              name="qt")
         qt_sample = tf.dtypes.cast(qt.sample(), tf.float64)
         
-        hqy = self.hqy(qt_sample, step)
+        hqy = self.hqy(x, step)
         mu_qy0 = self.mu_qy_t0(hqy, step)
         mu_qy1 = self.mu_qy_t1(hqy, step)
         qy = tfd.Independent(tfd.Normal(loc=qt_sample * mu_qy1 + (1. - qt_sample) * mu_qy0, 
