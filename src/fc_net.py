@@ -3,7 +3,7 @@ from tensorflow.keras import layers, Model
 
 class FC_net(Model):
     """ Simple fully connected net with not activation after the last layer. """
-    def __init__(self, in_dims, out_dims, name_tag, nr_hidden=2, hidden_size=256, activation='relu', debug=False):
+    def __init__(self, in_dims, out_dims, name_tag, nr_hidden=2, hidden_size=256, activation='elu', debug=False):
         super().__init__()
 
         self.debug = debug
@@ -18,6 +18,7 @@ class FC_net(Model):
             new_layer.build((None, in_dims))
             nn_layers = [new_layer]
 
+            i = 0
             for i in range(nr_hidden - 1):
                 new_layer = layers.Dense(hidden_size, activation=activation, dtype="float64", name=f"dense_{i + 1}")
                 new_layer.build((None, hidden_size))

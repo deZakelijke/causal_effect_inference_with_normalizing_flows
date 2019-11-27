@@ -1,7 +1,7 @@
 import tensorflow as tf
 import numpy as np
 
-def IHDP_dataset(batch_size=10, path_data="datasets/IHDP/csv/", file_prefix="ihdp_npci_"):
+def IHDP_dataset(params, path_data="datasets/IHDP/csv/", file_prefix="ihdp_npci_"):
     binfeats = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
     contfeats = [i for i in range(25) if i not in binfeats]
     nr_files = 10
@@ -28,9 +28,12 @@ def IHDP_dataset(batch_size=10, path_data="datasets/IHDP/csv/", file_prefix="ihd
 
     x_cont = np.array(x_cont)
     x_bin = np.array(x_bin)
-    t = np.array(t)
-    y = np.array(y)
+    t = np.expand_dims(np.array(t), axis=1)
+    y = np.expand_dims(np.array(y), axis=1) # Y needs to have zero mean and std 1 during training
+    y_mean, y_std = np.mean(y), np.std(y)
+    y = (y - y_mean) / y_std
     y_cf = np.array(y_cf)
+    #self.y_cf__mean, self.y_cf_std = np.mean(y_cf), np.std(y_cf)
     mu_0 = np.array(mu_0)
     mu_1 = np.array(mu_1)
 

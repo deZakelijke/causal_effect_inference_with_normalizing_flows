@@ -27,14 +27,16 @@ def parse_arguments():
                         help="Dataset used (default: IHDP")
     parser.add_argument("--model_dir", type=str, default="/home/mdegroot/logs/",
                         help="The directory to save the model to (default: ~/logs/)")
-    parser.add_argument("--save_steps", type=int, default=100,
+    parser.add_argument("--log_steps", type=int, default=10,
                         help="Save/print log every n steps (default: 10)")
     parser.add_argument("--debug", action="store_true", default=False,
                         help="Turn on debugging mode. All it does now is turn off summary writer")
 
     args = parser.parse_args()
 
-    if not args.debug:
+    if args.debug:
+        tf.random.set_seed(0)
+    else:
         os.environ["TF_CPP_MIN_LOG_LEVEL"] = "1"
         logging.getLogger("tensorflow").setLevel(logging.WARNING)
 
