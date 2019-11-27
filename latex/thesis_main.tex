@@ -1,6 +1,7 @@
 \documentclass{report}
 \usepackage[utf8]{inputenc}
 \usepackage{tikz}
+\usetikzlibrary{shapes.geometric}
 \usepackage{standalone}
 \usepackage{amsmath}
 \usepackage{amsfonts}
@@ -9,7 +10,7 @@
 
 \newcommand{\red}[1]{{\color{red}{#1}}}
 
-
+\newcommand{\E}{\mathbb{E}}
 \newcommand{\Norm}{\mathcal{N}}
 \newcommand{\Loss}{\mathcal{L}}
 \newcommand{\R}{\mathbb{R}}
@@ -145,9 +146,35 @@ The set $\text{pa}_\bt$ denotes the set of ancestor nodes from $\bt$ that satisf
 But in general this is not possible, and instead the principle of proxy variables is introduced. These proxy variables, denoted with $\bX$, can be anything that can be measured and from which we can assume that it is directly caused by $\bZ$. The right hand side of Figure \ref{fig:graph_observed_confounder_and_latent_with_proxy} represent such a situation. The underlying principle of proxy variables is that it allows us to correct for the latent confounder in an approximate way. There has been extensive research in this area in recent years but most methods either assume that the latent confounder is categorical or 
 % \cite{kuroki2014measurement} \cite{miao2018identifying}
 
+\section{Metrics in causal inference}
+Precision in Estimation of Heterogeneous Effect(PEHE): $PEHE := \frac{1}{N}\sum\limits^N_{i=1}((y_{i1} - y_{i0}) - (\hat{y}_{i1} - \hat{y}_{i0}))^2$, where $y_1$ and $y_0$ correspond to the true outcomes under $t=1$ and $t=0$ respectively, and $\hat{y}_1$ and $\hat{y}_0$ correspond to the outcomes estimated by the model. 
+Absolute error of the average treatment effect. Its the absolute error of the average of the individual treatment effect(ITE): 
+\begin{equation}
+    ITE(X) := \E[\by | \bX=x, do(\bt=1)] - \E[\by | \bX=x, do(\bt=0)], \quad ATE := \E[ITE(x)]
+\end{equation}
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \chapter{Generative modelling and variational inference}
+The field of variational inference is concerned with finding the posterior distribution of latent variables $\bz$ of some observed variables $\bx$. The purpose of this is to uncover the structure of the data distribution $p(\bx)$ and to make it possible to generate new samples from that distribution through the sampling of new $\bz$ from the prior\footnotemark[\ref{note:citation}]. The difficulty in this is that in general the posterior can have a complex structure and to uncover this requires us to solve an intractable integral:
+\begin{equation}
+    p_\theta(\bx) = \int p_\theta(\bx|\bz)p(\bz) d\bz
+\end{equation}
+A possible solution for this is the introduction of the variational distribution, $q_\phi(\bz|\bx)$\footnotemark[\ref{note:citation}]. The variational distribution is an approximation for the real posterior that has a relatively simple form, for example a diagonal Gaussian. Through the introduction of the variational distribution we can derive a lower bound for the log-likelihood, called the evidence lower bound(ELBO) or negative free energy\footnotemark[\ref{note:citation}]:
+
+\begin{equation}\label{equation:negative_free_energy}
+    \begin{split}
+    \ln p_\theta(\bx) &= \ln \int p_\theta(\bx|\bz)p(\bz) d\bz\\
+    &= \ln \int \frac{q_\phi(\bz|\bx)}{q_\phi(\bz|\bx)} p_\theta(\bx|\bz)p(\bz)d\bz\\
+    &\geq \E_{q_\phi(\bz|\bx)}[\ln p_\theta(\bx|\bz) + \ln p(\bz) - \ln q_\phi(\bz|\bx)] \\
+    &= D_{KL}[q_\phi(\bz|\bx) || p(\bz)] + \E_{q_\phi(\bz|\bx)}[\ln p_\theta(\bx|\bz)]= -\mathcal{F}(\bx)
+    \end{split}
+\end{equation}
+
+This can be quite effective if both $p_\theta(\bx|\bz)$ and $q_\phi(\bz\bx)$ are modelled as neural networks. The work of \cite{kingma2013auto} has show how to then optimise this lower bound through stochastic gradient descent(SGD) methods, through the use of the reparameterisation trick. Such a model is called the Variational Autoencoder(VAE). It is capable of constructing a meaningful latent representation of data and to generate new data samples from that latent space. 
+
+A weakness of the VAE is that the learned variational distribution can't be too complex, even if the true posterior would be. Another disadvantage is the difficulty of finding the global optimum of the model when using a non-linear neural network. Furthermore, the work of \cite{alemi2017fixing} has shown that even if a good marginal log-likelihood is obtained, the model may still have learned a weak latent representation.
+
 \section{Normalising Flows}
 The research in generative models has yielded a model type called Normalising Flows, first thought of by Tabak and Turner \cite{tabak2013family} and later popularised by Rezende and Mohamed \cite{rezende2016variational}. The approach of this class of models is to learn an invertible series of mappings from a prior distribution of a simple form to the data likelihood. By using the change of variable rule, in Equation \ref{equation:change_of_variables}, it is guaranteed that before and after the transformations we have a valid probability distribution. Through the use of the inverse of these mappings one can perform exact posterior inference. 
 
@@ -159,10 +186,21 @@ The reason we talk about a series of transformations is to split the the potenti
 \begin{equation}\label{equation:change_of_variables_log_chain}
     \ln p(\bx) = \ln p(\bz_0) - \sum\limits^K_{k=1}\ln \left| \text{det} \parfrac{f_k}{\bz_{k-1}} \right|
 \end{equation}
+To make this work in practice the (log)determinant of the Jacobian of each mapping $f_k$ has to computed efficiently. The most straightforward way to do this is to enforce that each mapping has a triangular Jacobian. This immediately solves the second practical criterion of having a tractable inverse of each $f_k$. Another more implicit requirement for our mappings is that they are parameterised functions on which we can use gradient descent methods to learn the parameters. 
 
-To make this work in practice the (log)determinant of the Jacobian of each mapping $f_k$ has to computed efficiently. The most straightforward way to do this is to enforce that each mapping has a triangular Jacobian. This immediately solves the second practical criterion of having a tractable inverse of each $f_k$. Another more implicit requirement for our mappings is that they are parameterised functions on which we can use gradient descent methods to learn the parameters. Several implementations of Normalising Flows have been made so far, the simplest of which is the planar flow and radial flow
+The original version of the Normalising Flow had a slightly different approach. Instead of mapping from the data distribution to the latent prior or the other way around it maps the latent variable to its more expressive final posterior. This approach combines the idea of a variational distribution and a Normalising Flow. In the first part of the inference procedure a data sample $\bx$ is mapped to the parameters of the (simple) variational distribution, in the second step the first latent variable in the flow, $\bz_0$ is sampled from this distribution, and in the third step $\bz_0$ is mapped through the Normalising Flow to the final posterior estimate $\bz_K$. By rewriting the negative free energy function we get the following lower bound of the log-likelihood:
 
-\subsection{Planar flow and radial flow}
+\begin{equation}\label{equation:negative_free_energy_with_flow}
+    \begin{split}
+    -\mathcal{F}(\bx) &= D_{KL}[q_\phi(\bz|\bx) || p(\bz)] + \E_{q_\phi(\bz|\bx)}[\ln p_\theta(\bx|\bz)]\\
+    &= \E_{q_\phi(\bz|\bx)}[-\ln q_\phi(\bz|\bx) + \ln p(\bz) + \ln p_\theta(\bx|\bz)]\\
+    &= \E_{q_0(z_0)}[-\ln q_0(\bz_K) + \ln p(\bz_K) + \ln p_\theta(\bx|\bz_K)]\\
+    &= \E_{q_0(z_0)}[-\ln q_0(\bz_0) + \sum\limits^K_{k=1}\ln \left|\text{det} \parfrac{f_k}{f_{k-1}} \right| + \ln p(\bz_K) + \ln p_\theta(\bx|\bz_K)]\\
+    \end{split}
+\end{equation}
+where we have $q_0(z_0)$ as the start of the flow, while also being a variational distribution. Several implementations of Normalising Flows have been made so far, the simplest of which is the planar flow and radial flow
+
+\subsection{Planar flow and radial flow}\label{section:planar_radial_flow}
 In the original work of Rezende and Mohamed \cite{rezende2016variational}, two possible implementations were proposed. The first one is the planar flow, in which each mapping has the form:
 \begin{equation}\label{equation:planar_flow}
     f(\bz) = \bz + \bu h(\bw^T\bz + b)
@@ -209,8 +247,21 @@ The idea of using a generative model in causal effect inference was proposed by 
     \label{fig:cevae_graphical_model}
 \end{figure}
 
+The objective function of a CEVAE is of the same form as the ELBO in equation  \ref{equation:negative_free_energy}. It is the expectation under the variational distribution of the joint log probability of all variables, minus the log of the variational distribution:
+\begin{equation}
+    \mathcal{L} = \E_{q_\phi(\bz|\bx, \bt, \by)}[\ln p_\theta(\bx, \bt | \bz) + \ln p_\theta(\by |\bt, \bz) +\ln p(\bz) - q_\phi(\bz | \bx, \bt, \by)]
+\end{equation}
+
 \section{Causal effect inference with Normalising Flows}
-This can be potentially be improved upon by using Normalising Flows. Their ability to reproduce the true posterior over the latent confounder is an improvement on the CEVAE
+This can be potentially be improved upon by using Normalising Flows. Their ability to reproduce the true posterior over the latent confounder is an improvement on the CEVAE. The first proposal for this is to pass the inferred $\bZ$ values through a series of Normalising Flows to yield $\bZ_k$, which can then be used to reconstruct the observed variables. We can implement this the simplest by using Planar Flows, as described in section \ref{section:planar_radial_flow}. Through this we hope to uncover a better match to the true posterior of $\bZ$.
+
+
+\begin{figure}
+    \centering
+    \includestandalone{Figures/cenf_with_vae}
+    \caption{Simple cenf}
+    \label{fig:cenf_with_vae}
+\end{figure}
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
