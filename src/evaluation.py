@@ -2,15 +2,21 @@ import numpy as np
 import tensorflow as tf
 
 
-class Evaluator(object):
-    def __init__(self, y, t, y_cf=None, mu0=None, mu1=None):
-        self.y = y
-        self.t = t
-        self.y_cf = y_cf
-        self.mu0 = mu0
-        self.mu1 = mu1
-        if mu0 is not None and mu1 is not None:
-            self.true_ite = mu1 - mu0
+#class Evaluator(object):
+def evaluation(model, dataset_slice):
+    """ Function for evaluating a model according to our metrics
+
+    """
+    x_bin, x_cont, t, y, y_cf, mu_0, mu_1 = dataset_slice 
+    
+#    def __init__(self, y, t, y_cf=None, mu0=None, mu1=None):
+#        self.y = y
+#        self.t = t
+#        self.y_cf = y_cf
+#        self.mu0 = mu0
+#        self.mu1 = mu1
+#        if mu0 is not None and mu1 is not None:
+#            self.true_ite = mu1 - mu0
 
     def rmse_ite(self, ypred1, ypred0):
         pred_ite = tf.zeros_like(self.true_ite)
@@ -37,6 +43,12 @@ class Evaluator(object):
         return rmse_factual, rmse_cfactual
 
     def calc_stats(self, ypred1, ypred0):
+        """ Function that calls all individual metrics that we wat to computes 
+            and returns a tuple of all metrics.
+
+            Args: 
+                ypred1, ypred0: output of get_y0_y1, rescaled with original std and mean of y
+        """
         ite = self.rmse_ite(ypred1, ypred0)
         ate = self.abs_ate(ypred1, ypred0)
         pehe = self.pehe(ypred1, ypred0)

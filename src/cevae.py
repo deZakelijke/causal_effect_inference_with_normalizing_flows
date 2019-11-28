@@ -8,6 +8,7 @@ from tensorflow_probability import distributions as tfd
 
 from fc_net import FC_net
 from dataset import IHDP_dataset
+#from evaluation import Evaluator
 
 
 class CEVAE(Model):
@@ -73,25 +74,25 @@ class CEVAE(Model):
                              reinterpreted_batch_ndims=1,
                              name="qy")
         
-        #xy = tf.concat([x, qy.sample()], 1)
-        xy = tf.concat([x, y], 1)
+        xy = tf.concat([x, qy.sample()], 1)
+        #xy = tf.concat([x, y], 1)
         hidden_z = self.hqz(xy, step)
         qz0 = self.qz_t0(hidden_z, step)
         qz1 = self.qz_t1(hidden_z, step)
-        #qz = tfd.Independent(tfd.Normal(loc=qt_sample * qz1[:, :self.z_size] + 
-        #                                    (1. - qt_sample) * qz0[:, :self.z_size], 
-        #                                scale=qt_sample * softplus(qz1[:, self.z_size:]) + 
-        #                                      (1. - qt_sample) * softplus(qz0[:, self.z_size:]),
-        #                               ),
-        #                     reinterpreted_batch_ndims=1,
-        #                     name="qz")
-        qz = tfd.Independent(tfd.Normal(loc=t * qz1[:, :self.z_size] + 
-                                            (1. - t) * qz0[:, :self.z_size], 
-                                        scale=t * softplus(qz1[:, self.z_size:]) + 
-                                              (1. - t) * softplus(qz0[:, self.z_size:]),
+        qz = tfd.Independent(tfd.Normal(loc=qt_sample * qz1[:, :self.z_size] + 
+                                            (1. - qt_sample) * qz0[:, :self.z_size], 
+                                        scale=qt_sample * softplus(qz1[:, self.z_size:]) + 
+                                              (1. - qt_sample) * softplus(qz0[:, self.z_size:]),
                                        ),
                              reinterpreted_batch_ndims=1,
                              name="qz")
+        #qz = tfd.Independent(tfd.Normal(loc=t * qz1[:, :self.z_size] + 
+        #                                    (1. - t) * qz0[:, :self.z_size], 
+        #                                scale=t * softplus(qz1[:, self.z_size:]) + 
+        #                                      (1. - t) * softplus(qz0[:, self.z_size:]),
+        #                               ),
+        #                     reinterpreted_batch_ndims=1,
+        #                     name="qz")
 
         return qt, qy, qz
 
@@ -113,8 +114,7 @@ class CEVAE(Model):
                             reinterpreted_batch_ndims=1,
                             name="t")
 
-        #t_sample = tf.dtypes.cast(t.sample(), tf.float64)
-        t_sample = tf.dtypes.cast(t.mean(), tf.float64)
+        t_sample = tf.dtypes.cast(t.sample(), tf.float64)
 
         mu_y0 = self.mu_y_t0(z, step)
         mu_y1 = self.mu_y_t1(z, step)
@@ -194,8 +194,9 @@ def train_cevae(params):
     len_dataset = 0
     for _ in dataset:
         len_dataset +=1
+    dataset = dataset.shuffle(len_dataset)
 
-    timestamp = str(int(time.time()))[2:] # Cut off the first two digits because this project wont take more than ten years
+    timestamp = str(int(time.time()))[2:] 
     logdir = f"{params['model_dir']}cevae/{params['dataset']}/{params['learning_rate']}/{timestamp}"
     if not params["debug"]:
         writer = tf.summary.create_file_writer(logdir)
@@ -206,6 +207,9 @@ def train_cevae(params):
                   params["z_size"],
                   debug=params["debug"])
     optimizer = tf.keras.optimizers.Adam(learning_rate=params["learning_rate"])
+    #train_evaluator = Evaluator() #y, t, y_cf, mu0, mu1
+    #print(dataset)
+    #sys.exit(0)
 
     #tf.summary.trace_on(graph=True, profiler=False)
 
@@ -223,17 +227,16 @@ def train_cevae(params):
             if epoch % params["log_steps"] == 0:
                 print(f"Epoch: {epoch}, loss: {loss_value}")
             print("Epoch done")
-        sys.exit(0)
+        return
 
     with writer.as_default():
         for epoch in range(params["epochs"]):
             step_start = epoch * (len_dataset // params["batch_size"] + 1)
-            dataset.shuffle(len_dataset)
+            #dataset.shuffle(len_dataset)
             for step, features in dataset.batch(params["batch_size"]).enumerate(step_start):
                 loss_value, grads = cevae.grad(*features, step)
                 optimizer.apply_gradients(zip(grads, cevae.trainable_variables))
-                #if step == 0:
-                #    tf.summary.trace_export("Profile", step=step)
             if epoch % params["log_steps"] == 0:
+
                 print(f"Epoch: {epoch}, loss: {loss_value}")
 
