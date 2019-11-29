@@ -8,6 +8,7 @@ from tensorflow_probability import distributions as tfd
 
 from fc_net import FC_net
 from dataset import IHDP_dataset
+from utils import get_log_prob, get_analytical_KL_divergence
 #from evaluation import Evaluator
 
 
@@ -31,12 +32,6 @@ class CEVAE(Model):
         self.debug = debug
         y_hidden = 2
 
-        self.latent_prior = tfd.Independent(tfd.Normal(
-                                                loc=tf.zeros([1, z_size], dtype=tf.float64),
-                                                scale=tf.ones([1, z_size], dtype=tf.float64)),
-                                   reinterpreted_batch_ndims=1)
-
-
         # Encoder part
         self.qt_logits = FC_net(x_size, 1, "qt", hidden_size=hidden_size, debug=debug)
         self.hqy       = FC_net(x_size, hidden_size, "hqy", hidden_size=hidden_size, debug=debug)
@@ -57,60 +52,45 @@ class CEVAE(Model):
         self.mu_y_t1 = FC_net(z_size, 1, "mu_y_t1", hidden_size=hidden_size, debug=debug, nr_hidden=y_hidden)
 
 
-    def encode(self, x, t, y, step):
+    @tf.function
+    def encode(self, x, t, y, step, training=False):
         if self.debug:
             print("Encoding")
-        qt = tfd.Independent(tfd.Bernoulli(logits=self.qt_logits(x, step)), 
+        qt_prob = tf.sigmoid(self.qt_logits(x, step))
+        qt = tfd.Independent(tfd.Bernoulli(probs=qt_prob), 
                              reinterpreted_batch_ndims=1,
                              name="qt")
         qt_sample = tf.dtypes.cast(qt.sample(), tf.float64)
-        #qt_sample = tf.dtypes.cast(qt.mean(), tf.float64) # do we have to do this? not use the real t instead?
         
         hqy = self.hqy(x, step)
         mu_qy0 = self.mu_qy_t0(hqy, step)
         mu_qy1 = self.mu_qy_t1(hqy, step)
-        qy = tfd.Independent(tfd.Normal(loc=qt_sample * mu_qy1 + (1. - qt_sample) * mu_qy0, 
-                                        scale=tf.ones_like(mu_qy0)),
+        qy_mean = qt_sample * mu_qy1 + (1. - qt_sample) * mu_qy0
+        qy = tfd.Independent(tfd.Normal(loc=qy_mean, scale=tf.ones_like(qy_mean)),
                              reinterpreted_batch_ndims=1,
                              name="qy")
         
         xy = tf.concat([x, qy.sample()], 1)
-        #xy = tf.concat([x, y], 1)
         hidden_z = self.hqz(xy, step)
         qz0 = self.qz_t0(hidden_z, step)
         qz1 = self.qz_t1(hidden_z, step)
-        qz = tfd.Independent(tfd.Normal(loc=qt_sample * qz1[:, :self.z_size] + 
-                                            (1. - qt_sample) * qz0[:, :self.z_size], 
-                                        scale=qt_sample * softplus(qz1[:, self.z_size:]) + 
-                                              (1. - qt_sample) * softplus(qz0[:, self.z_size:]),
-                                       ),
-                             reinterpreted_batch_ndims=1,
-                             name="qz")
-        #qz = tfd.Independent(tfd.Normal(loc=t * qz1[:, :self.z_size] + 
-        #                                    (1. - t) * qz0[:, :self.z_size], 
-        #                                scale=t * softplus(qz1[:, self.z_size:]) + 
-        #                                      (1. - t) * softplus(qz0[:, self.z_size:]),
-        #                               ),
-        #                     reinterpreted_batch_ndims=1,
-        #                     name="qz")
+        qz_mean = qt_sample * qz1[:, :self.z_size] + (1. - qt_sample) * qz0[:, :self.z_size]
+        qz_std = qt_sample * softplus(qz1[:, self.z_size:]) + (1. - qt_sample) * softplus(qz0[:, self.z_size:])
+        return qt_prob, qy_mean, qz_mean, qz_std
 
-        return qt, qy, qz
-
-    def decode(self, z, step):
+    @tf.function
+    def decode(self, z, step, training=False):
         if self.debug:
             print("Decoding")
         hidden_x = self.hx(z, step)
-        x_bin = tfd.Independent(tfd.Bernoulli(logits=self.x_bin_logits(hidden_x, step)),
-                                reinterpreted_batch_ndims=1,
-                                name="x_bin")
+        x_bin_prob = tf.sigmoid(self.x_bin_logits(hidden_x, step))
 
-        x_cont_l = self.x_cont_logits(hidden_x, step)
-        x_cont = tfd.Independent(tfd.Normal(loc=x_cont_l[:, :self.x_cont_size], 
-                                            scale=softplus(x_cont_l[:, self.x_cont_size:])),
-                                 reinterpreted_batch_ndims=1,
-                                 name="x_cont")
+        x_cont_h = self.x_cont_logits(hidden_x, step)
+        x_cont_mean = x_cont_h[:, :self.x_cont_size]
+        x_cont_std = softplus(x_cont_h[:, self.x_cont_size:])
 
-        t = tfd.Independent(tfd.Bernoulli(logits=self.t_logits(z, step)),
+        t_prob = tf.sigmoid(self.t_logits(z, step))
+        t = tfd.Independent(tfd.Bernoulli(probs=t_prob),
                             reinterpreted_batch_ndims=1,
                             name="t")
 
@@ -118,67 +98,78 @@ class CEVAE(Model):
 
         mu_y0 = self.mu_y_t0(z, step)
         mu_y1 = self.mu_y_t1(z, step)
-        y = tfd.Independent(tfd.Normal(loc=t_sample * mu_y1 + (1. - t_sample) * mu_y0, 
-                                       scale=tf.ones_like(mu_y0)),
-                            reinterpreted_batch_ndims=1,
-                            name="y")
-        return x_bin, x_cont, t, y
+        y_mean = t_sample * mu_y1 + (1. - t_sample) * mu_y0
+        return x_bin_prob, x_cont_mean, x_cont_std, t_prob, y_mean
 
     @tf.function
     def call(self, features, step, training=False):
+        """ Forward pass of the CEVAE
+
+        Args:   features, tuple of all input variables
+                step, iteration number of the model for tensorboard logging
+
+        Returns:    encoder_params, parameters of all variational distributions
+                    qt_prob, qy_mean, qz_mean, qz_std
+
+                    decoder_params, parameters of all likelihoods
+                    x_bin_prob, x_cont_mean, x_cont_std, t_prob, y_mean
+        """
         if self.debug:
             print("Starting forward pass")
         x_bin, x_cont, t, y, y_cf, mu_0, mu_1 = features
         x = tf.concat([x_bin, x_cont], 1)
 
-        qt, qy, qz = self.encode(x, t, y, step)
+        encoder_params = self.encode(x, t, y, step, training=training)
+        _, _, qz_mean, qz_std = encoder_params
+        qz = tfd.Independent(tfd.Normal(loc=qz_mean, scale=qz_std),
+                             reinterpreted_batch_ndims=1,
+                             name="qz")
         qz_sample = qz.sample()
-        x_bin_likelihood, x_cont_likelihood, t_likelihood, y_likelihood = self.decode(qz_sample, step)
+
+        decoder_params = self.decode(qz_sample, step, training=training)
+        return encoder_params, decoder_params
+
+    @tf.function
+    def elbo(self, features, encoder_params, decoder_params, step):
+        if self.debug:
+            print("Calculating loss")
+        x_bin, x_cont, t, y, y_cf, mu_0, mu_1 = features
+        qt_prob, qy_mean, qz_mean, qz_std = encoder_params
+        x_bin_prob, x_cont_mean, x_cont_std, t_prob, y_mean = decoder_params
 
         # Reconstruction
         if self.debug:
             print("Calculating negative data log likelihood")
-        distortion_x = -x_bin_likelihood.log_prob(x_bin) - x_cont_likelihood.log_prob(x_cont)
-        distortion_t = -t_likelihood.log_prob(t)
-        distortion_y = -y_likelihood.log_prob(y)
-        avg_x_distortion = tf.reduce_mean(input_tensor=distortion_x)
-        avg_t_distortion = tf.reduce_mean(input_tensor=distortion_t)
-        avg_y_distortion = tf.reduce_mean(input_tensor=distortion_y)
-        tf.summary.scalar("distortion/x", avg_x_distortion, step=step)
-        tf.summary.scalar("distortion/t", avg_t_distortion, step=step)
-        tf.summary.scalar("distortion/y", avg_y_distortion, step=step)
+        distortion_x = - get_log_prob(x_bin, 'B', probs=x_bin_prob) \
+                           - get_log_prob(x_cont, 'N', mean=x_cont_mean, std=x_cont_std)
+        distortion_t = - get_log_prob(t, 'B', probs=t_prob)
+        distortion_y = - get_log_prob(y, 'N', mean=y_mean)
+        tf.summary.scalar("distortion/x", distortion_x, step=step)
+        tf.summary.scalar("distortion/t", distortion_t, step=step)
+        tf.summary.scalar("distortion/y", distortion_y, step=step)
 
         # KL-divergence
         if self.debug:
             print("Calculating KL-divergence")
-        rate = tfd.kl_divergence(qz, self.latent_prior)
-        avg_rate = tf.reduce_mean(input_tensor=rate)
-        tf.summary.scalar("rate/z", avg_rate, step=step)
+        rate = tf.reduce_mean(get_analytical_KL_divergence(qz_mean, qz_std))
+        tf.summary.scalar("rate/z", rate, step=step)
 
         # Auxillary distributions
         if self.debug:
             print("Calculating negative log likelihood of auxillary distributions")
-        variational_t = -qt.log_prob(t)
-        variational_y = -qy.log_prob(y)
-        avg_variational_t = tf.reduce_mean(variational_t)
-        avg_variational_y = tf.reduce_mean(variational_y)
-        tf.summary.scalar("variational_ll/t", avg_variational_t, step=step)
-        tf.summary.scalar("variational_ll/y", avg_variational_y, step=step)
+        variational_t = - get_log_prob(t, 'B', probs=qt_prob)
+        variational_y = - get_log_prob(y, 'N', mean=qy_mean)
+        tf.summary.scalar("variational_ll/t", variational_t, step=step)
+        tf.summary.scalar("variational_ll/y", variational_y, step=step)
 
-        return distortion_x, distortion_t, distortion_y, rate, variational_t, variational_y
-
-    @tf.function
-    def elbo(self, distortion_x, distortion_t, distortion_y, rate, variational_t, variational_y):
-        if self.debug:
-            print("Calculating loss")
         elbo_local = -(rate + distortion_x + distortion_t + distortion_y + variational_t + variational_y)
         elbo = tf.reduce_mean(input_tensor=elbo_local)
         return -elbo
 
-    def grad(self, features, _, step):
+    def grad(self, features, step):
         with tf.GradientTape() as tape:
-            model_output = self(features, step)
-            loss = self.elbo(*model_output)
+            encoder_params, decoder_params = self(features, step)
+            loss = self.elbo(features, encoder_params, decoder_params, step)
             tf.summary.scalar("metrics/loss", loss, step=step)
         if self.debug:
             print(f"Forward pass complete, step: {step}")
@@ -207,11 +198,6 @@ def train_cevae(params):
                   params["z_size"],
                   debug=params["debug"])
     optimizer = tf.keras.optimizers.Adam(learning_rate=params["learning_rate"])
-    #train_evaluator = Evaluator() #y, t, y_cf, mu0, mu1
-    #print(dataset)
-    #sys.exit(0)
-
-    #tf.summary.trace_on(graph=True, profiler=False)
 
     if params["debug"]:
         for epoch in range(5):
@@ -219,11 +205,8 @@ def train_cevae(params):
             print(f"Epoch: {epoch}")
             step_start = epoch * (len_dataset // params["batch_size"] + 1)
             for step, features in dataset.batch(params["batch_size"]).enumerate(step_start):
-                loss_value, grads = cevae.grad(*features, step)
-                #tf.summary.trace_export(name="test?", step=step, profiler_outdir=logdir)
+                loss_value, grads = cevae.grad(features, step)
                 optimizer.apply_gradients(zip(grads, cevae.trainable_variables))
-                #if step == 0:
-                #    tf.summary.trace_export("Profile")
             if epoch % params["log_steps"] == 0:
                 print(f"Epoch: {epoch}, loss: {loss_value}")
             print("Epoch done")
@@ -232,9 +215,8 @@ def train_cevae(params):
     with writer.as_default():
         for epoch in range(params["epochs"]):
             step_start = epoch * (len_dataset // params["batch_size"] + 1)
-            #dataset.shuffle(len_dataset)
             for step, features in dataset.batch(params["batch_size"]).enumerate(step_start):
-                loss_value, grads = cevae.grad(*features, step)
+                loss_value, grads = cevae.grad(features, step)
                 optimizer.apply_gradients(zip(grads, cevae.trainable_variables))
             if epoch % params["log_steps"] == 0:
 

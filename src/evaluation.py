@@ -3,54 +3,55 @@ import tensorflow as tf
 
 
 #class Evaluator(object):
-def evaluation(model, dataset_slice):
+def calc_stats(model, dataset, params):
     """ Function for evaluating a model according to our metrics
 
-    """
-    x_bin, x_cont, t, y, y_cf, mu_0, mu_1 = dataset_slice 
-    
-#    def __init__(self, y, t, y_cf=None, mu0=None, mu1=None):
-#        self.y = y
-#        self.t = t
-#        self.y_cf = y_cf
-#        self.mu0 = mu0
-#        self.mu1 = mu1
-#        if mu0 is not None and mu1 is not None:
-#            self.true_ite = mu1 - mu0
+   
+    Function that calls all individual metrics that we wat to computes 
+        and returns a tuple of all metrics.
 
-    def rmse_ite(self, ypred1, ypred0):
-        pred_ite = tf.zeros_like(self.true_ite)
-        idx1, idx0 = tf.where(self.t == 1), tf.where(self.t == 0)
-        ite1, ite0 = self.y[idx1] - ypred0[idx1], ypred1[idx0] - self.y[idx0]
+        Args: 
+            ypred1, ypred0: output of get_y0_y1, rescaled with original std and mean of y
+    """
+
+    def rmse_ite(ypred1, ypred0):
+        pred_ite = tf.zeros_like(true_ite)
+        idx1, idx0 = tf.where(t == 1), tf.where(t == 0)
+        ite1, ite0 = y[idx1] - ypred0[idx1], ypred1[idx0] - y[idx0]
         pred_ite[idx1] = ite1
         pred_ite[idx0] = ite0
-        return tf.sqrt(tf.reduce_mean(tf.square(self.true_ite - pred_ite)))
+        return tf.sqrt(tf.reduce_mean(tf.square(true_ite - pred_ite)))
 
-    def abs_ate(self, ypred1, ypred0):
-        return tf.abs(tf.reduce_mean(ypred1 - ypred0) - tf.redce_mean(self.true_ite))
+    def abs_ate(ypred1, ypred0):
+        return tf.abs(tf.reduce_mean(ypred1 - ypred0) - tf.redce_mean(true_ite))
 
-    def pehe(self, ypred1, ypred0):
-        return tf.sqrt(tf.reduce_mean(tf.square((self.mu1 - self.mu0) - (ypred1 - ypred0))))
+    def pehe(ypred1, ypred0):
+        return tf.sqrt(tf.reduce_mean(tf.square((mu_1 - self.mu_0) - (ypred1 - ypred0))))
 
-    def y_errors(self, y0, y1):
-        ypred = (1 - self.t) * y0 + self.t * y1
-        ypred_cf = self.t * y0 + (1 - self.t) * y1
-        return self.y_errors_pcf(ypred, ypred_cf)
+    def y_errors(y0, y1):
+        ypred = (1 - t) * y0 + t * y1
+        ypred_cf = t * y0 + (1 - t) * y1
+        return y_errors_pcf(ypred, ypred_cf)
 
-    def y_errors_pcf(self, ypred, ypred_cf):
-        rmse_factual = tf.sqrt(tf.reduce_mean(tf.square(ypred - self.y)))
-        rmse_cfactual = tf.sqrt(tf.reduce_mean(tf.square(ypred_cf - self.y_cf)))
+    def y_errors_pcf(ypred, ypred_cf):
+        rmse_factual = tf.sqrt(tf.reduce_mean(tf.square(ypred - y)))
+        rmse_cfactual = tf.sqrt(tf.reduce_mean(tf.square(ypred_cf - y_cf)))
         return rmse_factual, rmse_cfactual
 
-    def calc_stats(self, ypred1, ypred0):
-        """ Function that calls all individual metrics that we wat to computes 
-            and returns a tuple of all metrics.
 
-            Args: 
-                ypred1, ypred0: output of get_y0_y1, rescaled with original std and mean of y
-        """
-        ite = self.rmse_ite(ypred1, ypred0)
-        ate = self.abs_ate(ypred1, ypred0)
-        pehe = self.pehe(ypred1, ypred0)
-        return ite, ate, pehe
+    avg_ite = 0
+    avg_ate = 0
+    avg_pehe = 0
 
+    for features in dataset.batch(params["batch_size"]):
+        x_bin, x_cont, t, y, y_cf, mu_0, mu_1 = features
+        true_ite = mu_1 - mu_0
+ 
+   # def calc_stats(ypred1, ypred0):
+   #     ite = self.rmse_ite(ypred1, ypred0)
+   #     ate = self.abs_ate(ypred1, ypred0)
+   #     pehe = self.pehe(ypred1, ypred0)
+   #     return ite, ate, pehe
+
+
+   # return calc_stats
