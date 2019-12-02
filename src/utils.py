@@ -17,7 +17,8 @@ def get_log_prob(data, dist, mean=None, std=None, probs=None, name=None):
         
 
     distribution = tfd.Independent(distribution, reinterpreted_batch_ndims=1, name=name)
-    return tf.reduce_mean(input_tensor=distribution.log_prob(data))
+    #return tf.reduce_mean(input_tensor=distribution.log_prob(data))
+    return distribution.log_prob(data)
 
 @tf.function
 def get_analytical_KL_divergence(mean, std):

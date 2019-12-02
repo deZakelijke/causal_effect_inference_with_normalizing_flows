@@ -9,7 +9,7 @@ from tensorflow_probability import distributions as tfd
 from fc_net import FC_net
 from dataset import IHDP_dataset
 from utils import get_log_prob, get_analytical_KL_divergence
-#from evaluation import Evaluator
+from evaluation import calc_stats
 
 
 class CEVAE(Model):
@@ -140,10 +140,10 @@ class CEVAE(Model):
         # Reconstruction
         if self.debug:
             print("Calculating negative data log likelihood")
-        distortion_x = - get_log_prob(x_bin, 'B', probs=x_bin_prob) \
-                           - get_log_prob(x_cont, 'N', mean=x_cont_mean, std=x_cont_std)
-        distortion_t = - get_log_prob(t, 'B', probs=t_prob)
-        distortion_y = - get_log_prob(y, 'N', mean=y_mean)
+        distortion_x = tf.reduce_mean(- get_log_prob(x_bin, 'B', probs=x_bin_prob) \
+                           - get_log_prob(x_cont, 'N', mean=x_cont_mean, std=x_cont_std))
+        distortion_t = tf.reduce_mean(- get_log_prob(t, 'B', probs=t_prob))
+        distortion_y = tf.reduce_mean(- get_log_prob(y, 'N', mean=y_mean))
         tf.summary.scalar("distortion/x", distortion_x, step=step)
         tf.summary.scalar("distortion/t", distortion_t, step=step)
         tf.summary.scalar("distortion/y", distortion_y, step=step)
@@ -157,8 +157,8 @@ class CEVAE(Model):
         # Auxillary distributions
         if self.debug:
             print("Calculating negative log likelihood of auxillary distributions")
-        variational_t = - get_log_prob(t, 'B', probs=qt_prob)
-        variational_y = - get_log_prob(y, 'N', mean=qy_mean)
+        variational_t = - tf.reduce_mean(get_log_prob(t, 'B', probs=qt_prob))
+        variational_y = - tf.reduce_mean(get_log_prob(y, 'N', mean=qy_mean))
         tf.summary.scalar("variational_ll/t", variational_t, step=step)
         tf.summary.scalar("variational_ll/y", variational_y, step=step)
 
@@ -170,7 +170,7 @@ class CEVAE(Model):
         with tf.GradientTape() as tape:
             encoder_params, decoder_params = self(features, step)
             loss = self.elbo(features, encoder_params, decoder_params, step)
-            tf.summary.scalar("metrics/loss", loss, step=step)
+            #tf.summary.scalar("metrics/loss", loss, step=step)
         if self.debug:
             print(f"Forward pass complete, step: {step}")
         return loss, tape.gradient(loss, self.trainable_variables)
@@ -201,16 +201,19 @@ def train_cevae(params):
 
     if params["debug"]:
         for epoch in range(5):
-
             print(f"Epoch: {epoch}")
             step_start = epoch * (len_dataset // params["batch_size"] + 1)
             for step, features in dataset.batch(params["batch_size"]).enumerate(step_start):
                 loss_value, grads = cevae.grad(features, step)
                 optimizer.apply_gradients(zip(grads, cevae.trainable_variables))
-            if epoch % params["log_steps"] == 0:
+                break
+            if epoch % 1 == 0:
                 print(f"Epoch: {epoch}, loss: {loss_value}")
+                stats = calc_stats(cevae, dataset, params)
+                print(f"Average ite: {stats[0]:.4f}, abs ate: {stats[1]:.4f}, pehe; {stats[2]:.4f}")
             print("Epoch done")
         return
+
 
     with writer.as_default():
         for epoch in range(params["epochs"]):
@@ -219,6 +222,11 @@ def train_cevae(params):
                 loss_value, grads = cevae.grad(features, step)
                 optimizer.apply_gradients(zip(grads, cevae.trainable_variables))
             if epoch % params["log_steps"] == 0:
-
                 print(f"Epoch: {epoch}, loss: {loss_value}")
+                stats = calc_stats(cevae, dataset, params)
+                print(f"Average ite: {stats[0]:.4f}, abs ate: {stats[1]:.4f}, pehe; {stats[2]:.4f}")
+                tf.summary.scalar("metrics/loss", loss_value, step=epoch)
+                tf.summary.scalar("metrics/ite", stats[0], step=epoch)
+                tf.summary.scalar("metrics/ate", stats[1], step=epoch)
+                tf.summary.scalar("metrics/pehe", stats[2], step=epoch)
 

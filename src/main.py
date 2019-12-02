@@ -15,8 +15,8 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description="Causal effect Normalizing Flow trainer")
     parser.add_argument("--batch_size", type=int, default=16,
                         help="Batch size (default=16")
-    parser.add_argument("--learning_rate", type=float, default=1e-4,
-                        help="Learning rate of hte optmiser (default: 1e-4)")
+    parser.add_argument("--learning_rate", type=float, default=1e-3,
+                        help="Learning rate of hte optmiser (default: 1e-3)")
     parser.add_argument("--epochs", type=int, default=100,
                         help="Number of training iterations (default: 100)")
     parser.add_argument("--mode", type=str, default="train",
