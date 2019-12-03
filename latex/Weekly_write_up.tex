@@ -1,0 +1,25 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{tikz}
+\usepackage{standalone}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+
+
+
+\title{Causal Effect Inference with Normalizing Flows}
+\author{Micha de Groot}
+\date{August 2019}
+
+\begin{document}
+
+\section*{Things I've been working on}
+\begin{itemize}
+    \item Reading/literature review: I've been trying to get an over view of what methods have been used before the CEVAE in the causal inference field. I've noticed that it is quite a deep rabbit hole, especially since there are many possible research directions. So far I've tried to delineate this by focusing on causal effect inference with a given graph that also use proxy-based methods. There has been a lot of theoretical work on trying to prove certain inferences are possible, but they usually assume that the variables are all categorical, and then reach a step that requires a full matrix inversion.
+    \item Reproducing earlier results: A while ago I mentioned that the code provided with the CEVAE runs out of the box and produces the results. This is indeed true, but the code is too obfuscated and too poorly documented to use it as a starting point for this project. Therefore I've been trying to reproduce it from scratch in such a way that is is modular enough to later swap out specific modules for NF-based modules. Unfortunately this has proven more difficult that I anticipated. Firstly because of the dataset, which I'll discuss below, and secondly because it is difficult to trace some details of how the original CEVAE code works. I would say I'm close to getting this done, but not yet
+    \item The dataset: The first dataset I'm working with, the IHDP dataset, is a bit strange because it is a semi-simulated dataset. From what I gather the idea of the semi simulation is to get counterfactual outcome variables as a sort of ground truth. 
+\end{itemize}
+
+
+
+\end{document}
