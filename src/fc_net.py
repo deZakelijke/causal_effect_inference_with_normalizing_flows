@@ -9,7 +9,7 @@ class FC_net(Model):
         self.debug = debug
         self.name_tag = name_tag
 
-        assert nr_hidden >= 1, "Must have at leas one hidden layer"
+        assert nr_hidden >= 1 and type(nr_hidden) == int, "Must have at leas one hidden layer"
         assert name_tag != "", "Name tag can't be an empty stirng"
 
 
