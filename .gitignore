@@ -1,6 +1,9 @@
 # Test code for quick tests
 test/
 
+# Mount directory for logs
+logs/
+
 # Compiled latex stuff
 *.pdf
 
