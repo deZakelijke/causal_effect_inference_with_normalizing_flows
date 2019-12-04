@@ -29,16 +29,15 @@ class FC_net(Model):
             nn_layers.append(new_layer)
 
             self.nn_layers = nn_layers
-            #self.nn_layers = tf.keras.Sequential(nn_layers)
-            #self.nn_layers.build((None, in_dims))
 
 
     @tf.function
-    def call(self, x, step):
+    def call(self, x, step, training=False):
         with tf.name_scope(f"FC/{self.name_tag}/FC") as scope:
             for i in range(len(self.nn_layers)):
                 x = self.nn_layers[i](x)
                 name = self.nn_layers[i].name
-                tf.summary.histogram(f"{name}/weight", self.nn_layers[i].weights[0], step=step)
-                tf.summary.histogram(f"{name}/bias", self.nn_layers[i].weights[1], step=step)
+                if training:
+                    tf.summary.histogram(f"{name}/weight", self.nn_layers[i].weights[0], step=step)
+                    tf.summary.histogram(f"{name}/bias", self.nn_layers[i].weights[1], step=step)
             return x
