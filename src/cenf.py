@@ -15,7 +15,7 @@ from evaluation import calc_stats
 
 class CENF(Model):
     
-    def __init__(self, params, nr_flows=2, hidden_size=64, debug=False):
+    def __init__(self, params, hidden_size=64, debug=False):
         """ Causal Effect Normalising Flow
 
 
@@ -25,9 +25,10 @@ class CENF(Model):
         self.x_cont_size = params["x_cont_size"]
         self.z_size = params["z_size"]
         self.debug = params["debug"]
+        
         self.encode = Encoder(self.x_bin_size, self.x_cont_size, self.z_size, hidden_size, self.debug)
         self.decode = Decoder(self.x_bin_size, self.x_cont_size, self.z_size, hidden_size, self.debug)
-        self.planar_flow = PlanarFlow(self.z_size, nr_flows)
+        self.planar_flow = PlanarFlow(self.z_size, params["nr_flows"])
 
     @tf.function
     def call(self, features, step, training=False):

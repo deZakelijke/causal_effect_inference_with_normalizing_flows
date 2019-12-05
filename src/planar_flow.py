@@ -48,16 +48,16 @@ class PlanarFlowLayer(Model):
         initializer = tf.initializers.GlorotNormal()
         self.u = tf.Variable(initializer([z_size, 1], dtype=tf.dtypes.float64), dtype="float64", name="u")
         self.w = tf.Variable(initializer([z_size, 1], dtype=tf.dtypes.float64), dtype="float64", name="w")
-        self.b = tf.Variable([0], dtype="float64", name="b")
+        self.b = tf.Variable(initializer([1, 1], dtype=tf.dtypes.float64), dtype="float64", name="b")
 
 
     @tf.function
     def call(self, z, step, training=False):
         with tf.name_scope("planar_flow") as scope:
             if training:
-                tf.summary.histogram(f"{self.flow_nr}/{self.b.name}", self.b, step=step)
-                tf.summary.histogram(f"{self.flow_nr}/{self.w.name}", self.w, step=step)
-                tf.summary.histogram(f"{self.flow_nr}/{self.u.name}", self.u, step=step)
+                tf.summary.histogram(f"flow_{self.flow_nr}/{self.b.name}", self.b, step=step)
+                tf.summary.histogram(f"flow_{self.flow_nr}/{self.w.name}", self.w, step=step)
+                tf.summary.histogram(f"flow_{self.flow_nr}/{self.u.name}", self.u, step=step)
             h1 = tf.tanh(z @ self.w + self.b)
             return z + h1 @ tf.transpose(self.u)
 

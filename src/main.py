@@ -20,7 +20,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description="Causal effect Normalizing Flow trainer")
     parser.add_argument("--batch_size", type=int, default=16,
                         help="Batch size (default=16")
-    parser.add_argument("--learning_rate", type=float, default=1e-3,
+    parser.add_argument("--learning_rate", type=float, default=1e-4,
                         help="Learning rate of hte optmiser (default: 1e-3)")
     parser.add_argument("--epochs", type=int, default=100,
                         help="Number of training iterations (default: 100)")
@@ -36,6 +36,8 @@ def parse_arguments():
                         help="Save/print log every n steps (default: 10)")
     parser.add_argument("--debug", action="store_true", default=False,
                         help="Turn on debugging mode. All it does now is turn off summary writer")
+    parser.add_argument("--nr_flows", type=int, default=4,
+                        help="Number of flows in the flow models")
 
     args = parser.parse_args()
 
@@ -50,6 +52,9 @@ def parse_arguments():
 
     if not args.dataset in VALID_DATASETS:
        raise NotImplementedError(f"Dataset {args.dataset} is not implemented")
+
+    if args.model == "cevae":
+        args.nr_flows = 0
 
     for arg, value in vars(args).items():
         print(f"Argument: {arg:<16} {value:<5}")
