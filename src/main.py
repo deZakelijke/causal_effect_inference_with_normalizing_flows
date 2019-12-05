@@ -93,7 +93,7 @@ def train(config, dataset, len_dataset):
         for epoch in range(params["epochs"]):
             step_start = epoch * (len_dataset // params["batch_size"] + 1)
             for step, features in dataset.batch(params["batch_size"]).enumerate(step_start):
-                loss_value, grads = model.grad(features, step)
+                loss_value, grads = model.grad(features, step, params)
                 optimizer.apply_gradients(zip(grads, model.trainable_variables))
             if epoch % params["log_steps"] == 0:
                 print(f"Epoch: {epoch}, loss: {loss_value}")
