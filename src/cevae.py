@@ -1,5 +1,4 @@
 import sys
-import time
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras import layers, Model
@@ -7,14 +6,12 @@ from tensorflow.keras.activations import softplus
 from tensorflow_probability import distributions as tfd
 
 from fc_net import FC_net
-from dataset import IHDP_dataset
 from utils import get_log_prob, get_analytical_KL_divergence
-from evaluation import calc_stats
 
 
 class CEVAE(Model):
 
-    def __init__(self, x_bin_size, x_cont_size, z_size, hidden_size=64, debug=False):
+    def __init__(self, params, hidden_size=64, debug=False):
         """ CEVAE model with fc nets between random variables.
         https://github.com/tensorflow/probability/blob/master/tensorflow_probability/examples/vae.py
 
@@ -25,82 +22,12 @@ class CEVAE(Model):
         std of a Normal distribution at once.
         """
         super().__init__()
-
-        self.x_bin_size = x_bin_size 
-        self.x_cont_size = x_cont_size 
-        x_size = x_bin_size + x_cont_size
-        self.z_size = z_size
-        self.debug = debug
-        y_hidden = 2
-
-        # Encoder part
-        self.qt_logits = FC_net(x_size, 1, "qt", hidden_size=hidden_size, debug=debug)
-        self.hqy       = FC_net(x_size, hidden_size, "hqy", hidden_size=hidden_size, debug=debug)
-        self.mu_qy_t0  = FC_net(hidden_size, 1, "mu_qy_t0", hidden_size=hidden_size, debug=debug, nr_hidden=y_hidden)
-        self.mu_qy_t1  = FC_net(hidden_size, 1, "mu_qy_t1", hidden_size=hidden_size, debug=debug, nr_hidden=y_hidden)
-
-        self.hqz   = FC_net(x_size + 1, hidden_size, "hqz", hidden_size=hidden_size, debug=debug)
-        self.qz_t0 = FC_net(hidden_size, z_size * 2, "qz_t0", hidden_size=hidden_size, debug=debug) 
-        self.qz_t1 = FC_net(hidden_size, z_size * 2, "qz_t1", hidden_size=hidden_size, debug=debug) 
-
-        # Decoder part
-        self.hx            = FC_net(z_size, hidden_size, "hx", hidden_size=hidden_size, debug=debug)
-        self.x_cont_logits = FC_net(hidden_size, x_cont_size * 2, "x_cont", hidden_size=hidden_size, debug=debug)
-        self.x_bin_logits  = FC_net(hidden_size, x_bin_size, "x_bin", hidden_size=hidden_size, debug=debug)
-
-        self.t_logits = FC_net(z_size, 1, "t", hidden_size=hidden_size, debug=debug)
-        self.mu_y_t0 = FC_net(z_size, 1, "mu_y_t0", hidden_size=hidden_size, debug=debug, nr_hidden=y_hidden)
-        self.mu_y_t1 = FC_net(z_size, 1, "mu_y_t1", hidden_size=hidden_size, debug=debug, nr_hidden=y_hidden)
-
-
-    @tf.function
-    def encode(self, x, t, y, step, training=False):
-        if self.debug:
-            print("Encoding")
-        qt_prob = tf.sigmoid(self.qt_logits(x, step, training=training))
-        qt = tfd.Independent(tfd.Bernoulli(probs=qt_prob), 
-                             reinterpreted_batch_ndims=1,
-                             name="qt")
-        qt_sample = tf.dtypes.cast(qt.sample(), tf.float64)
-        
-        hqy = self.hqy(x, step, training=training)
-        mu_qy0 = self.mu_qy_t0(hqy, step, training=training)
-        mu_qy1 = self.mu_qy_t1(hqy, step, training=training)
-        qy_mean = qt_sample * mu_qy1 + (1. - qt_sample) * mu_qy0
-        qy = tfd.Independent(tfd.Normal(loc=qy_mean, scale=tf.ones_like(qy_mean)),
-                             reinterpreted_batch_ndims=1,
-                             name="qy")
-        
-        xy = tf.concat([x, qy.sample()], 1)
-        hidden_z = self.hqz(xy, step, training=training)
-        qz0 = self.qz_t0(hidden_z, step, training=training)
-        qz1 = self.qz_t1(hidden_z, step, training=training)
-        qz_mean = qt_sample * qz1[:, :self.z_size] + (1. - qt_sample) * qz0[:, :self.z_size]
-        qz_std = qt_sample * softplus(qz1[:, self.z_size:]) + (1. - qt_sample) * softplus(qz0[:, self.z_size:])
-        return qt_prob, qy_mean, qz_mean, qz_std
-
-    @tf.function
-    def decode(self, z, step, training=False):
-        if self.debug:
-            print("Decoding")
-        hidden_x = self.hx(z, step, training=training)
-        x_bin_prob = tf.sigmoid(self.x_bin_logits(hidden_x, step, training=training))
-
-        x_cont_h = self.x_cont_logits(hidden_x, step, training=training)
-        x_cont_mean = x_cont_h[:, :self.x_cont_size]
-        x_cont_std = softplus(x_cont_h[:, self.x_cont_size:])
-
-        t_prob = tf.sigmoid(self.t_logits(z, step, training=training))
-        t = tfd.Independent(tfd.Bernoulli(probs=t_prob),
-                            reinterpreted_batch_ndims=1,
-                            name="t")
-
-        t_sample = tf.dtypes.cast(t.sample(), tf.float64)
-
-        mu_y0 = self.mu_y_t0(z, step, training=training)
-        mu_y1 = self.mu_y_t1(z, step, training=training)
-        y_mean = t_sample * mu_y1 + (1. - t_sample) * mu_y0
-        return x_bin_prob, x_cont_mean, x_cont_std, t_prob, y_mean
+        self.x_bin_size = params["x_bin_size"]
+        self.x_cont_size = params["x_cont_size"]
+        self.z_size = params["z_size"]
+        self.debug=params["debug"]
+        self.encode = Encoder(self.x_bin_size, self.x_cont_size, self.z_size, hidden_size, self.debug)
+        self.decode = Decoder(self.x_bin_size, self.x_cont_size, self.z_size, hidden_size, self.debug)
 
     @tf.function
     def call(self, features, step, training=False):
@@ -174,57 +101,88 @@ class CEVAE(Model):
             print(f"Forward pass complete, step: {step}")
         return loss, tape.gradient(loss, self.trainable_variables)
 
-def train_cevae(params):
-    params["x_bin_size"] = 19
-    params["x_cont_size"] = 6
-    params["z_size"] = 16
+class Encoder(Model):
 
-    if params["dataset"] == "IHDP":
-        dataset = IHDP_dataset(params)
-    len_dataset = 0
-    for _ in dataset:
-        len_dataset +=1
-    dataset = dataset.shuffle(len_dataset)
+    def __init__(self, x_bin_size, x_cont_size, z_size, hidden_size, debug):
+        super().__init__()
+        self.x_bin_size = x_bin_size 
+        self.x_cont_size = x_cont_size 
+        x_size = x_bin_size + x_cont_size
+        self.z_size = z_size
+        self.debug = debug
 
-    timestamp = str(int(time.time()))[2:] 
-    logdir = f"{params['model_dir']}cevae/{params['dataset']}/{params['learning_rate']}/{timestamp}"
-    if not params["debug"]:
-        writer = tf.summary.create_file_writer(logdir)
+        self.qt_logits = FC_net(x_size, 1, "qt", hidden_size=hidden_size, debug=debug)
+        self.hqy       = FC_net(x_size, hidden_size, "hqy", hidden_size=hidden_size, debug=debug)
+        self.mu_qy_t0  = FC_net(hidden_size, 1, "mu_qy_t0", hidden_size=hidden_size, debug=debug)
+        self.mu_qy_t1  = FC_net(hidden_size, 1, "mu_qy_t1", hidden_size=hidden_size, debug=debug)
+        self.hqz       = FC_net(x_size + 1, hidden_size, "hqz", hidden_size=hidden_size, debug=debug)
+        self.qz_t0     = FC_net(hidden_size, z_size * 2, "qz_t0", hidden_size=hidden_size, debug=debug) 
+        self.qz_t1     = FC_net(hidden_size, z_size * 2, "qz_t1", hidden_size=hidden_size, debug=debug) 
+
+    @tf.function
+    def call(self, x, t, y, step, training=False):
+        if self.debug:
+            print("Encoding")
+        qt_prob = tf.sigmoid(self.qt_logits(x, step, training=training))
+        qt = tfd.Independent(tfd.Bernoulli(probs=qt_prob), 
+                             reinterpreted_batch_ndims=1,
+                             name="qt")
+        qt_sample = tf.dtypes.cast(qt.sample(), tf.float64)
+        
+        hqy = self.hqy(x, step, training=training)
+        mu_qy0 = self.mu_qy_t0(hqy, step, training=training)
+        mu_qy1 = self.mu_qy_t1(hqy, step, training=training)
+        qy_mean = qt_sample * mu_qy1 + (1. - qt_sample) * mu_qy0
+        qy = tfd.Independent(tfd.Normal(loc=qy_mean, scale=tf.ones_like(qy_mean)),
+                             reinterpreted_batch_ndims=1,
+                             name="qy")
+        
+        xy = tf.concat([x, qy.sample()], 1)
+        hidden_z = self.hqz(xy, step, training=training)
+        qz0 = self.qz_t0(hidden_z, step, training=training)
+        qz1 = self.qz_t1(hidden_z, step, training=training)
+        qz_mean = qt_sample * qz1[:, :self.z_size] + (1. - qt_sample) * qz0[:, :self.z_size]
+        qz_std = qt_sample * softplus(qz1[:, self.z_size:]) + (1. - qt_sample) * softplus(qz0[:, self.z_size:])
+        return qt_prob, qy_mean, qz_mean, qz_std
 
 
-    cevae = CEVAE(params["x_bin_size"], 
-                  params["x_cont_size"], 
-                  params["z_size"],
-                  debug=params["debug"])
-    optimizer = tf.keras.optimizers.Adam(learning_rate=params["learning_rate"])
+class Decoder(Model):
 
-    if params["debug"]:
-        for epoch in range(5):
-            print(f"Epoch: {epoch}")
-            step_start = epoch * (len_dataset // params["batch_size"] + 1)
-            for step, features in dataset.batch(params["batch_size"]).enumerate(step_start):
-                loss_value, grads = cevae.grad(features, step, params)
-                optimizer.apply_gradients(zip(grads, cevae.trainable_variables))
-                break
-            print(f"Epoch: {epoch}, loss: {loss_value}")
-            stats = calc_stats(cevae, dataset, params)
-            print(f"Average ite: {stats[0]:.4f}, abs ate: {stats[1]:.4f}, pehe; {stats[2]:.4f}")
-            print("Epoch done")
-        return
+    def __init__(self, x_bin_size, x_cont_size, z_size, hidden_size, debug):
+        super().__init__()
+        self.x_bin_size = x_bin_size 
+        self.x_cont_size = x_cont_size 
+        x_size = x_bin_size + x_cont_size
+        self.z_size = z_size
+        self.debug = debug
 
+        self.hx            = FC_net(z_size, hidden_size, "hx", hidden_size=hidden_size, debug=debug)
+        self.x_cont_logits = FC_net(hidden_size, x_cont_size * 2, "x_cont", hidden_size=hidden_size, debug=debug)
+        self.x_bin_logits  = FC_net(hidden_size, x_bin_size, "x_bin", hidden_size=hidden_size, debug=debug)
+        self.t_logits      = FC_net(z_size, 1, "t", hidden_size=hidden_size, debug=debug)
+        self.mu_y_t0       = FC_net(z_size, 1, "mu_y_t0", hidden_size=hidden_size, debug=debug)
+        self.mu_y_t1       = FC_net(z_size, 1, "mu_y_t1", hidden_size=hidden_size, debug=debug)
 
-    with writer.as_default():
-        for epoch in range(params["epochs"]):
-            step_start = epoch * (len_dataset // params["batch_size"] + 1)
-            for step, features in dataset.batch(params["batch_size"]).enumerate(step_start):
-                loss_value, grads = cevae.grad(features, step)
-                optimizer.apply_gradients(zip(grads, cevae.trainable_variables))
-            if epoch % params["log_steps"] == 0:
-                print(f"Epoch: {epoch}, loss: {loss_value}")
-                stats = calc_stats(cevae, dataset, params)
-                print(f"Average ite: {stats[0]:.4f}, abs ate: {stats[1]:.4f}, pehe; {stats[2]:.4f}")
-                tf.summary.scalar("metrics/loss", loss_value, step=epoch)
-                tf.summary.scalar("metrics/ite", stats[0], step=epoch)
-                tf.summary.scalar("metrics/ate", stats[1], step=epoch)
-                tf.summary.scalar("metrics/pehe", stats[2], step=epoch)
+    @tf.function
+    def call(self, z, step, training=False):
+        if self.debug:
+            print("Decoding")
+        hidden_x = self.hx(z, step, training=training)
+        x_bin_prob = tf.sigmoid(self.x_bin_logits(hidden_x, step, training=training))
+
+        x_cont_h = self.x_cont_logits(hidden_x, step, training=training)
+        x_cont_mean = x_cont_h[:, :self.x_cont_size]
+        x_cont_std = softplus(x_cont_h[:, self.x_cont_size:])
+
+        t_prob = tf.sigmoid(self.t_logits(z, step, training=training))
+        t = tfd.Independent(tfd.Bernoulli(probs=t_prob),
+                            reinterpreted_batch_ndims=1,
+                            name="t")
+
+        t_sample = tf.dtypes.cast(t.sample(), tf.float64)
+
+        mu_y0 = self.mu_y_t0(z, step, training=training)
+        mu_y1 = self.mu_y_t1(z, step, training=training)
+        y_mean = t_sample * mu_y1 + (1. - t_sample) * mu_y0
+        return x_bin_prob, x_cont_mean, x_cont_std, t_prob, y_mean
 

@@ -51,7 +51,8 @@ def calc_stats(model, dataset, params):
     for i, features in dataset.batch(params["batch_size"]).enumerate(0):
         x_bin, x_cont, t, y, y_cf, mu_0, mu_1 = features
         true_ite = mu_1 - mu_0
-        encoder_params, decoder_params = model(features, step=0, training=False)
+        #encoder_params, decoder_params = model(features, step=0, training=False)
+        out = model(features, step=0, training=False)
 
         ypred1, ypred0 = y, y_cf
 

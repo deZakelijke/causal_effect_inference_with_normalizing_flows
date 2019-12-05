@@ -4,9 +4,14 @@ import logging
 import os
 import sys
 import tensorflow as tf
-from cevae import train_cevae
+import time
 
-VALID_MODELS = ["cevae"]
+from cevae import CEVAE
+from cenf import CENF
+from dataset import IHDP_dataset
+from evaluation import calc_stats
+
+VALID_MODELS = ["cevae", "cenf"]
 VALID_DATASETS = ["IHDP"]
 
 tf.keras.backend.set_floatx('float64')
@@ -52,9 +57,52 @@ def parse_arguments():
 
     return vars(args)
 
-def train(config):
+def train(config, dataset, len_dataset):
+    params["x_bin_size"] = 19
+    params["x_cont_size"] = 6
+    params["z_size"] = 16
+
+    timestamp = str(int(time.time()))[2:] 
+    logdir = f"{params['model_dir']}{params['model']}/{params['dataset']}/{params['learning_rate']}/{timestamp}"
+    if not params["debug"]:
+        writer = tf.summary.create_file_writer(logdir)
+
     if config["model"] == "cevae":
-        train_cevae(config)
+        model = CEVAE(params)
+    if config["model"] == "cenf":
+        model = CENF(params)
+
+    optimizer = tf.keras.optimizers.Adam(learning_rate=params["learning_rate"])
+
+    if params["debug"]:
+        for epoch in range(5):
+            print(f"Epoch: {epoch}")
+            step_start = epoch * (len_dataset // params["batch_size"] + 1)
+            for step, features in dataset.batch(params["batch_size"]).enumerate(step_start):
+                loss_value, grads = model.grad(features, step, params)
+                optimizer.apply_gradients(zip(grads, model.trainable_variables))
+                #break
+            print(f"Epoch: {epoch}, loss: {loss_value}")
+            stats = calc_stats(model, dataset, params)
+            print(f"Average ite: {stats[0]:.4f}, abs ate: {stats[1]:.4f}, pehe; {stats[2]:.4f}")
+            print("Epoch done")
+        return
+
+
+    with writer.as_default():
+        for epoch in range(params["epochs"]):
+            step_start = epoch * (len_dataset // params["batch_size"] + 1)
+            for step, features in dataset.batch(params["batch_size"]).enumerate(step_start):
+                loss_value, grads = model.grad(features, step)
+                optimizer.apply_gradients(zip(grads, model.trainable_variables))
+            if epoch % params["log_steps"] == 0:
+                print(f"Epoch: {epoch}, loss: {loss_value}")
+                stats = calc_stats(model, dataset, params)
+                print(f"Average ite: {stats[0]:.4f}, abs ate: {stats[1]:.4f}, pehe; {stats[2]:.4f}")
+                tf.summary.scalar("metrics/loss", loss_value, step=epoch)
+                tf.summary.scalar("metrics/ite", stats[0], step=epoch)
+                tf.summary.scalar("metrics/ate", stats[1], step=epoch)
+                tf.summary.scalar("metrics/pehe", stats[2], step=epoch)
 
 def test(config):
     pass
@@ -62,7 +110,16 @@ def test(config):
 if __name__ == "__main__":
     params = parse_arguments()
 
+    if params["dataset"] == "IHDP":
+        dataset = IHDP_dataset(params)
+    len_dataset = 0
+    for _ in dataset:
+        len_dataset +=1
+    dataset = dataset.shuffle(len_dataset)
+
+
+
     if params["mode"] == "train":
-        train(params)
+        train(params, dataset, len_dataset)
     else:
         test(params)
