@@ -138,9 +138,14 @@ class Encoder(Model):
                              name="qy")
         
         xy = tf.concat([x, qy.sample()], 1)
+        #xy = tf.concat([x, y], 1)
+        
         hidden_z = self.hqz(xy, step, training=training)
         qz0 = self.qz_t0(hidden_z, step, training=training)
         qz1 = self.qz_t1(hidden_z, step, training=training)
+        #qz_mean = t * qz1[:, :self.z_size] + (1. - t) * qz0[:, :self.z_size]
+        #qz_std = t * softplus(qz1[:, self.z_size:]) + (1. - t) * softplus(qz0[:, self.z_size:])
+
         qz_mean = qt_sample * qz1[:, :self.z_size] + (1. - qt_sample) * qz0[:, :self.z_size]
         qz_std = qt_sample * softplus(qz1[:, self.z_size:]) + (1. - qt_sample) * softplus(qz0[:, self.z_size:])
         return qt_prob, qy_mean, qz_mean, qz_std

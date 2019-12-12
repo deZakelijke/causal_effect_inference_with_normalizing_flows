@@ -1,7 +1,7 @@
 import tensorflow as tf
 import numpy as np
 
-def IHDP_dataset(params, path_data="datasets/IHDP/csv/", file_prefix="ihdp_npci_"):
+def IHDP_dataset(params, path_data="datasets/IHDP/csv/", file_prefix="ihdp_npci_", separate_files=False, file_index=None):
     binfeats = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
     contfeats = [i for i in range(25) if i not in binfeats]
     nr_files = 10
@@ -13,8 +13,11 @@ def IHDP_dataset(params, path_data="datasets/IHDP/csv/", file_prefix="ihdp_npci_
     mu_1 = []
     x_bin = []
     x_cont = []
-    for i in range(1, nr_files + 1):
-        data = np.loadtxt(f"{path_data}{file_prefix}{i}.csv", delimiter=',', dtype=np.float64)
+    
+    if separate_files:
+        assert file_index is not None, "No file index given"
+        assert file_index < nr_files, "File index invalid"
+        data = np.loadtxt(f"{path_data}{file_prefix}{file_index + 1}.csv", delimiter=',', dtype=np.float64)
         for line in data:
             t.append(line[0])       # Treatment true/false
             y.append(line[1])       # Outcome
@@ -25,6 +28,19 @@ def IHDP_dataset(params, path_data="datasets/IHDP/csv/", file_prefix="ihdp_npci_
             x[13] -= 1              # Value is in [1, 2] instead of [0, 1]
             x_bin.append(x[binfeats])
             x_cont.append(x[contfeats])
+    else:
+        for i in range(1, nr_files + 1):
+            data = np.loadtxt(f"{path_data}{file_prefix}{i}.csv", delimiter=',', dtype=np.float64)
+            for line in data:
+                t.append(line[0])      
+                y.append(line[1])       
+                y_cf.append(line[2])    
+                mu_0.append(line[3])    
+                mu_1.append(line[4])    
+                x = line[5:]            
+                x[13] -= 1              
+                x_bin.append(x[binfeats])
+                x_cont.append(x[contfeats])
 
     x_cont = np.array(x_cont)
     x_bin = np.array(x_bin)
@@ -44,5 +60,3 @@ def IHDP_dataset(params, path_data="datasets/IHDP/csv/", file_prefix="ihdp_npci_
                                                 y_cf, 
                                                 mu_0, 
                                                 mu_1)))
-
-
