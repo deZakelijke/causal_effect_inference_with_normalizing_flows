@@ -69,7 +69,7 @@ def main(params):
     params["x_cont_size"] = 6
     params["z_size"] = 16
 
-    timestamp = str(int(time.time()))[2:] #TODO make readable timestamp
+    timestamp = time.strftime("%Y:%m:%d/%X")
     logdir = f"{params['model_dir']}{params['model']}/{params['dataset']}/{params['learning_rate']}/{timestamp}"
     if not params["debug"]:
         writer = tf.summary.create_file_writer(logdir)
@@ -131,18 +131,21 @@ def train(params, dataset, len_dataset, writer, train_iteration=0):
                 print(f"Epoch: {epoch}, average loss: {avg_loss / tf.dtypes.cast(len_epoch, tf.float64)}")
                 stats = calc_stats(model, dataset, params)
                 print(f"Average ite: {stats[0]:.4f}, abs ate: {stats[1]:.4f}, pehe; {stats[2]:.4f}")
-                tf.summary.scalar("metrics/loss", loss_value, step=epoch + global_log_step)
-                tf.summary.scalar("metrics/ite", stats[0], step=epoch + global_log_step)
-                tf.summary.scalar("metrics/ate", stats[1], step=epoch + global_log_step)
-                tf.summary.scalar("metrics/pehe", stats[2], step=epoch + global_log_step)
+                l_step = (epoch + global_log_step) // params['log_steps']
+                tf.summary.scalar("metrics/loss", avg_loss / tf.dtypes.cast(len_epoch, tf.float64), step=l_step)
+                tf.summary.scalar("metrics/ite", stats[0], step=l_step)
+                tf.summary.scalar("metrics/ate", stats[1], step=l_step)
+                tf.summary.scalar("metrics/pehe", stats[2], step=l_step)
 
         print(f"Epoch: {epoch}, loss: {avg_loss / tf.dtypes.cast(len_epoch, tf.float64)}")
         stats = calc_stats(model, dataset, params)
         print(f"Average ite: {stats[0]:.4f}, abs ate: {stats[1]:.4f}, pehe; {stats[2]:.4f}")
-        tf.summary.scalar("metrics/loss", loss_value, step=epoch + global_log_step)
-        tf.summary.scalar("metrics/ite", stats[0], step=epoch + global_log_step)
-        tf.summary.scalar("metrics/ate", stats[1], step=epoch + global_log_step)
-        tf.summary.scalar("metrics/pehe", stats[2], step=epoch + global_log_step)
+        l_step = (epoch + global_log_step) // params['log_steps']
+        tf.summary.scalar("metrics/loss", loss_value, step=l_step)
+        tf.summary.scalar("metrics/ite", stats[0], step=l_step)
+        tf.summary.scalar("metrics/ate", stats[1], step=l_step)
+        tf.summary.scalar("metrics/pehe", stats[2], step=l_step)
+
 
 
 def test(params):
@@ -150,6 +153,11 @@ def test(params):
 
 if __name__ == "__main__":
     params = parse_arguments()
+
+    gpus = tf.config.experimental.list_physical_devices("GPU")
+    if gpus:
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, False)
 
     main(params)
 

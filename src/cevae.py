@@ -67,27 +67,30 @@ class CEVAE(Model):
 
         if self.debug:
             print("Calculating negative data log likelihood")
-        distortion_x = tf.reduce_mean(- get_log_prob(x_bin, 'B', probs=x_bin_prob) \
-                           - get_log_prob(x_cont, 'N', mean=x_cont_mean, std=x_cont_std))
-        distortion_t = tf.reduce_mean(- get_log_prob(t, 'B', probs=t_prob))
-        distortion_y = tf.reduce_mean(- get_log_prob(y, 'N', mean=y_mean))
+        #distortion_x = tf.reduce_mean(- get_log_prob(x_bin, 'B', probs=x_bin_prob) \
+        #                   - get_log_prob(x_cont, 'N', mean=x_cont_mean, std=x_cont_std))
+        distortion_x = -get_log_prob(x_bin, 'B', probs=x_bin_prob) \
+                       -get_log_prob(x_cont, 'N', mean=x_cont_mean, std=x_cont_std)
+        distortion_t = -get_log_prob(t, 'B', probs=t_prob)
+        distortion_y = -get_log_prob(y, 'N', mean=y_mean)
 
         if self.debug:
             print("Calculating KL-divergence")
-        rate = tf.reduce_mean(get_analytical_KL_divergence(qz_mean, qz_std))
+        rate = get_analytical_KL_divergence(qz_mean, qz_std)
 
         if self.debug:
             print("Calculating negative log likelihood of auxillary distributions")
-        variational_t = - tf.reduce_mean(get_log_prob(t, 'B', probs=qt_prob))
-        variational_y = - tf.reduce_mean(get_log_prob(y, 'N', mean=qy_mean))
+        variational_t = -get_log_prob(t, 'B', probs=qt_prob)
+        variational_y = -get_log_prob(y, 'N', mean=qy_mean)
 
-        if step % params['log_steps'] == 0:
-            tf.summary.scalar("distortion/x", distortion_x, step=step)
-            tf.summary.scalar("distortion/t", distortion_t, step=step)
-            tf.summary.scalar("distortion/y", distortion_y, step=step)
-            tf.summary.scalar("rate/z", rate, step=step)
-            tf.summary.scalar("variational_ll/t", variational_t, step=step)
-            tf.summary.scalar("variational_ll/y", variational_y, step=step)
+        if step % (params['log_steps']  * 5) == 0:
+            l_step = step // (params['log_steps'] * 5)
+            tf.summary.scalar("distortion/x", tf.reduce_mean(distortion_x), step=l_step)
+            tf.summary.scalar("distortion/t", tf.reduce_mean(distortion_t), step=l_step)
+            tf.summary.scalar("distortion/y", tf.reduce_mean(distortion_y), step=l_step)
+            tf.summary.scalar("rate/z", tf.reduce_mean(rate), step=l_step)
+            tf.summary.scalar("variational_ll/t", tf.reduce_mean(variational_t), step=l_step)
+            tf.summary.scalar("variational_ll/y", tf.reduce_mean(variational_y), step=l_step)
 
         elbo_local = -(rate + distortion_x + distortion_t + distortion_y + variational_t + variational_y)
         elbo = tf.reduce_mean(input_tensor=elbo_local)
@@ -143,6 +146,7 @@ class Encoder(Model):
         hidden_z = self.hqz(xy, step, training=training)
         qz0 = self.qz_t0(hidden_z, step, training=training)
         qz1 = self.qz_t1(hidden_z, step, training=training)
+
         #qz_mean = t * qz1[:, :self.z_size] + (1. - t) * qz0[:, :self.z_size]
         #qz_std = t * softplus(qz1[:, self.z_size:]) + (1. - t) * softplus(qz0[:, self.z_size:])
 

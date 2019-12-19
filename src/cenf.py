@@ -76,14 +76,15 @@ class CENF(Model):
         variational_t = - tf.reduce_mean(get_log_prob(t, 'B', probs=qt_prob))
         variational_y = - tf.reduce_mean(get_log_prob(y, 'N', mean=qy_mean))
 
-        if step % params['log_steps'] == 0:
-            tf.summary.scalar("distortion/x", distortion_x, step=step)
-            tf.summary.scalar("distortion/t", distortion_t, step=step)
-            tf.summary.scalar("distortion/y", distortion_y, step=step)
-            tf.summary.scalar("rate/z", rate, step=step)
-            tf.summary.scalar("rate/ldj", ldj, step=step)
-            tf.summary.scalar("variational_ll/t", variational_t, step=step)
-            tf.summary.scalar("variational_ll/y", variational_y, step=step)
+        if step % (params['log_steps'] * 5) == 0:
+            l_step = step // (params['log_steps'] * 5)
+            tf.summary.scalar("distortion/x", distortion_x, step=l_step)
+            tf.summary.scalar("distortion/t", distortion_t, step=l_step)
+            tf.summary.scalar("distortion/y", distortion_y, step=l_step)
+            tf.summary.scalar("rate/z", rate, step=l_step)
+            tf.summary.scalar("rate/ldj", ldj, step=l_step)
+            tf.summary.scalar("variational_ll/t", variational_t, step=l_step)
+            tf.summary.scalar("variational_ll/y", variational_y, step=l_step)
 
 
         elbo_local = -(rate + distortion_x + distortion_t + distortion_y + 
