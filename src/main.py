@@ -19,7 +19,7 @@ tf.keras.backend.set_floatx('float64')
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Causal effect Normalizing Flow trainer")
     parser.add_argument("--batch_size", type=int, default=16, 
-                        help="Batch size (default=16")
+                        help="Batch size (default=16)")
     parser.add_argument("--dataset", type=str, default="IHDP", 
                         help="Dataset used (default: IHDP)")
     parser.add_argument("--debug", action="store_true", default=False, 
@@ -27,7 +27,7 @@ def parse_arguments():
     parser.add_argument("--epochs", type=int, default=100, 
                         help="Number of training iterations (default: 100)")
     parser.add_argument("--learning_rate", type=float, default=1e-4, 
-                        help="Learning rate of hte optmiser (default: 1e-3)")
+                        help="Learning rate of the optmiser (default: 1e-4)")
     parser.add_argument("--log_steps", type=int, default=10, 
                         help="Save/print log every n steps (default: 10)")
     parser.add_argument("--mode", type=str, default="train", 

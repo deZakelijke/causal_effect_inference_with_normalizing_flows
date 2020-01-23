@@ -13,7 +13,9 @@ def calc_stats(model, dataset, params):
             ypred1, ypred0: output of get_y0_y1, rescaled with original std and mean of y
     """
 
-    def rmse_ite(ypred1, ypred0):
+    nr_samples = 100
+
+    def rmse_ite(ypred1, ypred0, y):
         pred_ite = tf.zeros_like(true_ite)
         t_new = tf.squeeze(t)
         idx1, idx0 = tf.where(t_new == 1), tf.where(t_new == 0)
@@ -23,10 +25,10 @@ def calc_stats(model, dataset, params):
         pred_ite += tf.scatter_nd(idx0, ite0, pred_ite.shape)
         return tf.sqrt(tf.reduce_mean(tf.square(true_ite - pred_ite)))
 
-    def abs_ate(ypred1, ypred0):
+    def abs_ate(ypred1, ypred0, true_ite):
         return tf.abs(tf.reduce_mean(ypred1 - ypred0) - tf.reduce_mean(true_ite))
 
-    def pehe(ypred1, ypred0):
+    def pehe(ypred1, ypred0, mu_1, mu_0):
         return tf.sqrt(tf.reduce_mean(tf.square((mu_1 - mu_0) - (ypred1 - ypred0))))
 
     def y_errors(y0, y1):
@@ -49,16 +51,21 @@ def calc_stats(model, dataset, params):
     pehe_vec = []
 
     for i, features in dataset.batch(params["batch_size"]).enumerate(0):
+        # We need to be able to do an intervention here. For both t=0 and t=1
         x_bin, x_cont, t, y, y_cf, mu_0, mu_1 = features
         true_ite = mu_1 - mu_0
         #encoder_params, decoder_params = model(features, step=0, training=False)
-        out = model(features, step=0, training=False)
+        #out = model(features, step=0, training=False)
+        #encoder_params = out[0]
+        #y_pred = encoder_params[1]
+        #ypred1, ypred0 = y, y_cf
 
-        ypred1, ypred0 = y, y_cf
+        x = tf.concat([x_bin, x_cont], 1)
+        ypred0, ypred1 = model.do_intervention(x, nr_samples)
 
-        ite_vec += [rmse_ite(ypred1, ypred0)]
-        ate_vec += [abs_ate(ypred1, ypred0)]
-        pehe_vec += [pehe(ypred1, ypred0)]
+        ite_vec += [rmse_ite(ypred1, ypred0, y)]
+        ate_vec += [abs_ate(ypred1, ypred0, true_ite)]
+        pehe_vec += [pehe(ypred1, ypred0, mu_1, mu_0)]
 
     # Rescale last value for having a smaller batch size
     remainer_ratio = features[0].shape[0] / params["batch_size"]

@@ -1,4 +1,3 @@
-import matplotlib.pyplot as plt
 import tensorflow as tf
 import numpy as np
 
@@ -63,6 +62,8 @@ def IHDP_dataset(params, path_data="datasets/IHDP/csv/", file_prefix="ihdp_npci_
                                                 mu_1)))
 
 if __name__ == "__main__":
+    import matplotlib.pyplot as plt
+    
     params = {}
     data = IHDP_dataset(params)
     for _, data_sample in data.batch(7470).enumerate():

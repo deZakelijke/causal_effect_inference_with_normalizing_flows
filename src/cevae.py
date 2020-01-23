@@ -83,7 +83,7 @@ class CEVAE(Model):
         variational_t = -get_log_prob(t, 'B', probs=qt_prob)
         variational_y = -get_log_prob(y, 'N', mean=qy_mean)
 
-        if step % (params['log_steps']  * 5) == 0:
+        if not step is None and step % (params['log_steps']  * 5) == 0:
             l_step = step // (params['log_steps'] * 5)
             tf.summary.scalar("distortion/x", tf.reduce_mean(distortion_x), step=l_step)
             tf.summary.scalar("distortion/t", tf.reduce_mean(distortion_t), step=l_step)
@@ -105,7 +105,10 @@ class CEVAE(Model):
         return loss, tape.gradient(loss, self.trainable_variables)
 
     def do_intervention(self, x, nr_samples):
-        pass
+        _, _, qz_mean, qz_std = self.encode(x, None, training=False)
+        mu_y0, mu_y1 = self.decode.do_intervention(qz_mean, qz_std, nr_samples)
+        return mu_y0, mu_y1
+
 
 class Encoder(Model):
 
@@ -144,14 +147,10 @@ class Encoder(Model):
                              name="qy")
         
         xy = tf.concat([x, qy.sample()], 1)
-        #xy = tf.concat([x, y], 1)
         
         hidden_z = self.hqz(xy, step, training=training)
         qz0 = self.qz_t0(hidden_z, step, training=training)
         qz1 = self.qz_t1(hidden_z, step, training=training)
-
-        #qz_mean = t * qz1[:, :self.z_size] + (1. - t) * qz0[:, :self.z_size]
-        #qz_std = t * softplus(qz1[:, self.z_size:]) + (1. - t) * softplus(qz0[:, self.z_size:])
 
         qz_mean = qt_sample * qz1[:, :self.z_size] + (1. - qt_sample) * qz0[:, :self.z_size]
         qz_std = qt_sample * softplus(qz1[:, self.z_size:]) + (1. - qt_sample) * softplus(qz0[:, self.z_size:])
@@ -209,12 +208,12 @@ class Decoder(Model):
         qz = tfd.Independent(tfd.Normal(loc=qz_mean, scale=qz_std),
                              reinterpreted_batch_ndims=1,
                              name="qz")
-        qz_sample = qz.sample(nr_samples)
+        z = qz.sample(nr_samples)
 
-        y0 = self.mu_y_t0(z, step, training=training)
-        y1 = self.mu_y_t1(z, step, training=training)
-        mu_y0 = tf.reduce_mean(y0)
-        mu_y1 = tf.reduce_mean(y1)
+        y0 = self.mu_y_t0(z, None, training=False)
+        y1 = self.mu_y_t1(z, None, training=False)
+        mu_y0 = tf.reduce_mean(y0, axis=0)
+        mu_y1 = tf.reduce_mean(y1, axis=0)
 
         return mu_y0, mu_y1
 

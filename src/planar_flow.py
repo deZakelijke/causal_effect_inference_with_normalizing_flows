@@ -54,7 +54,7 @@ class PlanarFlowLayer(Model):
     @tf.function
     def call(self, z, step, training=False):
         with tf.name_scope("planar_flow") as scope:
-            if training:
+            if training and not step is None:
                 tf.summary.histogram(f"flow_{self.flow_nr}/{self.b.name}", self.b, step=step)
                 tf.summary.histogram(f"flow_{self.flow_nr}/{self.w.name}", self.w, step=step)
                 tf.summary.histogram(f"flow_{self.flow_nr}/{self.u.name}", self.u, step=step)
