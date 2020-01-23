@@ -47,7 +47,7 @@ class CEVAE(Model):
         x_bin, x_cont, t, y, y_cf, mu_0, mu_1 = features
         x = tf.concat([x_bin, x_cont], 1)
 
-        encoder_params = self.encode(x, t, y, step, training=training)
+        encoder_params = self.encode(x, step, training=training)
         _, _, qz_mean, qz_std = encoder_params
         qz = tfd.Independent(tfd.Normal(loc=qz_mean, scale=qz_std),
                              reinterpreted_batch_ndims=1,
@@ -104,6 +104,9 @@ class CEVAE(Model):
             print(f"Forward pass complete, step: {step}")
         return loss, tape.gradient(loss, self.trainable_variables)
 
+    def do_intervention(self, x, nr_samples):
+        pass
+
 class Encoder(Model):
 
     def __init__(self, x_bin_size, x_cont_size, z_size, hidden_size, debug):
@@ -123,7 +126,7 @@ class Encoder(Model):
         self.qz_t1     = FC_net(hidden_size, z_size * 2, "qz_t1", hidden_size=hidden_size, debug=debug) 
 
     @tf.function
-    def call(self, x, t, y, step, training=False):
+    def call(self, x, step, training=False):
         if self.debug:
             print("Encoding")
         qt_prob = tf.sigmoid(self.qt_logits(x, step, training=training))
@@ -194,4 +197,24 @@ class Decoder(Model):
         mu_y1 = self.mu_y_t1(z, step, training=training)
         y_mean = t_sample * mu_y1 + (1. - t_sample) * mu_y0
         return x_bin_prob, x_cont_mean, x_cont_std, t_prob, y_mean
+
+    def do_intervention(self, qz_mean, qz_std, nr_samples):
+        """ Computes the quantity E[y|z, do(t=0)] and E[y|z, do(t=1)]
+
+    `   nr_sample of samples are drawn from the Normal distribution
+        N(qz_mean, qz_std) and used to infer y for both t=0 and t=1.
+        The samples are averaged at the end.
+
+        """
+        qz = tfd.Independent(tfd.Normal(loc=qz_mean, scale=qz_std),
+                             reinterpreted_batch_ndims=1,
+                             name="qz")
+        qz_sample = qz.sample(nr_samples)
+
+        y0 = self.mu_y_t0(z, step, training=training)
+        y1 = self.mu_y_t1(z, step, training=training)
+        mu_y0 = tf.reduce_mean(y0)
+        mu_y1 = tf.reduce_mean(y1)
+
+        return mu_y0, mu_y1
 

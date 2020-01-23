@@ -38,7 +38,7 @@ class CENF(Model):
         x_bin, x_cont, t, y, y_cf, mu_0, mu_1 = features
         x = tf.concat([x_bin, x_cont], 1)
 
-        encoder_params = self.encode(x, t, y, step, training=training)
+        encoder_params = self.encode(x, step, training=training)
         _, _, qz_mean, qz_std = encoder_params
         qz = tfd.Independent(tfd.Normal(loc=qz_mean, scale=qz_std),
                              reinterpreted_batch_ndims=1,
