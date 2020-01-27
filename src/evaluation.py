@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 
 
-def calc_stats(model, dataset, params):
+def calc_stats(model, dataset, y_mean, y_std, params):
     """ Function for evaluating a model according to our metrics
 
    
@@ -23,12 +23,18 @@ def calc_stats(model, dataset, params):
         ite0 = tf.gather_nd(ypred1, idx0) - tf.gather_nd(y, idx0)
         pred_ite += tf.scatter_nd(idx1, ite1, pred_ite.shape)
         pred_ite += tf.scatter_nd(idx0, ite0, pred_ite.shape)
+        print("ITE")
+        print(pred_ite)
+        print(true_ite)
         return tf.sqrt(tf.reduce_mean(tf.square(true_ite - pred_ite)))
 
     def abs_ate(ypred1, ypred0, true_ite):
         return tf.abs(tf.reduce_mean(ypred1 - ypred0) - tf.reduce_mean(true_ite))
 
     def pehe(ypred1, ypred0, mu_1, mu_0):
+        print("PEHE")
+        print(mu_1 - mu_0)
+        print(ypred1 - ypred0)
         return tf.sqrt(tf.reduce_mean(tf.square((mu_1 - mu_0) - (ypred1 - ypred0))))
 
     def y_errors(y0, y1):
@@ -62,6 +68,7 @@ def calc_stats(model, dataset, params):
 
         x = tf.concat([x_bin, x_cont], 1)
         ypred0, ypred1 = model.do_intervention(x, nr_samples)
+        ypred0, ypred1 = ypred0 * y_std + y_mean, ypred1 * y_std + y_mean
 
         ite_vec += [rmse_ite(ypred1, ypred0, y)]
         ate_vec += [abs_ate(ypred1, ypred0, true_ite)]

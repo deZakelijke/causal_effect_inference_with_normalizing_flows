@@ -59,7 +59,7 @@ def IHDP_dataset(params, path_data="datasets/IHDP/csv/", file_prefix="ihdp_npci_
                                                 y, 
                                                 y_cf, 
                                                 mu_0, 
-                                                mu_1)))
+                                                mu_1))), y_mean, y_std
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt

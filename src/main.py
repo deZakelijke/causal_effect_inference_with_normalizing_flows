@@ -79,19 +79,19 @@ def main(params):
 
     if params["separate_files"]:
         for i in range(10):
-            dataset = eval(f"{params['dataset']}_dataset")(params, separate_files=True, file_index=i)
+            dataset, y_mean, y_std = eval(f"{params['dataset']}_dataset")(params, separate_files=True, file_index=i)
             len_dataset = tf.data.experimental.cardinality(dataset)
             dataset = dataset.shuffle(len_dataset)
-            train(params, dataset, len_dataset, writer, i)
+            train(params, dataset, len_dataset, writer, y_mean, y_std, i)
     else:
-        dataset = eval(f"{params['dataset']}_dataset")(params)
+        dataset, y_mean, y_std = eval(f"{params['dataset']}_dataset")(params)
         len_dataset = tf.data.experimental.cardinality(dataset)
         dataset = dataset.shuffle(len_dataset)
 
-        train(params, dataset, len_dataset, writer)
+        train(params, dataset, len_dataset, writer, y_mean, y_std)
 
 
-def train(params, dataset, len_dataset, writer, train_iteration=0):
+def train(params, dataset, len_dataset, writer, y_mean, y_std, train_iteration=0):
     if params["model"] == "cevae":
         model = CEVAE(params)
     if params["model"] == "cenf":
@@ -113,7 +113,7 @@ def train(params, dataset, len_dataset, writer, train_iteration=0):
                 optimizer.apply_gradients(zip(grads, model.trainable_variables))
                 #break
             print(f"Epoch: {epoch}, average loss: {avg_loss / tf.dtypes.cast(len_epoch, tf.float64)}")
-            stats = calc_stats(model, dataset, params)
+            stats = calc_stats(model, dataset, y_mean, y_std, params)
             print(f"Average ite: {stats[0]:.4f}, abs ate: {stats[1]:.4f}, pehe; {stats[2]:.4f}")
             print("Epoch done")
         return
@@ -128,8 +128,8 @@ def train(params, dataset, len_dataset, writer, train_iteration=0):
                 avg_loss += loss_value
                 optimizer.apply_gradients(zip(grads, model.trainable_variables))
             if epoch % params["log_steps"] == 0:
-                print(f"Epoch: {epoch}, average loss: {avg_loss / tf.dtypes.cast(len_epoch, tf.float64)}")
-                stats = calc_stats(model, dataset, params)
+                print(f"Epoch: {epoch}, average loss: {(avg_loss / tf.dtypes.cast(len_epoch, tf.float64)):.4f}")
+                stats = calc_stats(model, dataset, y_mean, y_std, params)
                 print(f"Average ite: {stats[0]:.4f}, abs ate: {stats[1]:.4f}, pehe; {stats[2]:.4f}")
                 l_step = (epoch + global_log_step) // params['log_steps']
                 tf.summary.scalar("metrics/loss", avg_loss / tf.dtypes.cast(len_epoch, tf.float64), step=l_step)
@@ -137,8 +137,8 @@ def train(params, dataset, len_dataset, writer, train_iteration=0):
                 tf.summary.scalar("metrics/ate", stats[1], step=l_step)
                 tf.summary.scalar("metrics/pehe", stats[2], step=l_step)
 
-        print(f"Epoch: {epoch}, loss: {avg_loss / tf.dtypes.cast(len_epoch, tf.float64)}")
-        stats = calc_stats(model, dataset, params)
+        print(f"Epoch: {epoch}, average loss: {(avg_loss / tf.dtypes.cast(len_epoch, tf.float64)):.4f}")
+        stats = calc_stats(model, dataset, y_mean, y_std, params)
         print(f"Average ite: {stats[0]:.4f}, abs ate: {stats[1]:.4f}, pehe; {stats[2]:.4f}")
         l_step = (epoch + global_log_step) // params['log_steps']
         tf.summary.scalar("metrics/loss", loss_value, step=l_step)
