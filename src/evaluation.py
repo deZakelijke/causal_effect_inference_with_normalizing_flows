@@ -23,19 +23,17 @@ def calc_stats(model, dataset, y_mean, y_std, params):
         ite0 = tf.gather_nd(ypred1, idx0) - tf.gather_nd(y, idx0)
         pred_ite += tf.scatter_nd(idx1, ite1, pred_ite.shape)
         pred_ite += tf.scatter_nd(idx0, ite0, pred_ite.shape)
-        print("ITE")
-        print(pred_ite)
-        print(true_ite)
-        return tf.sqrt(tf.reduce_mean(tf.square(true_ite - pred_ite)))
+        # Maybe the problem is that I take the mean twice. Once per batch and then over all batches
+        # Usually that is not a problem but it might be a problem because I now take the root in
+        # between the two averagings, while it should be done at the end.
+        #return tf.sqrt(tf.reduce_mean(tf.square(true_ite - pred_ite)))
+        return tf.square(true_ite - pred_ite)
 
     def abs_ate(ypred1, ypred0, true_ite):
-        return tf.abs(tf.reduce_mean(ypred1 - ypred0) - tf.reduce_mean(true_ite))
+        return tf.concat([ypred1 - ypred0, true_ite], 1)
 
     def pehe(ypred1, ypred0, mu_1, mu_0):
-        print("PEHE")
-        print(mu_1 - mu_0)
-        print(ypred1 - ypred0)
-        return tf.sqrt(tf.reduce_mean(tf.square((mu_1 - mu_0) - (ypred1 - ypred0))))
+        return tf.square((mu_1 - mu_0) - (ypred1 - ypred0))
 
     def y_errors(y0, y1):
         ypred = (1 - t) * y0 + t * y1
@@ -52,32 +50,30 @@ def calc_stats(model, dataset, y_mean, y_std, params):
         len_dataset +=1
     dataset = dataset.shuffle(len_dataset)
 
-    ite_vec = []
-    ate_vec = []
-    pehe_vec = []
+    ite_scores  = tf.Variable(tf.zeros((len_dataset, 1), dtype=tf.double))
+    ate_scores  = tf.Variable(tf.zeros((len_dataset, 2), dtype=tf.double))
+    pehe_scores = tf.Variable(tf.zeros((len_dataset, 1), dtype=tf.double))
 
     for i, features in dataset.batch(params["batch_size"]).enumerate(0):
-        # We need to be able to do an intervention here. For both t=0 and t=1
         x_bin, x_cont, t, y, y_cf, mu_0, mu_1 = features
         true_ite = mu_1 - mu_0
-        #encoder_params, decoder_params = model(features, step=0, training=False)
-        #out = model(features, step=0, training=False)
-        #encoder_params = out[0]
-        #y_pred = encoder_params[1]
-        #ypred1, ypred0 = y, y_cf
 
         x = tf.concat([x_bin, x_cont], 1)
         ypred0, ypred1 = model.do_intervention(x, nr_samples)
         ypred0, ypred1 = ypred0 * y_std + y_mean, ypred1 * y_std + y_mean
 
-        ite_vec += [rmse_ite(ypred1, ypred0, y)]
-        ate_vec += [abs_ate(ypred1, ypred0, true_ite)]
-        pehe_vec += [pehe(ypred1, ypred0, mu_1, mu_0)]
+        slice_indices = (i * features[0].shape[0], (i + 1) * features[0].shape[0])
+        ite_scores  = ite_scores[slice_indices[0]:slice_indices[1]].assign(rmse_ite(ypred1, ypred0, y))
+        ate_scores  = ate_scores[slice_indices[0]:slice_indices[1]].assign(abs_ate(ypred1, ypred0, true_ite))
+        pehe_scores = pehe_scores[slice_indices[0]:slice_indices[1]].assign(pehe(ypred1, ypred0, mu_1, mu_0))
 
-    # Rescale last value for having a smaller batch size
-    remainer_ratio = features[0].shape[0] / params["batch_size"]
-    ite_vec[-1] /= remainer_ratio
-    ate_vec[-1] /= remainer_ratio
-    pehe_vec[-1] /= remainer_ratio
+    
+    if params["debug"]:
+        pass
+
+    ite = tf.sqrt(tf.reduce_mean(ite_scores))
+    ate = tf.abs(tf.reduce_mean(ate_scores[:, 0]) - tf.reduce_mean(ate_scores[:, 1]))
+    pehe = tf.sqrt(tf.reduce_mean(pehe_scores))
  
-    return tf.reduce_mean(ite_vec), tf.reduce_mean(ate_vec), tf.reduce_mean(pehe_vec)
+    return ite, ate, pehe
+
