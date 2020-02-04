@@ -15,7 +15,7 @@ from evaluation import calc_stats
 
 class CENF(Model):
     
-    def __init__(self, params, hidden_size=64, debug=False):
+    def __init__(self, params, hidden_size=200, debug=False):
         """ Causal Effect Normalising Flow
 
 

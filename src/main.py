@@ -103,7 +103,7 @@ def train(params, dataset, len_dataset, writer, y_mean, y_std, train_iteration=0
     global_log_step = train_iteration * params["epochs"]
 
     if params["debug"]:
-        for epoch in range(5):
+        for epoch in range(3):
             print(f"Epoch: {epoch}")
             avg_loss = 0
             step_start = global_train_step + epoch * len_epoch

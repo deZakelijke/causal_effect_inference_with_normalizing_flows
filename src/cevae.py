@@ -11,7 +11,7 @@ from utils import get_log_prob, get_analytical_KL_divergence
 
 class CEVAE(Model):
 
-    def __init__(self, params, hidden_size=64, debug=False):
+    def __init__(self, params, hidden_size=200, debug=False):
         """ CEVAE model with fc nets between random variables.
         https://github.com/tensorflow/probability/blob/master/tensorflow_probability/examples/vae.py
 
@@ -120,13 +120,20 @@ class Encoder(Model):
         self.z_size = z_size
         self.debug = debug
 
-        self.qt_logits = FC_net(x_size, 1, "qt", hidden_size=hidden_size, debug=debug)
-        self.hqy       = FC_net(x_size, hidden_size, "hqy", hidden_size=hidden_size, debug=debug)
-        self.mu_qy_t0  = FC_net(hidden_size, 1, "mu_qy_t0", hidden_size=hidden_size, debug=debug)
-        self.mu_qy_t1  = FC_net(hidden_size, 1, "mu_qy_t1", hidden_size=hidden_size, debug=debug)
-        self.hqz       = FC_net(x_size + 1, hidden_size, "hqz", hidden_size=hidden_size, debug=debug)
-        self.qz_t0     = FC_net(hidden_size, z_size * 2, "qz_t0", hidden_size=hidden_size, debug=debug) 
-        self.qz_t1     = FC_net(hidden_size, z_size * 2, "qz_t1", hidden_size=hidden_size, debug=debug) 
+        self.qt_logits = FC_net(x_size, 1, "qt", nr_hidden=1, 
+                                hidden_size=hidden_size, debug=debug)
+        self.hqy       = FC_net(x_size, hidden_size, "hqy",
+                                hidden_size=hidden_size, debug=debug)
+        self.mu_qy_t0  = FC_net(hidden_size, 1, "mu_qy_t0",
+                                hidden_size=hidden_size, debug=debug)
+        self.mu_qy_t1  = FC_net(hidden_size, 1, "mu_qy_t1",
+                                hidden_size=hidden_size, debug=debug)
+        self.hqz       = FC_net(x_size + 1, hidden_size, "hqz", 
+                                hidden_size=hidden_size, debug=debug)
+        self.qz_t0     = FC_net(hidden_size, z_size * 2, "qz_t0", 
+                                hidden_size=hidden_size, debug=debug) 
+        self.qz_t1     = FC_net(hidden_size, z_size * 2, "qz_t1", 
+                                hidden_size=hidden_size, debug=debug) 
 
     @tf.function
     def call(self, x, step, training=False):
@@ -167,12 +174,18 @@ class Decoder(Model):
         self.z_size = z_size
         self.debug = debug
 
-        self.hx            = FC_net(z_size, hidden_size, "hx", hidden_size=hidden_size, debug=debug)
-        self.x_cont_logits = FC_net(hidden_size, x_cont_size * 2, "x_cont", hidden_size=hidden_size, debug=debug)
-        self.x_bin_logits  = FC_net(hidden_size, x_bin_size, "x_bin", hidden_size=hidden_size, debug=debug)
-        self.t_logits      = FC_net(z_size, 1, "t", hidden_size=hidden_size, debug=debug)
-        self.mu_y_t0       = FC_net(z_size, 1, "mu_y_t0", hidden_size=hidden_size, debug=debug)
-        self.mu_y_t1       = FC_net(z_size, 1, "mu_y_t1", hidden_size=hidden_size, debug=debug)
+        self.hx            = FC_net(z_size, hidden_size, "hx",              
+                                    hidden_size=hidden_size, debug=debug)
+        self.x_cont_logits = FC_net(hidden_size, x_cont_size * 2, "x_cont", 
+                                    hidden_size=hidden_size, debug=debug)
+        self.x_bin_logits  = FC_net(hidden_size, x_bin_size, "x_bin",       
+                                    hidden_size=hidden_size, debug=debug)
+        self.t_logits      = FC_net(z_size, 1, "t", nr_hidden=1, 
+                                    hidden_size=hidden_size, debug=debug)
+        self.mu_y_t0       = FC_net(z_size, 1, "mu_y_t0", 
+                                    hidden_size=hidden_size, debug=debug)
+        self.mu_y_t1       = FC_net(z_size, 1, "mu_y_t1", 
+                                    hidden_size=hidden_size, debug=debug)
 
     @tf.function
     def call(self, z, step, training=False):
