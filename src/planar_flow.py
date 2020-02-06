@@ -70,9 +70,7 @@ class PlanarFlowLayer(Model):
         return tf.math.log(tf.abs(1 + psi @ self.u))
 
 
-
-if __name__ == "__main__":
-    tf.keras.backend.set_floatx('float64')
+def test_flow():
     # tests
     z_size = 4
     batch_size = 8
@@ -84,10 +82,17 @@ if __name__ == "__main__":
     assert out.shape == z.shape
     assert ldj.shape == (batch_size, 1)
 
-    flow = PlanarFlow(z_size, nr_flows=2)
+    flow = PlanarFlow(z_size, nr_flows=4)
 
     out, ldj = flow(z, step=0, training=True)
     assert out.shape == z.shape
     assert ldj.shape == (batch_size, 1)
+
+
     
-    print("All assertions passed")
+    print("All assertions passed, test successful")
+
+if __name__ == "__main__":
+    tf.keras.backend.set_floatx('float64')
+    test_flow()
+
