@@ -65,8 +65,6 @@ class CEVAE(Model):
         qt_prob, qy_mean, qz_mean, qz_std = encoder_params
         x_bin_prob, x_cont_mean, x_cont_std, t_prob, y_mean = decoder_params
 
-        if self.debug:
-            print("Calculating negative data log likelihood")
         #distortion_x = tf.reduce_mean(- get_log_prob(x_bin, 'B', probs=x_bin_prob) \
         #                   - get_log_prob(x_cont, 'N', mean=x_cont_mean, std=x_cont_std))
         distortion_x = -get_log_prob(x_bin, 'B', probs=x_bin_prob) \
@@ -74,12 +72,8 @@ class CEVAE(Model):
         distortion_t = -get_log_prob(t, 'B', probs=t_prob)
         distortion_y = -get_log_prob(y, 'N', mean=y_mean)
 
-        if self.debug:
-            print("Calculating KL-divergence")
         rate = get_analytical_KL_divergence(qz_mean, qz_std)
 
-        if self.debug:
-            print("Calculating negative log likelihood of auxillary distributions")
         variational_t = -get_log_prob(t, 'B', probs=qt_prob)
         variational_y = -get_log_prob(y, 'N', mean=qy_mean)
 
@@ -93,7 +87,8 @@ class CEVAE(Model):
             tf.summary.scalar("variational_ll/y", tf.reduce_mean(variational_y), step=l_step)
 
         elbo_local = -(rate + distortion_x + distortion_t + distortion_y + variational_t + variational_y)
-        elbo = tf.reduce_mean(input_tensor=elbo_local)
+        elbo = tf.reduce_mean(elbo_local)
+
         return -elbo
 
     def grad(self, features, step, params):
@@ -149,6 +144,16 @@ class Encoder(Model):
         mu_qy0 = self.mu_qy_t0(hqy, step, training=training)
         mu_qy1 = self.mu_qy_t1(hqy, step, training=training)
         qy_mean = qt_sample * mu_qy1 + (1. - qt_sample) * mu_qy0
+        #if tf.math.reduce_any(tf.math.is_nan(qy_mean)):
+        #    print("hit")
+        #    print("qy", qy_mean)
+        #    print("qy0", mu_qy0)
+        #    print("qy1", mu_qy1)
+        #    print("hqy", hqy)
+        #    print("qt_prob", qt_prob)
+        #    print("x", x)
+        #    print("test\n\n")
+
         qy = tfd.Independent(tfd.Normal(loc=qy_mean, scale=tf.ones_like(qy_mean)),
                              reinterpreted_batch_ndims=1,
                              name="qy")
