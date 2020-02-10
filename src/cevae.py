@@ -79,15 +79,17 @@ class CEVAE(Model):
 
         if not step is None and step % (params['log_steps']  * 5) == 0:
             l_step = step // (params['log_steps'] * 5)
-            tf.summary.scalar("distortion/x", tf.reduce_mean(distortion_x), step=l_step)
-            tf.summary.scalar("distortion/t", tf.reduce_mean(distortion_t), step=l_step)
-            tf.summary.scalar("distortion/y", tf.reduce_mean(distortion_y), step=l_step)
-            tf.summary.scalar("rate/z", tf.reduce_mean(rate), step=l_step)
-            tf.summary.scalar("variational_ll/t", tf.reduce_mean(variational_t), step=l_step)
-            tf.summary.scalar("variational_ll/y", tf.reduce_mean(variational_y), step=l_step)
+            tf.summary.scalar("partial_loss/distortion_x", tf.reduce_mean(distortion_x), step=l_step)
+            tf.summary.scalar("partial_loss/distortion_t", tf.reduce_mean(distortion_t), step=l_step)
+            tf.summary.scalar("partial_loss/distortion_y", tf.reduce_mean(distortion_y), step=l_step)
+            tf.summary.scalar("partial_loss/rate_z", tf.reduce_mean(rate), step=l_step)
+            tf.summary.scalar("partial_loss/variational_t", tf.reduce_mean(variational_t), step=l_step)
+            tf.summary.scalar("partial_loss/variational_y", tf.reduce_mean(variational_y), step=l_step)
 
-        elbo_local = -(rate + distortion_x + distortion_t + distortion_y + variational_t + variational_y)
-        elbo = tf.reduce_mean(elbo_local)
+        #elbo_local = -(rate + distortion_x + distortion_t + distortion_y + variational_t + variational_y)
+        #elbo = tf.reduce_mean(elbo_local)
+        elbo = - (tf.reduce_mean(rate) + tf.reduce_mean(distortion_x) + tf.reduce_mean(distortion_t))
+        elbo -= tf.reduce_mean(distortion_y) + tf.reduce_mean(variational_t) + tf.reduce_mean(variational_y)
 
         return -elbo
 
@@ -144,15 +146,16 @@ class Encoder(Model):
         mu_qy0 = self.mu_qy_t0(hqy, step, training=training)
         mu_qy1 = self.mu_qy_t1(hqy, step, training=training)
         qy_mean = qt_sample * mu_qy1 + (1. - qt_sample) * mu_qy0
-        #if tf.math.reduce_any(tf.math.is_nan(qy_mean)):
-        #    print("hit")
-        #    print("qy", qy_mean)
-        #    print("qy0", mu_qy0)
-        #    print("qy1", mu_qy1)
-        #    print("hqy", hqy)
-        #    print("qt_prob", qt_prob)
-        #    print("x", x)
-        #    print("test\n\n")
+        if tf.math.reduce_any(tf.math.is_nan(qy_mean)):
+        # This doesnt work if call() is a compiled TF function
+            print("hit")
+            print("qy", qy_mean)
+            print("qy0", mu_qy0)
+            print("qy1", mu_qy1)
+            print("hqy", hqy)
+            print("qt_prob", qt_prob)
+            print("x", x)
+            print("test\n\n")
 
         qy = tfd.Independent(tfd.Normal(loc=qy_mean, scale=tf.ones_like(qy_mean)),
                              reinterpreted_batch_ndims=1,
