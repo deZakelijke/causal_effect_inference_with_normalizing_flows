@@ -20,12 +20,17 @@ tf.keras.backend.set_floatx('float64')
 def parse_arguments():
     """ Parse all arguments and check for faulty input. """
     parser = argparse.ArgumentParser(description="Causal effect Normalizing Flow trainer")
-    parser.add_argument("--batch_size", type=int, default=16, 
-                        help="Batch size (default=16)")
+    parser.add_argument("--batch_size", type=int, default=32, 
+                        help="Batch size (default=32)")
+    parser.add_argument("--beta", type=float, default=1.0,
+                        help="Beta parameter to balance rate vs distortion in loss."\
+                        "Higher than one means more weight to rate, lower than one means"\
+                        "more weight to distortion. (default=1.0)")
     parser.add_argument("--dataset", type=str, default="IHDP", 
                         help="Dataset used (default: IHDP)")
     parser.add_argument("--debug", action="store_true", default=False, 
-                        help="Turn on debugging mode. What it does now is turn off summary writer and print a lott of stuff.")
+                        help="Turn on debugging mode. What it does now is turn off "\
+                        "summary writer and print a lott of stuff.")
     parser.add_argument("--epochs", type=int, default=100, 
                         help="Number of training iterations (default: 100)")
     parser.add_argument("--experiment_name", type=str, 
@@ -43,7 +48,8 @@ def parse_arguments():
     parser.add_argument("--nr_flows", type=int, default=4, 
                         help="Number of flows in the flow models (default: 4)")
     parser.add_argument("--separate_files", action="store_true", default=False, 
-                        help="Switch to training the model on each data file separately instead of everything at once")
+                        help="Switch to training the model on each data file "\
+                        "separately instead of everything at once")
 
     args = parser.parse_args()
 
@@ -129,7 +135,7 @@ def train(params, dataset, len_dataset, writer, y_mean, y_std, train_iteration=0
                 #break
             print(f"Epoch: {epoch}, average loss: {avg_loss / tf.dtypes.cast(len_epoch, tf.float64)}")
             stats = calc_stats(model, dataset, y_mean, y_std, params)
-            print(f"Average ite: {stats[0]:.4f}, abs ate: {stats[1]:.4f}, pehe; {stats[2]:.4f}")
+            print(f"Average ite: {stats[0]:.4f}, abs ate: {stats[1]:.4f}, pehe; {stats[2]:.4f}, y_error factual: {stats[3][0]:.4f}, y_error counterfactual {stats[3][1]:.4f}")
             print("Epoch done")
         return
 
@@ -145,21 +151,29 @@ def train(params, dataset, len_dataset, writer, y_mean, y_std, train_iteration=0
             if epoch % params["log_steps"] == 0:
                 print(f"Epoch: {epoch}, average loss: {(avg_loss / tf.dtypes.cast(len_epoch, tf.float64)):.4f}")
                 stats = calc_stats(model, dataset, y_mean, y_std, params)
-                print(f"Average ite: {stats[0]:.4f}, abs ate: {stats[1]:.4f}, pehe; {stats[2]:.4f}")
+                print(f"Average ite: {stats[0]:.4f}, abs ate: {stats[1]:.4f}, pehe; {stats[2]:.4f}, "\
+                      f"y_error factual: {stats[3][0]:.4f}, y_error counterfactual {stats[3][1]:.4f}")
+ 
                 l_step = (epoch + global_log_step) // params['log_steps']
                 tf.summary.scalar("metrics/loss", avg_loss / tf.dtypes.cast(len_epoch, tf.float64), step=l_step)
                 tf.summary.scalar("metrics/ite", stats[0], step=l_step)
                 tf.summary.scalar("metrics/ate", stats[1], step=l_step)
                 tf.summary.scalar("metrics/pehe", stats[2], step=l_step)
+                tf.summary.scalar("metrics/y_factual", stats[3][0], step=l_step)
+                tf.summary.scalar("metrics/y_counterfactual", stats[3][1], step=l_step)
 
         print(f"Epoch: {epoch}, average loss: {(avg_loss / tf.dtypes.cast(len_epoch, tf.float64)):.4f}")
         stats = calc_stats(model, dataset, y_mean, y_std, params)
-        print(f"Average ite: {stats[0]:.4f}, abs ate: {stats[1]:.4f}, pehe; {stats[2]:.4f}")
+        print(f"Average ite: {stats[0]:.4f}, abs ate: {stats[1]:.4f}, pehe; {stats[2]:.4f}, "\
+              f"y_error factual: {stats[3][0]:.4f}, y_error counterfactual {stats[3][1]:.4f}")
+ 
         l_step = (epoch + global_log_step + 1) // params['log_steps']
         tf.summary.scalar("metrics/loss", loss_value, step=l_step)
         tf.summary.scalar("metrics/ite", stats[0], step=l_step)
         tf.summary.scalar("metrics/ate", stats[1], step=l_step)
         tf.summary.scalar("metrics/pehe", stats[2], step=l_step)
+        tf.summary.scalar("metrics/y_factual", stats[3][0], step=l_step)
+        tf.summary.scalar("metrics/y_counterfactual", stats[3][1], step=l_step)
 
 
 

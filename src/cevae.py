@@ -47,7 +47,7 @@ class CEVAE(Model):
         x_bin, x_cont, t, y, y_cf, mu_0, mu_1 = features
         x = tf.concat([x_bin, x_cont], 1)
 
-        encoder_params = self.encode(x, step, training=training)
+        encoder_params = self.encode(x, t, y, step, training=training)
         _, _, qz_mean, qz_std = encoder_params
         qz = tfd.Independent(tfd.Normal(loc=qz_mean, scale=qz_std),
                              reinterpreted_batch_ndims=1,
@@ -86,10 +86,10 @@ class CEVAE(Model):
             tf.summary.scalar("partial_loss/variational_t", tf.reduce_mean(variational_t), step=l_step)
             tf.summary.scalar("partial_loss/variational_y", tf.reduce_mean(variational_y), step=l_step)
 
-        #elbo_local = -(rate + distortion_x + distortion_t + distortion_y + variational_t + variational_y)
-        #elbo = tf.reduce_mean(elbo_local)
-        elbo = - (tf.reduce_mean(rate) + tf.reduce_mean(distortion_x) + tf.reduce_mean(distortion_t))
-        elbo -= tf.reduce_mean(distortion_y) + tf.reduce_mean(variational_t) + tf.reduce_mean(variational_y)
+        # Either pick beta to increase rate or decrease only dist of x
+        #elbo_local = -(params['beta'] * rate + distortion_x + distortion_t + distortion_y + variational_t + variational_y)
+        elbo_local = -(rate + distortion_x + distortion_t + params['beta'] * distortion_y + variational_t + variational_y)
+        elbo = tf.reduce_mean(elbo_local)
 
         return -elbo
 
@@ -102,7 +102,7 @@ class CEVAE(Model):
         return loss, tape.gradient(loss, self.trainable_variables)
 
     def do_intervention(self, x, nr_samples):
-        _, _, qz_mean, qz_std = self.encode(x, None, training=False)
+        _, _, qz_mean, qz_std = self.encode(x, None, None, None, training=False)
         mu_y0, mu_y1 = self.decode.do_intervention(qz_mean, qz_std, nr_samples)
         return mu_y0, mu_y1
 
@@ -133,7 +133,7 @@ class Encoder(Model):
                                 hidden_size=hidden_size, debug=debug) 
 
     @tf.function
-    def call(self, x, step, training=False):
+    def call(self, x, t, y, step, training=False):
         if self.debug:
             print("Encoding")
         qt_prob = tf.sigmoid(self.qt_logits(x, step, training=training))
@@ -145,30 +145,42 @@ class Encoder(Model):
         hqy = self.hqy(x, step, training=training)
         mu_qy0 = self.mu_qy_t0(hqy, step, training=training)
         mu_qy1 = self.mu_qy_t1(hqy, step, training=training)
-        qy_mean = qt_sample * mu_qy1 + (1. - qt_sample) * mu_qy0
-        if tf.math.reduce_any(tf.math.is_nan(qy_mean)):
+        if  training:
+            qy_mean = t * mu_qy1 + (1. - t) * mu_qy0
+        else:
+            qy_mean = qt_sample * mu_qy1 + (1. - qt_sample) * mu_qy0
+
+        #if tf.math.reduce_any(tf.math.is_nan(qy_mean)):
         # This doesnt work if call() is a compiled TF function
-            print("hit")
-            print("qy", qy_mean)
-            print("qy0", mu_qy0)
-            print("qy1", mu_qy1)
-            print("hqy", hqy)
-            print("qt_prob", qt_prob)
-            print("x", x)
-            print("test\n\n")
+        #    print("hit")
+        #    print("qy", qy_mean)
+        #    print("qy0", mu_qy0)
+        #    print("qy1", mu_qy1)
+        #    print("hqy", hqy)
+        #    print("qt_prob", qt_prob)
+        #    print("x", x)
+        #    print("test\n\n")
 
         qy = tfd.Independent(tfd.Normal(loc=qy_mean, scale=tf.ones_like(qy_mean)),
                              reinterpreted_batch_ndims=1,
                              name="qy")
         
-        xy = tf.concat([x, qy.sample()], 1)
+        if training:
+            xy = tf.concat([x, y], 1)
+        else:
+            xy = tf.concat([x, qy.sample()], 1)
         
         hidden_z = self.hqz(xy, step, training=training)
         qz0 = self.qz_t0(hidden_z, step, training=training)
         qz1 = self.qz_t1(hidden_z, step, training=training)
 
-        qz_mean = qt_sample * qz1[:, :self.z_size] + (1. - qt_sample) * qz0[:, :self.z_size]
-        qz_std = qt_sample * softplus(qz1[:, self.z_size:]) + (1. - qt_sample) * softplus(qz0[:, self.z_size:])
+        if training:
+            qz_mean = t * qz1[:, :self.z_size] + (1. - t) * qz0[:, :self.z_size]
+            qz_std = t * softplus(qz1[:, self.z_size:]) + (1. - t) * softplus(qz0[:, self.z_size:])
+
+        else:
+            qz_mean = qt_sample * qz1[:, :self.z_size] + (1. - qt_sample) * qz0[:, :self.z_size]
+            qz_std = qt_sample * softplus(qz1[:, self.z_size:]) + (1. - qt_sample) * softplus(qz0[:, self.z_size:])
         return qt_prob, qy_mean, qz_mean, qz_std
 
 
@@ -235,6 +247,7 @@ class Decoder(Model):
         y1 = self.mu_y_t1(z, None, training=False)
         mu_y0 = tf.reduce_mean(y0, axis=0)
         mu_y1 = tf.reduce_mean(y1, axis=0)
+        # Is this correct? Do we average and sample correctly?
 
         return mu_y0, mu_y1
 
