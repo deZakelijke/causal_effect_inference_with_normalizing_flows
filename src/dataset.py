@@ -47,13 +47,13 @@ def IHDP_dataset(params, path_data="datasets/IHDP/csv/", file_prefix="ihdp_npci_
     t = np.expand_dims(np.array(t), axis=1)
     y = np.expand_dims(np.array(y), axis=1) # Y needs to have zero mean and std 1 during training
     y_mean, y_std = np.mean(y), np.std(y)
-    y = (y - y_mean) / y_std
+    #y = (y - y_mean) / y_std
     y_cf = np.expand_dims(np.array(y_cf), axis=1)
     y_cf_mean, y_cf_std = np.mean(y_cf), np.std(y_cf)
-    y_cf = (y_cf - y_cf_mean) / y_cf_std
-    #self.y_cf__mean, self.y_cf_std = np.mean(y_cf), np.std(y_cf)
+    #y_cf = (y_cf - y_cf_mean) / y_cf_std
     mu_0 = np.expand_dims(np.array(mu_0), axis=1)
     mu_1 = np.expand_dims(np.array(mu_1), axis=1)
+    scaling_data = (y_mean, y_std, y_cf_mean, y_cf_std)
 
     return tf.data.Dataset.from_tensor_slices(((x_bin, 
                                                 x_cont, 
@@ -61,7 +61,7 @@ def IHDP_dataset(params, path_data="datasets/IHDP/csv/", file_prefix="ihdp_npci_
                                                 y, 
                                                 y_cf, 
                                                 mu_0, 
-                                                mu_1))), y_mean, y_std
+                                                mu_1))), scaling_data
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt

@@ -99,21 +99,21 @@ def main(params):
 
     if params["separate_files"]:
         for i in range(10):
-            dataset, y_mean, y_std = eval(f"{params['dataset']}_dataset")(params, separate_files=True, file_index=i)
+            dataset, scaling_data = eval(f"{params['dataset']}_dataset")(params, separate_files=True, file_index=i)
             len_dataset = tf.data.experimental.cardinality(dataset)
             dataset = dataset.shuffle(len_dataset)
-            train(params, dataset, len_dataset, writer, y_mean, y_std, i)
+            train(params, dataset, len_dataset, writer, scaling_data, i)
             if params['debug']:
                 break
     else:
-        dataset, y_mean, y_std = eval(f"{params['dataset']}_dataset")(params)
+        dataset, scaling_data = eval(f"{params['dataset']}_dataset")(params)
         len_dataset = tf.data.experimental.cardinality(dataset)
         dataset = dataset.shuffle(len_dataset)
 
-        train(params, dataset, len_dataset, writer, y_mean, y_std)
+        train(params, dataset, len_dataset, writer, scaling_data)
 
 
-def train(params, dataset, len_dataset, writer, y_mean, y_std, train_iteration=0):
+def train(params, dataset, len_dataset, writer, scaling_data, train_iteration=0):
     """ Runs training of selected model. """
     if params["model"] == "cevae":
         model = CEVAE(params)
@@ -136,7 +136,7 @@ def train(params, dataset, len_dataset, writer, y_mean, y_std, train_iteration=0
                 optimizer.apply_gradients(zip(grads, model.trainable_variables))
                 #break
             print(f"Epoch: {epoch}, average loss: {avg_loss / tf.dtypes.cast(len_epoch, tf.float64)}")
-            stats = calc_stats(model, dataset, y_mean, y_std, params)
+            stats = calc_stats(model, dataset, scaling_data, params)
             print(f"Average ite: {stats[0]:.4f}, abs ate: {stats[1]:.4f}, pehe; {stats[2]:.4f}, y_error factual: {stats[3][0]:.4f}, y_error counterfactual {stats[3][1]:.4f}")
             print("Epoch done")
         return
@@ -152,7 +152,7 @@ def train(params, dataset, len_dataset, writer, y_mean, y_std, train_iteration=0
                 optimizer.apply_gradients(zip(grads, model.trainable_variables))
             if epoch % params["log_steps"] == 0:
                 print(f"Epoch: {epoch}, average loss: {(avg_loss / tf.dtypes.cast(len_epoch, tf.float64)):.4f}")
-                stats = calc_stats(model, dataset, y_mean, y_std, params)
+                stats = calc_stats(model, dataset, scaling_data, params)
                 print(f"Average ite: {stats[0]:.4f}, abs ate: {stats[1]:.4f}, pehe; {stats[2]:.4f}, "\
                       f"y_error factual: {stats[3][0]:.4f}, y_error counterfactual {stats[3][1]:.4f}")
  
@@ -165,7 +165,7 @@ def train(params, dataset, len_dataset, writer, y_mean, y_std, train_iteration=0
                 tf.summary.scalar("metrics/y_counterfactual", stats[3][1], step=l_step)
 
         print(f"Epoch: {epoch}, average loss: {(avg_loss / tf.dtypes.cast(len_epoch, tf.float64)):.4f}")
-        stats = calc_stats(model, dataset, y_mean, y_std, params)
+        stats = calc_stats(model, dataset, scaling_data, params)
         print(f"Average ite: {stats[0]:.4f}, abs ate: {stats[1]:.4f}, pehe; {stats[2]:.4f}, "\
               f"y_error factual: {stats[3][0]:.4f}, y_error counterfactual {stats[3][1]:.4f}")
  

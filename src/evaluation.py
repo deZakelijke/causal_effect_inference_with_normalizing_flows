@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 
 
-def calc_stats(model, dataset, y_mean, y_std, params):
+def calc_stats(model, dataset, scaling_data, params):
     """ Function for evaluating a model according to our metrics
 
    
@@ -71,25 +71,26 @@ def calc_stats(model, dataset, y_mean, y_std, params):
 
         x = tf.concat([x_bin, x_cont], 1)
         ypred0, ypred1 = model.do_intervention(x, nr_samples)
-        ypred0, ypred1 = ypred0 * y_std + y_mean, ypred1 * y_std + y_mean
+        #y_mean, y_std = scaling_data[0], scaling_data[1]
+        #y_cf_mean, y_cf_std = scaling_data[2], scaling_data[3]
+        #ypred0, ypred1 = ypred0 * y_std + y_mean, ypred1 * y_std + y_mean
+        #y = y * y_std + y_mean
+        #y_cf = y_cf * y_cf_std + y_cf_mean
 
         slice_indices = (i * features[0].shape[0], (i + 1) * features[0].shape[0])
         ite_scores  = ite_scores[slice_indices[0]:slice_indices[1]].assign(rmse_ite(ypred1, ypred0, y))
         ate_scores  = ate_scores[slice_indices[0]:slice_indices[1]].assign(abs_ate(ypred1, ypred0, true_ite))
         pehe_scores = pehe_scores[slice_indices[0]:slice_indices[1]].assign(pehe(ypred1, ypred0, mu_1, mu_0))
         y_error_val = y_error_val[slice_indices[0]:slice_indices[1]].assign(y_errors(ypred1, ypred0, y, y_cf))
-    if params['debug']:
-        print(f"y: {y}")
-        print(f"y_cf: {y_cf}")
-        print(f"ypred1: {ypred1}")
-        print(f"ypred0: {ypred0}")
-        print(f"ypred: {(1 - t) * ypred0 + t * ypred1}")
-        print(f"ypred_cf: {t * ypred0 + (1 - t) * ypred1}")
+    #if params['debug']:
+    #    print(f"y: {y}")
+    #    print(f"y_cf: {y_cf}")
+    #    print(f"ypred1: {ypred1}")
+    #    print(f"ypred0: {ypred0}")
+    #    print(f"ypred: {(1 - t) * ypred0 + t * ypred1}")
+    #    print(f"ypred_cf: {t * ypred0 + (1 - t) * ypred1}")
 
     
-    if params["debug"]:
-        pass
-
     ite = tf.sqrt(tf.reduce_mean(ite_scores))
     ate = tf.abs(tf.reduce_mean(ate_scores[:, 0]) - tf.reduce_mean(ate_scores[:, 1]))
     pehe = tf.sqrt(tf.reduce_mean(pehe_scores))
