@@ -103,6 +103,8 @@ def main(params):
             len_dataset = tf.data.experimental.cardinality(dataset)
             dataset = dataset.shuffle(len_dataset)
             train(params, dataset, len_dataset, writer, y_mean, y_std, i)
+            if params['debug']:
+                break
     else:
         dataset, y_mean, y_std = eval(f"{params['dataset']}_dataset")(params)
         len_dataset = tf.data.experimental.cardinality(dataset)
@@ -124,7 +126,7 @@ def train(params, dataset, len_dataset, writer, y_mean, y_std, train_iteration=0
     global_log_step = train_iteration * params["epochs"]
 
     if params["debug"]:
-        for epoch in range(3):
+        for epoch in range(10):
             print(f"Epoch: {epoch}")
             avg_loss = 0
             step_start = global_train_step + epoch * len_epoch
@@ -187,7 +189,7 @@ if __name__ == "__main__":
     #tf.config.experimental_run_functions_eagerly(True)
     if gpus:
         for gpu in gpus:
-            tf.config.experimental.set_memory_growth(gpu, False)
+            tf.config.experimental.set_virtual_device_configuration(gpu, [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=2048)])
 
     main(params)
 

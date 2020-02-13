@@ -57,20 +57,28 @@ class CEVAE(Model):
         decoder_params = self.decode(qz_sample, step, training=training)
         return encoder_params, decoder_params
 
-    @tf.function
+    #@tf.function
     def elbo(self, features, encoder_params, decoder_params, step, params):
         if self.debug:
             print("Calculating loss")
         x_bin, x_cont, t, y, y_cf, mu_0, mu_1 = features
         qt_prob, qy_mean, qz_mean, qz_std = encoder_params
-        x_bin_prob, x_cont_mean, x_cont_std, t_prob, y_mean = decoder_params
+        x_bin_prob, x_cont_mean, x_cont_std, t_prob, t_sample, y_mean = decoder_params
 
-        #distortion_x = tf.reduce_mean(- get_log_prob(x_bin, 'B', probs=x_bin_prob) \
-        #                   - get_log_prob(x_cont, 'N', mean=x_cont_mean, std=x_cont_std))
+        # Get the y values corresponding to the values of t that were sampled during decoding
+        t_correct = tf.where(tf.squeeze(t) == tf.squeeze(t_sample))
+        t_incorrect = tf.where(tf.squeeze(t) != tf.squeeze(t_sample))
+        y_labels = tf.scatter_nd(t_correct, tf.squeeze(tf.gather(y, t_correct), axis=2), y.shape) + \
+                   tf.scatter_nd(t_incorrect, tf.squeeze(tf.gather(y_cf, t_incorrect), axis=2), y.shape)
+
         distortion_x = -get_log_prob(x_bin, 'B', probs=x_bin_prob) \
                        -get_log_prob(x_cont, 'N', mean=x_cont_mean, std=x_cont_std)
         distortion_t = -get_log_prob(t, 'B', probs=t_prob)
-        distortion_y = -get_log_prob(y, 'N', mean=y_mean)
+        distortion_y = -get_log_prob(y_labels, 'N', mean=y_mean)
+        # TODO here we should use y of the values that actually got chosen
+        # if t~p(t|z) is not the same as the actual t then we take the wrong loss
+        #print(f"y labels: {y_labels[:10]}")
+        #print(f"y mean: {y_mean[:10]}")
 
         rate = get_analytical_KL_divergence(qz_mean, qz_std)
 
@@ -88,7 +96,7 @@ class CEVAE(Model):
 
         # Either pick beta to increase rate or decrease only dist of x
         #elbo_local = -(params['beta'] * rate + distortion_x + distortion_t + distortion_y + variational_t + variational_y)
-        elbo_local = -(rate + distortion_x + distortion_t + params['beta'] * distortion_y + variational_t + variational_y)
+        elbo_local = -(params['beta'] * rate + distortion_x + distortion_t + distortion_y + variational_t + variational_y)
         elbo = tf.reduce_mean(elbo_local)
 
         return -elbo
@@ -228,7 +236,7 @@ class Decoder(Model):
         mu_y0 = self.mu_y_t0(z, step, training=training)
         mu_y1 = self.mu_y_t1(z, step, training=training)
         y_mean = t_sample * mu_y1 + (1. - t_sample) * mu_y0
-        return x_bin_prob, x_cont_mean, x_cont_std, t_prob, y_mean
+        return x_bin_prob, x_cont_mean, x_cont_std, t_prob, t_sample, y_mean
 
     def do_intervention(self, qz_mean, qz_std, nr_samples):
         """ Computes the quantity E[y|z, do(t=0)] and E[y|z, do(t=1)]

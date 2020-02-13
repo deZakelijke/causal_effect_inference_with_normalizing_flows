@@ -78,6 +78,13 @@ def calc_stats(model, dataset, y_mean, y_std, params):
         ate_scores  = ate_scores[slice_indices[0]:slice_indices[1]].assign(abs_ate(ypred1, ypred0, true_ite))
         pehe_scores = pehe_scores[slice_indices[0]:slice_indices[1]].assign(pehe(ypred1, ypred0, mu_1, mu_0))
         y_error_val = y_error_val[slice_indices[0]:slice_indices[1]].assign(y_errors(ypred1, ypred0, y, y_cf))
+    if params['debug']:
+        print(f"y: {y}")
+        print(f"y_cf: {y_cf}")
+        print(f"ypred1: {ypred1}")
+        print(f"ypred0: {ypred0}")
+        print(f"ypred: {(1 - t) * ypred0 + t * ypred1}")
+        print(f"ypred_cf: {t * ypred0 + (1 - t) * ypred1}")
 
     
     if params["debug"]:

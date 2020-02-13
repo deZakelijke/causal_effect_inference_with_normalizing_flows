@@ -49,6 +49,8 @@ def IHDP_dataset(params, path_data="datasets/IHDP/csv/", file_prefix="ihdp_npci_
     y_mean, y_std = np.mean(y), np.std(y)
     y = (y - y_mean) / y_std
     y_cf = np.expand_dims(np.array(y_cf), axis=1)
+    y_cf_mean, y_cf_std = np.mean(y_cf), np.std(y_cf)
+    y_cf = (y_cf - y_cf_mean) / y_cf_std
     #self.y_cf__mean, self.y_cf_std = np.mean(y_cf), np.std(y_cf)
     mu_0 = np.expand_dims(np.array(mu_0), axis=1)
     mu_1 = np.expand_dims(np.array(mu_1), axis=1)
