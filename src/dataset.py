@@ -22,8 +22,8 @@ def IHDP_dataset(params, path_data="datasets/IHDP/csv/", file_prefix="ihdp_npci_
             t.append(line[0])       # Treatment true/false
             y.append(line[1])       # Outcome
             y_cf.append(line[2])    # Counterfactual outcome
-            mu_0.append(line[3])    # Still not sure what these are 
-            mu_1.append(line[4])    # ?????
+            mu_0.append(line[3])    # Outcome of the experiment if the dataset had been created with
+            mu_1.append(line[4])    # a randomised double lbind trial
             x = line[5:]            # Proxy features
             x[13] -= 1              # Value is in [1, 2] instead of [0, 1]
             x_bin.append(x[binfeats])
@@ -45,15 +45,16 @@ def IHDP_dataset(params, path_data="datasets/IHDP/csv/", file_prefix="ihdp_npci_
     x_cont = np.array(x_cont)
     x_bin = np.array(x_bin)
     t = np.expand_dims(np.array(t), axis=1)
-    y = np.expand_dims(np.array(y), axis=1) # Y needs to have zero mean and std 1 during training
-    y_mean, y_std = np.mean(y), np.std(y)
-    #y = (y - y_mean) / y_std
+    y = np.expand_dims(np.array(y), axis=1) 
     y_cf = np.expand_dims(np.array(y_cf), axis=1)
-    y_cf_mean, y_cf_std = np.mean(y_cf), np.std(y_cf)
-    #y_cf = (y_cf - y_cf_mean) / y_cf_std
+
+    y_mean, y_std = np.mean(tf.concat([y, y_cf], 1)), np.std(tf.concat([y, y_cf], 1))
+    y = (y - y_mean) / y_std
+    y_cf = (y_cf - y_mean) / y_std
+
     mu_0 = np.expand_dims(np.array(mu_0), axis=1)
     mu_1 = np.expand_dims(np.array(mu_1), axis=1)
-    scaling_data = (y_mean, y_std, y_cf_mean, y_cf_std)
+    scaling_data = (y_mean, y_std)
 
     return tf.data.Dataset.from_tensor_slices(((x_bin, 
                                                 x_cont, 

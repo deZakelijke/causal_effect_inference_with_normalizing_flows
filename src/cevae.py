@@ -57,7 +57,7 @@ class CEVAE(Model):
         decoder_params = self.decode(qz_sample, step, training=training)
         return encoder_params, decoder_params
 
-    #@tf.function
+    @tf.function
     def elbo(self, features, encoder_params, decoder_params, step, params):
         if self.debug:
             print("Calculating loss")
@@ -75,10 +75,6 @@ class CEVAE(Model):
                        -get_log_prob(x_cont, 'N', mean=x_cont_mean, std=x_cont_std)
         distortion_t = -get_log_prob(t, 'B', probs=t_prob)
         distortion_y = -get_log_prob(y_labels, 'N', mean=y_mean)
-        # TODO here we should use y of the values that actually got chosen
-        # if t~p(t|z) is not the same as the actual t then we take the wrong loss
-        #print(f"y labels: {y_labels[:10]}")
-        #print(f"y mean: {y_mean[:10]}")
 
         rate = get_analytical_KL_divergence(qz_mean, qz_std)
 
@@ -94,9 +90,8 @@ class CEVAE(Model):
             tf.summary.scalar("partial_loss/variational_t", tf.reduce_mean(variational_t), step=l_step)
             tf.summary.scalar("partial_loss/variational_y", tf.reduce_mean(variational_y), step=l_step)
 
-        # Either pick beta to increase rate or decrease only dist of x
-        #elbo_local = -(params['beta'] * rate + distortion_x + distortion_t + distortion_y + variational_t + variational_y)
-        elbo_local = -(params['beta'] * rate + distortion_x + distortion_t + distortion_y + variational_t + variational_y)
+        elbo_local = -(params['beta'] * rate + distortion_x + distortion_t + \
+                       distortion_y + variational_t + variational_y)
         elbo = tf.reduce_mean(elbo_local)
 
         return -elbo
@@ -111,7 +106,13 @@ class CEVAE(Model):
 
     def do_intervention(self, x, nr_samples):
         _, _, qz_mean, qz_std = self.encode(x, None, None, None, training=False)
-        mu_y0, mu_y1 = self.decode.do_intervention(qz_mean, qz_std, nr_samples)
+
+        qz = tfd.Independent(tfd.Normal(loc=qz_mean, scale=qz_std),
+                             reinterpreted_batch_ndims=1,
+                             name="qz")
+        z = qz.sample(nr_samples)
+
+        mu_y0, mu_y1 = self.decode.do_intervention(z, nr_samples)
         return mu_y0, mu_y1
 
 
@@ -157,17 +158,6 @@ class Encoder(Model):
             qy_mean = t * mu_qy1 + (1. - t) * mu_qy0
         else:
             qy_mean = qt_sample * mu_qy1 + (1. - qt_sample) * mu_qy0
-
-        #if tf.math.reduce_any(tf.math.is_nan(qy_mean)):
-        # This doesnt work if call() is a compiled TF function
-        #    print("hit")
-        #    print("qy", qy_mean)
-        #    print("qy0", mu_qy0)
-        #    print("qy1", mu_qy1)
-        #    print("hqy", hqy)
-        #    print("qt_prob", qt_prob)
-        #    print("x", x)
-        #    print("test\n\n")
 
         qy = tfd.Independent(tfd.Normal(loc=qy_mean, scale=tf.ones_like(qy_mean)),
                              reinterpreted_batch_ndims=1,
@@ -238,7 +228,7 @@ class Decoder(Model):
         y_mean = t_sample * mu_y1 + (1. - t_sample) * mu_y0
         return x_bin_prob, x_cont_mean, x_cont_std, t_prob, t_sample, y_mean
 
-    def do_intervention(self, qz_mean, qz_std, nr_samples):
+    def do_intervention(self, z, nr_samples):
         """ Computes the quantity E[y|z, do(t=0)] and E[y|z, do(t=1)]
 
     `   nr_sample of samples are drawn from the Normal distribution
@@ -246,11 +236,6 @@ class Decoder(Model):
         The samples are averaged at the end.
 
         """
-        qz = tfd.Independent(tfd.Normal(loc=qz_mean, scale=qz_std),
-                             reinterpreted_batch_ndims=1,
-                             name="qz")
-        z = qz.sample(nr_samples)
-
         y0 = self.mu_y_t0(z, None, training=False)
         y1 = self.mu_y_t1(z, None, training=False)
         mu_y0 = tf.reduce_mean(y0, axis=0)

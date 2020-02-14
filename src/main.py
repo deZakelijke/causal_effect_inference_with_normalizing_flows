@@ -82,11 +82,22 @@ def parse_arguments():
 
     return vars(args)
 
+def print_stats(stats, index):
+        print(f"Average ite: {stats[0]:.4f}, abs ate: {stats[1]:.4f}, pehe; {stats[2]:.4f}, "\
+              f"y_error factual: {stats[3][0]:.4f}, y_error counterfactual {stats[3][1]:.4f}")
+ 
+        tf.summary.scalar("metrics/ite", stats[0], step=index)
+        tf.summary.scalar("metrics/ate", stats[1], step=index)
+        tf.summary.scalar("metrics/pehe", stats[2], step=index)
+        tf.summary.scalar("metrics/y_factual", stats[3][0], step=index)
+        tf.summary.scalar("metrics/y_counterfactual", stats[3][1], step=index)
+
 def main(params):
     """ Main execution. Creates logging aand writer, and launches selected training. """
     params["x_bin_size"] = 19
     params["x_cont_size"] = 6
     params["z_size"] = 16
+    repetitions = 10
 
     timestamp = time.strftime("%Y:%m:%d/%X")
     if not params["debug"]:
@@ -98,13 +109,16 @@ def main(params):
 
 
     if params["separate_files"]:
-        for i in range(10):
+        total_stats = []
+        for i in range(repetitions):
             dataset, scaling_data = eval(f"{params['dataset']}_dataset")(params, separate_files=True, file_index=i)
             len_dataset = tf.data.experimental.cardinality(dataset)
             dataset = dataset.shuffle(len_dataset)
-            train(params, dataset, len_dataset, writer, scaling_data, i)
-            if params['debug']:
-                break
+            stats = train(params, dataset, len_dataset, writer, scaling_data, i)
+            total_stats.append(stats)
+        total_stats = np.array(total_stats)
+        print_stats(total_stats.mean(0), repetitions * params['log_steps'] + 1)
+        
     else:
         dataset, scaling_data = eval(f"{params['dataset']}_dataset")(params)
         len_dataset = tf.data.experimental.cardinality(dataset)
@@ -139,7 +153,7 @@ def train(params, dataset, len_dataset, writer, scaling_data, train_iteration=0)
             stats = calc_stats(model, dataset, scaling_data, params)
             print(f"Average ite: {stats[0]:.4f}, abs ate: {stats[1]:.4f}, pehe; {stats[2]:.4f}, y_error factual: {stats[3][0]:.4f}, y_error counterfactual {stats[3][1]:.4f}")
             print("Epoch done")
-        return
+        return stats
 
 
     with writer.as_default():
@@ -153,30 +167,16 @@ def train(params, dataset, len_dataset, writer, scaling_data, train_iteration=0)
             if epoch % params["log_steps"] == 0:
                 print(f"Epoch: {epoch}, average loss: {(avg_loss / tf.dtypes.cast(len_epoch, tf.float64)):.4f}")
                 stats = calc_stats(model, dataset, scaling_data, params)
-                print(f"Average ite: {stats[0]:.4f}, abs ate: {stats[1]:.4f}, pehe; {stats[2]:.4f}, "\
-                      f"y_error factual: {stats[3][0]:.4f}, y_error counterfactual {stats[3][1]:.4f}")
- 
                 l_step = (epoch + global_log_step) // params['log_steps']
-                tf.summary.scalar("metrics/loss", avg_loss / tf.dtypes.cast(len_epoch, tf.float64), step=l_step)
-                tf.summary.scalar("metrics/ite", stats[0], step=l_step)
-                tf.summary.scalar("metrics/ate", stats[1], step=l_step)
-                tf.summary.scalar("metrics/pehe", stats[2], step=l_step)
-                tf.summary.scalar("metrics/y_factual", stats[3][0], step=l_step)
-                tf.summary.scalar("metrics/y_counterfactual", stats[3][1], step=l_step)
+                print_stats(stats, l_step)
+                tf.summary.scalar("metrics/loss", loss_value, step=l_step)
 
         print(f"Epoch: {epoch}, average loss: {(avg_loss / tf.dtypes.cast(len_epoch, tf.float64)):.4f}")
         stats = calc_stats(model, dataset, scaling_data, params)
-        print(f"Average ite: {stats[0]:.4f}, abs ate: {stats[1]:.4f}, pehe; {stats[2]:.4f}, "\
-              f"y_error factual: {stats[3][0]:.4f}, y_error counterfactual {stats[3][1]:.4f}")
- 
         l_step = (epoch + global_log_step + 1) // params['log_steps']
+        print_stats(stats, l_step)
         tf.summary.scalar("metrics/loss", loss_value, step=l_step)
-        tf.summary.scalar("metrics/ite", stats[0], step=l_step)
-        tf.summary.scalar("metrics/ate", stats[1], step=l_step)
-        tf.summary.scalar("metrics/pehe", stats[2], step=l_step)
-        tf.summary.scalar("metrics/y_factual", stats[3][0], step=l_step)
-        tf.summary.scalar("metrics/y_counterfactual", stats[3][1], step=l_step)
-
+        return stats
 
 
 def test(params):
