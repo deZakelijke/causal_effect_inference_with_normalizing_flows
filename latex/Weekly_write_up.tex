@@ -4,6 +4,9 @@
 \usepackage{standalone}
 \usepackage{amsmath}
 \usepackage{amsfonts}
+\usepackage[a4paper, total={7.5in, 10in}]{geometry}
+\usepackage{hyperref}
+\usepackage{pbox}
 
 
 
@@ -13,13 +16,59 @@
 
 \begin{document}
 
-\section*{Things I've been working on}
-\begin{itemize}
-    \item Reading/literature review: I've been trying to get an over view of what methods have been used before the CEVAE in the causal inference field. I've noticed that it is quite a deep rabbit hole, especially since there are many possible research directions. So far I've tried to delineate this by focusing on causal effect inference with a given graph that also use proxy-based methods. There has been a lot of theoretical work on trying to prove certain inferences are possible, but they usually assume that the variables are all categorical, and then reach a step that requires a full matrix inversion.
-    \item Reproducing earlier results: A while ago I mentioned that the code provided with the CEVAE runs out of the box and produces the results. This is indeed true, but the code is too obfuscated and too poorly documented to use it as a starting point for this project. Therefore I've been trying to reproduce it from scratch in such a way that is is modular enough to later swap out specific modules for NF-based modules. Unfortunately this has proven more difficult that I anticipated. Firstly because of the dataset, which I'll discuss below, and secondly because it is difficult to trace some details of how the original CEVAE code works. I would say I'm close to getting this done, but not yet
-    \item The dataset: The first dataset I'm working with, the IHDP dataset, is a bit strange because it is a semi-simulated dataset. From what I gather the idea of the semi simulation is to get counterfactual outcome variables as a sort of ground truth. 
-\end{itemize}
+\section*{Metrics: which are important and why}
+   Why are these metrics all relevant and is thera a convention on how to use them?
+   \vspace{5cm}
+    \begin{table}[h]
+        \centering
+        \bgroup
+        \def\arraystretch{3}%  1 is the default, change whatever you need
+        \begin{tabular}{c|c|c|c|c}
+             &  Johansson \cite{johansson2016learning} & Johansson \cite{shalit2017estimating} & Louizos \cite{louizos2017causal} & Künzel \cite{kunzel2019metalearners}\\
+             \hline
+            RMSE - ITE & 
+                $\begin{cases}
+                y_i^F - h(x_i, 1-t_i), & t_i=1\\
+                h(x_i, 1-t_i) - y_i^F, & t_i=0
+                \end{cases}$ &
+                $\mathbb{E}[Y_1 - Y_0 | x] $ & 
+                \pbox{20cm}{$\mathbb{E}[\mathbf{y} | \mathbf{X} = x, do(\mathbf{t} = 1)]$\\ 
+                $- \mathbb{E}[\mathbf{y} | \mathbf{X} = x, do(\mathbf{t} = 0)]$} & 
+                $Y_i(1) - Y_i(0)$\\
+            %
+            \hline
+            AbsE - ATE & 
+            $\mathbb{E}_{x\sim p(x)}[ITE(x)]$ & $\mathbb{E}_{x\sim p(x)}[ITE(x)]$ & $\mathbb{E}[ITE(x)]$ & $\mathbb{E}[Y(1) - Y(0)]$\\
+            %
+            \hline
+            CATE & N.A. & \pbox{20cm}{Different name\\ for the ITE} & \pbox{20cm}{Different name\\ for the ITE} & $\mathbb{E}[Y(1) - Y(0)|X=x] $\\
+            %
+            \hline
+            RMSE - PEHE & 
+            \pbox{20cm}{$(y_1(x) - y_0(x))$ \\$- (Y_1(x) - Y_0(x))$} & 
+            $ \int_\mathcal{X}(\hat{\tau}(x) -\tau(x))^2p(x) dx$ & 
+            \pbox{20cm}{$(y_1(x) - y_0(x))$ \\$- (\hat{y}_1(x) - \hat{y}_0(x))$}& 
+            N.A \\
+            %
+        \end{tabular}
+        \egroup
+        \caption{Metrics of causal inference across papers. Most metrics look very  similar, but have some subtle differences.  $\tau(x) = \mathbb{E}[Y_1 - Y_0|x]$}
+        \label{tab:metrics}
+    \end{table}
 
+\bibliographystyle{plain}
+\bibliography{references}
+
+\newpage
+\section*{Infant Health and Development Program data set}
+Real data contains $x \in \mathbb{R}^{25}$ and $t \in \{0, 1\}$ per individual. Simulations yield $y^f, y^{cf}, \mu_0, \mu_1$. The first two are the sampled $y$ values for the real value of $t$, and the counterfactual value of $t$ respectively. According to Fredrik Johansson $\mu_0$ and $\mu_1$ are to " the individual/conditional potential outcomes before noise is added (which is equal to the conditional expectation of the outcome given features if the noise has mean 0). As such, they are not means over individuals but over draws of the noise variables. These are the values we would like to identify given enough data. In particular, CATE = mu1 – mu0".
+
+So from a simulation perspective $y^f$ and $y^{cf}$ are sampled from Gaussians with mean $\mu_0$ or $\mu_1$, but during training only the $y$'s are used even though the $\mu$'s seem like cleaner data as they don't have added noise to them. What is the convention here? Do we ignore $\mu$ during training because we assume we don't have it in a 'real' dataset? In that case, which metrics can we measure when we use a data set without counterfactual values or noiseless values?
+
+\vspace{5cm}
+
+\section*{More general treatment variables}
+We think we can leverage the power of deep learning for more complex or higher dimensional data sets. Is there recent work in causal inference that deals with either continuous treatment variables or higher dimensional treatment variables? I've read the work on causal confusion by Pim de Haan et al. which is somewhat what we are looking for.
 
 
 \end{document}

@@ -112,11 +112,15 @@ Dr. Efstratios Gavves% Supervisor's Name
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \chapter{Introduction}
-Measuring the causal effect of an action on certain parts of the world and the people in it is a question that form the cornerstone of most sciences\footnote{\label{note:citation}Citation needed}. Most disciplines of science try to isolate and quantify such effects, to allow predictions of the future. One of the problems faced in practice is the difficulty in isolating the causal effect of an action from the influence of any background variables. 
+Measuring the causal effect of an action or treatment on certain parts of the world and the people in it is a question that form the cornerstone of most sciences\footnote{\label{note:citation}Citation needed}. Most disciplines of science try to isolate and quantify such effects, to allow predictions of the future. in some cases this can be done through double-blind studies in which there is no confounding between the the action which we try to analyse and the resulting effect. But the vast majority of problems can only be viewed through observational studies in which there usually is (unobserved) confounding between the treatment and the outcome. Isolating the causal effect we are interested in from background variables can be a difficult task, as decades in statistical research has shown.
 
-In recent years the work by Pearl et al.\cite{pearl2009causal} \cite{pearl1995causal} has yielded a framework in which these causal effects can be modelled in terms of probability densities and in which it is theoretically possible to isolate a direct causal effect of a variable $\bt$ on an outcome variable $\by$ if there are one ore more confounding variables $\bZ$. Classically this is done through the use of randomised trials or other methods to isolate what is to be measured physically form any interference and by that preventing the existence of any possible confounder $\bZ$. Unfortunately this is not always possible and for those cases we shift our approach to the so-called \textit{do}-calculus. 
+Fortunately the work by Pearl et al.\cite{pearl2009causal} \cite{pearl1995causal} has yielded a framework in which these causal effects can be modelled in terms of probability densities and in which it is theoretically possible to isolate a direct causal effect of a variable $\bt$ on an outcome variable $\by$ if there are one ore more confounding variables $\bZ$.
 
-In cases where it is not possible to directly use equation \ref{equation:do_operation}, we use a proxy variable $\bx$ instead. The work of Louizos et al. \cite{louizos2017causal} has show that this can to some extend be done by using VAEs \cite{kingma2013auto}. This approach had the problem that the variational lower bound did not become as high as theoretically possible. To circumvent that problem we propose an alternative approach by using Normalising Flows \cite{rezende2016variational} to model the posterior distribution of $\bZ$ and use that to calculate the Average Treatment Effect.
+The fact that we are interested in an unobserved confounder coincides quite nicely with the latent variable modelling methods. This area has made substantial progress to become more powerful
+
+%Classically this is done through the use of randomised trials or other methods to isolate what is to be measured physically form any interference and by that preventing the existence of any possible confounder $\bZ$. Unfortunately this is not always possible and for those cases we shift our approach to the so-called \textit{do}-calculus. 
+
+%In cases where it is not possible to directly use equation \ref{equation:do_operation}, we use a proxy variable $\bx$ instead. The work of Louizos et al. \cite{louizos2017causal} has show that this can to some extend be done by using VAEs \cite{kingma2013auto}. This approach had the problem that the variational lower bound did not become as high as theoretically possible. To circumvent that problem we propose an alternative approach by using Normalising Flows \cite{rezende2016variational} to model the posterior distribution of $\bZ$ and use that to calculate the Average Treatment Effect.
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -151,6 +155,11 @@ Precision in Estimation of Heterogeneous Effect(PEHE): $PEHE := \frac{1}{N}\sum\
 Absolute error of the average treatment effect. Its the absolute error of the average of the individual treatment effect(ITE): 
 \begin{equation}
     ITE(X) := \E[\by | \bX=x, do(\bt=1)] - \E[\by | \bX=x, do(\bt=0)], \quad ATE := \E[ITE(x)]
+\end{equation}
+
+we also have the CATE. I really don't understand what they are averaging over.
+\begin{equation}
+    CATE := \E[Y(1) - Y(0) | X=x] \quad Y(1) = \mu_1(X) + \epsilon(1) \quad Y(0) = \mu_0(X) + \epsilon(0)
 \end{equation}
 
 
@@ -255,6 +264,12 @@ The objective function of a CEVAE is of the same form as the ELBO in equation  \
 \section{Causal effect inference with Normalising Flows}
 This can be potentially be improved upon by using Normalising Flows. Their ability to reproduce the true posterior over the latent confounder is an improvement on the CEVAE. The first proposal for this is to pass the inferred $\bZ$ values through a series of Normalising Flows to yield $\bZ_k$, which can then be used to reconstruct the observed variables. We can implement this the simplest by using Planar Flows, as described in section \ref{section:planar_radial_flow}. Through this we hope to uncover a better match to the true posterior of $\bZ$.
 
+\noindent
+New definition of the ELBO:
+\begin{equation}
+    -\mathcal{F}(\bx) = \mathbb{E}_{q_0(\bz_0)}\left[\ln p(\bx, \bt | \bz_K) + \ln p(\bz_K) + \ln p(\by |\bt, \bz_K) - \ln q_0(\bz_0) + \sum\limits^K_{k=1} \ln \left| 1 + \bu_k^Th'(\bw^T_k\bz_{k-1} + b)\right| \right]
+\end{equation}
+
 
 \begin{figure}
     \centering
@@ -263,6 +278,10 @@ This can be potentially be improved upon by using Normalising Flows. Their abili
     \label{fig:cenf_with_vae}
 \end{figure}
 
+\subsection{Augmenting decoder with a Normalising Flow}
+A possible way to extend this approach is to model $p(\bt|\bt,\bz)$ with a flow as well. In the original model there are two MLPs that model both $p(\by|\bt=1,\bz)$ and $p(\by|\bt=0,\bz)$. If we want our model to be able to generalise to more complex interventions we need to step away from an approach that requires multiple networks for multiple values of $\bt$. The problem that we face then is that the distribution of $p(\by|\bt,\bz)$ might not be a simple diagonal Gaussian. That is where Normalising Flows come into play. They might be able to capture the more complex distribution. 
+
+The immediate problem that we face is that in the simpler datasets $\by$ is just 1-dimensional. This means that we would have a flow that is also 1-dimensional, which might require a very long flow to make it work.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \bibliography{references.bib}
