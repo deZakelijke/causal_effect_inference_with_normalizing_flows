@@ -7,6 +7,7 @@ from tensorflow.keras.activations import softplus
 from tensorflow_probability import distributions as tfd
 
 from planar_flow import PlanarFlow
+from fc_net import FC_net
 from cevae import Encoder, Decoder
 from dataset import IHDP_dataset
 from utils import get_log_prob, get_analytical_KL_divergence
@@ -25,10 +26,16 @@ class CENF(Model):
         self.x_cont_size = params["x_cont_size"]
         self.z_size = params["z_size"]
         self.debug = params["debug"]
+        flow_decoder = True
         
         self.encode = Encoder(self.x_bin_size, self.x_cont_size, self.z_size, hidden_size, self.debug)
-        self.decode = Decoder(self.x_bin_size, self.x_cont_size, self.z_size, hidden_size, self.debug)
-        self.planar_flow = PlanarFlow(self.z_size, params["nr_flows"])
+        if flow_decoder:
+            self.decode = FlowDecoder(self.x_bin_size, self.x_cont_size, 
+                                      self.z_size, hidden_size, params['nr_flows'], self.debug)
+        else:
+            self.decode = Decoder(self.x_bin_size, self.x_cont_size, 
+                                  self.z_size, hidden_size, self.debug)
+        self.z_flow = PlanarFlow(self.z_size, params["nr_flows"])
 
     @tf.function
     def call(self, features, step, training=False):
@@ -45,7 +52,7 @@ class CENF(Model):
                              name="qz")
         qz_sample = qz.sample()
 
-        qz_k, ldj = self.planar_flow(qz_sample, step, training=training)
+        qz_k, ldj = self.z_flow(qz_sample, step, training=training)
 
         decoder_params = self.decode(qz_k, step, training=training)
         return encoder_params, qz_k, ldj, decoder_params
@@ -108,8 +115,79 @@ class CENF(Model):
                              name="qz")
         qz_sample = qz.sample(nr_samples)
 
-        qz_k, ldj = self.planar_flow(qz_sample, None, training=False)
+        qz_k, ldj = self.z_flow(qz_sample, None, training=False)
 
         mu_y0, mu_y1 = self.decode.do_intervention(qz_k, nr_samples)
         return mu_y0, mu_y1
 
+class FlowDecoder(Model):
+    """ A variation of the decoder that models p(y|t,z) with a normalising flow.
+
+    This class is very similar to the Decoder of the cevae and the first version of
+    the cenf. The main difference is that we no longer use two MLPs to model
+    p(y|t=1,z) and p(y|t=0,z), but use one MLP for both and then use a Normalising Flow
+    to capture a more complex distribution than a diagonal Gaussian with unit covariance.
+
+    """
+
+    def __init__(self, x_bin_size, x_cont_size, z_size, hidden_size, nr_flows, debug):
+        super().__init__()
+        self.x_bin_size = x_bin_size 
+        self.x_cont_size = x_cont_size 
+        x_size = x_bin_size + x_cont_size
+        self.z_size = z_size
+        self.debug = debug
+
+        self.hx            = FC_net(z_size, hidden_size, "hx",              
+                                    hidden_size=hidden_size, debug=debug)
+        self.x_cont_logits = FC_net(hidden_size, x_cont_size * 2, "x_cont", 
+                                    hidden_size=hidden_size, debug=debug)
+        self.x_bin_logits  = FC_net(hidden_size, x_bin_size, "x_bin",       
+                                    hidden_size=hidden_size, debug=debug)
+        self.t_logits      = FC_net(z_size, 1, "t", nr_hidden=1, 
+                                    hidden_size=hidden_size, debug=debug)
+        self.mu_y0         = FC_net(z_size + 1, 1, "mu_y0",
+                                    hidden_size=hidden_size, debug=debug)
+        self.y_flow        = PlanarFlow(1, nr_flows)
+
+    @tf.function
+    def call(self, z, step, training=False):
+        if self.debug:
+            print("Decoding")
+        hidden_x = self.hx(z, step, training=training)
+        x_bin_prob = tf.sigmoid(self.x_bin_logits(hidden_x, step, training=training))
+
+        x_cont_h = self.x_cont_logits(hidden_x, step, training=training)
+        x_cont_mean = x_cont_h[:, :self.x_cont_size]
+        x_cont_std = softplus(x_cont_h[:, self.x_cont_size:])
+
+        t_prob = tf.sigmoid(self.t_logits(z, step, training=training))
+        t = tfd.Independent(tfd.Bernoulli(probs=t_prob),
+                            reinterpreted_batch_ndims=1,
+                            name="t")
+
+        t_sample = tf.dtypes.cast(t.sample(), tf.float64)
+
+        y0 = self.mu_y0(tf.concat([z, t_sample], 1), step, training=training)
+        yK, ldj = self.y_flow(y0, step, training=training)
+        return x_bin_prob, x_cont_mean, x_cont_std, t_prob, t_sample, yK, ldj
+
+
+
+    def do_intervention(self, z, nr_samples):
+        t0 = tf.zeros((z.shape[0], 1), dtype=tf.float64)
+        t1 = tf.ones((z.shape[0], 1), dtype=tf.float64)
+
+        y0_t0 = self.mu_y0(tf.concat([z, t0], 1), None, training=False)
+        y0_t1 = self.mu_y0(tf.concat([z, t1], 1), None, training=False)
+
+        yK_t0, ldj_t0 = self.y_flow(y0_t0, None, training=False)
+        yK_t1, ldj_t1 = self.y_flow(y0_t1, None, training=False)
+
+        mu_y_t0 = tf.reduce_mean(yK_t0, axis=0)
+        mu_y_t1 = tf.reduce_mean(yK_t1, axis=0)
+        return mu_y_t0, mu_y_t1
+
+
+if __name__ == "__main__":
+    pass

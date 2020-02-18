@@ -83,14 +83,14 @@ def parse_arguments():
     return vars(args)
 
 def print_stats(stats, index):
-        print(f"Average ite: {stats[0]:.4f}, abs ate: {stats[1]:.4f}, pehe; {stats[2]:.4f}, "\
-              f"y_error factual: {stats[3][0]:.4f}, y_error counterfactual {stats[3][1]:.4f}")
+    print(f"Average ite: {stats[0]:.4f}, abs ate: {stats[1]:.4f}, pehe; {stats[2]:.4f}, "\
+          f"y_error factual: {stats[3][0]:.4f}, y_error counterfactual {stats[3][1]:.4f}")
  
-        tf.summary.scalar("metrics/ite", stats[0], step=index)
-        tf.summary.scalar("metrics/ate", stats[1], step=index)
-        tf.summary.scalar("metrics/pehe", stats[2], step=index)
-        tf.summary.scalar("metrics/y_factual", stats[3][0], step=index)
-        tf.summary.scalar("metrics/y_counterfactual", stats[3][1], step=index)
+    tf.summary.scalar("metrics/ite", stats[0], step=index)
+    tf.summary.scalar("metrics/ate", stats[1], step=index)
+    tf.summary.scalar("metrics/pehe", stats[2], step=index)
+    tf.summary.scalar("metrics/y_factual", stats[3][0], step=index)
+    tf.summary.scalar("metrics/y_counterfactual", stats[3][1], step=index)
 
 def main(params):
     """ Main execution. Creates logging aand writer, and launches selected training. """
@@ -117,7 +117,10 @@ def main(params):
             stats = train(params, dataset, len_dataset, writer, scaling_data, i)
             total_stats.append(stats)
         total_stats = np.array(total_stats)
-        print_stats(total_stats.mean(0), repetitions * params['log_steps'] + 1)
+        print("Final average results")
+        if not params['debug']:
+            with writer.as_default():
+                print_stats(total_stats.mean(0), repetitions * params['log_steps'] + 1, writer)
         
     else:
         dataset, scaling_data = eval(f"{params['dataset']}_dataset")(params)
