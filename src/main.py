@@ -43,7 +43,7 @@ def parse_arguments():
                         help="Switch between train and test mode (default: train)")
     parser.add_argument("--model", type=str, default="cevae", 
                         help="The type of model used for predictions (default: cevae)")
-    parser.add_argument("--model_dir", type=str, default="/home/mdegroot/logs/", 
+    parser.add_argument("--model_dir", type=str, default="/home/mgroot/logs/", 
                         help="The directory to save the model to (default: ~/logs/)")
     parser.add_argument("--nr_flows", type=int, default=4, 
                         help="Number of flows in the flow models (default: 4)")
@@ -120,7 +120,7 @@ def main(params):
         print("Final average results")
         if not params['debug']:
             with writer.as_default():
-                print_stats(total_stats.mean(0), repetitions * params['log_steps'] + 1, writer)
+                print_stats(total_stats.mean(0), repetitions * params['log_steps'] + 1)
         
     else:
         dataset, scaling_data = eval(f"{params['dataset']}_dataset")(params)

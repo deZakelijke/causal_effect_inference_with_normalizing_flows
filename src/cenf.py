@@ -15,7 +15,7 @@ from evaluation import calc_stats
 
 
 class CENF(Model):
-    
+
     def __init__(self, params, hidden_size=200, debug=False):
         """ Causal Effect Normalising Flow
 
@@ -26,10 +26,10 @@ class CENF(Model):
         self.x_cont_size = params["x_cont_size"]
         self.z_size = params["z_size"]
         self.debug = params["debug"]
-        flow_decoder = True
+        self.flow_decoder = True
         
         self.encode = Encoder(self.x_bin_size, self.x_cont_size, self.z_size, hidden_size, self.debug)
-        if flow_decoder:
+        if self.flow_decoder:
             self.decode = FlowDecoder(self.x_bin_size, self.x_cont_size, 
                                       self.z_size, hidden_size, params['nr_flows'], self.debug)
         else:
@@ -58,12 +58,16 @@ class CENF(Model):
         return encoder_params, qz_k, ldj, decoder_params
 
     @tf.function
-    def elbo(self, features, encoder_params, qz_k, ldj, decoder_params, step, params):
+    def elbo(self, features, encoder_params, qz_k, ldj_z, decoder_params, step, params):
         if self.debug:
             print("Calculating loss")
         x_bin, x_cont, t, y, y_cf, mu_0, mu_1 = features
         qt_prob, qy_mean, qz_mean, qz_std = encoder_params
-        x_bin_prob, x_cont_mean, x_cont_std, t_prob, t_sample, y_mean = decoder_params
+
+        if self.flow_decoder:
+            x_bin_prob, x_cont_mean, x_cont_std, t_prob, t_sample, y_mean, yK, ldj_y = decoder_params
+        else:
+            x_bin_prob, x_cont_mean, x_cont_std, t_prob, t_sample, y_mean = decoder_params
 
         # Get the y values corresponding to the values of t that were sampled during decoding
         t_correct = tf.where(tf.squeeze(t) == tf.squeeze(t_sample))
@@ -78,7 +82,9 @@ class CENF(Model):
         distortion_y = -get_log_prob(y_labels, 'N', mean=y_mean)
 
         rate = get_analytical_KL_divergence(qz_mean, qz_std)
-        ldj = tf.reduce_mean(-ldj)
+        ldj_z = tf.reduce_mean(-ldj_z)
+        if self.flow_decoder:
+            ldj_y = tf.reduce_mean(-ldj_y)
 
         variational_t = -get_log_prob(t, 'B', probs=qt_prob)
         variational_y = -get_log_prob(y, 'N', mean=qy_mean)
@@ -89,14 +95,19 @@ class CENF(Model):
             tf.summary.scalar("partial_loss/distortion_t", tf.reduce_mean(distortion_t), step=l_step)
             tf.summary.scalar("partial_loss/distortion_y", tf.reduce_mean(distortion_y), step=l_step)
             tf.summary.scalar("partial_loss/rate_z", tf.reduce_mean(rate), step=l_step)
-            tf.summary.scalar("partial_loss/ldj", ldj, step=l_step)
+            tf.summary.scalar("partial_loss/ldj_z", ldj_z, step=l_step)
+            if self.flow_decoder:
+                tf.summary.scalar("partial_loss/ldj_y", ldj_y, step=l_step)
             tf.summary.scalar("partial_loss/variational_t", tf.reduce_mean(variational_t), step=l_step)
             tf.summary.scalar("partial_loss/variational_y", tf.reduce_mean(variational_y), step=l_step)
 
 
-
-        elbo_local = -(rate + distortion_x + distortion_t + distortion_y + \
-                       variational_t + variational_y + ldj)
+        if self.flow_decoder:
+            elbo_local = -(rate + distortion_x + distortion_t + distortion_y + \
+                           variational_t + variational_y + ldj_z + ldj_y)
+        else:
+            elbo_local = -(rate + distortion_x + distortion_t + distortion_y + \
+                           variational_t + variational_y + ldj_z)
         elbo = tf.reduce_mean(input_tensor=elbo_local)
         return -elbo
 
@@ -170,16 +181,16 @@ class FlowDecoder(Model):
 
         y0 = self.mu_y0(tf.concat([z, t_sample], 1), step, training=training)
         yK, ldj = self.y_flow(y0, step, training=training)
-        return x_bin_prob, x_cont_mean, x_cont_std, t_prob, t_sample, yK, ldj
+        return x_bin_prob, x_cont_mean, x_cont_std, t_prob, t_sample, y0, yK, ldj
 
 
 
     def do_intervention(self, z, nr_samples):
-        t0 = tf.zeros((z.shape[0], 1), dtype=tf.float64)
-        t1 = tf.ones((z.shape[0], 1), dtype=tf.float64)
+        t0 = tf.zeros((z.shape[0], z.shape[1], 1), dtype=tf.float64)
+        t1 = tf.ones((z.shape[0], z.shape[1], 1), dtype=tf.float64)
 
-        y0_t0 = self.mu_y0(tf.concat([z, t0], 1), None, training=False)
-        y0_t1 = self.mu_y0(tf.concat([z, t1], 1), None, training=False)
+        y0_t0 = self.mu_y0(tf.concat([z, t0], 2), None, training=False)
+        y0_t1 = self.mu_y0(tf.concat([z, t1], 2), None, training=False)
 
         yK_t0, ldj_t0 = self.y_flow(y0_t0, None, training=False)
         yK_t1, ldj_t1 = self.y_flow(y0_t1, None, training=False)
