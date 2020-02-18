@@ -17,7 +17,21 @@
 \noindent
 The goal of this project is to see if it is possible to extent the work of Louizos et al. \cite{louizos2017causal} through the use of Normalising Flows. Louizos et al. have shown that variational inference can be used for causal inference. We now want to discover if we can improve of their VAE-based \cite{kingma2013auto} method with Normalising Flows \cite{rezende2016variational}\cite{berg2018sylvester}\cite{dinh2016density}. It has been shown that these models are capable of capturing more diverse and complex posterior distributions, which is needed in this research.
 
-The first phase of the project will focus on the literature research on causal inference and normalising flows, and on reproducing earlier results. In the second phase we will gradually transform the CEVAE into a more powerful NF-based model.
+%The first phase of the project will focus on the literature research on causal inference and normalising flows, and on reproducing earlier results. In the second phase we will gradually transform the CEVAE into a more powerful NF-based model. The third phase of the project is:
+
+
+The main ideas in which this model can be generalised or extended further are:
+\section*{Step away from the assumption that the treatment is binary}
+Either make the treatment variable categorical or continuous. Binary mask as intervention?
+
+\section*{Learn the intervention}
+Don't assume that we (can) know all the values the intervention can take. Combine learning the outcome for a given intervention with learning what intervention will yield a <high> outcome.
+Curriculum learning.
+What is important to note here is that we are not necessarily looking for a model that takes good actions, but one that learns the causal effect of certain interventions. The novelty would be that the model could generalise to interventions that it hasn't seen before.
+
+\section*{Construct a scenario where you really have to learn cause and effect}
+Some scenarios that could be predicted with our model could probably also be predicted with a model that learns correlations between the values of interventions, outcomes and features.
+
 
 \bibliography{references.bib}
 \bibliographystyle{abbrv}
