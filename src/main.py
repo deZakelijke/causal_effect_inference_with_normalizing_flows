@@ -13,7 +13,7 @@ from dataset import IHDP_dataset
 from evaluation import calc_stats
 
 VALID_MODELS = ["cevae", "cenf"]
-VALID_DATASETS = ["IHDP"]
+VALID_DATASETS = ["IHDP", "TWINS"]
 
 tf.keras.backend.set_floatx('float64')
 
@@ -94,8 +94,14 @@ def print_stats(stats, index):
 
 def main(params):
     """ Main execution. Creates logging aand writer, and launches selected training. """
-    params["x_bin_size"] = 19
-    params["x_cont_size"] = 6
+    if params['dataset'] == "IHDP":
+        params["x_bin_size"] = 19
+        params["x_cont_size"] = 6
+    if params['dataset'] == "TWINS":
+        params["x_bin_size"] = 22
+        params["x_cat_size"] = 24
+        params["x_ord_size"] = 2
+
     params["z_size"] = 16
     repetitions = 10
 
@@ -189,7 +195,8 @@ if __name__ == "__main__":
     params = parse_arguments()
 
     gpus = tf.config.experimental.list_physical_devices("GPU")
-    #tf.config.experimental_run_functions_eagerly(True)
+    print(gpus)
+    sys.exit(0)
     if gpus:
         for gpu in gpus:
             tf.config.experimental.set_virtual_device_configuration(gpu, [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=2048)])

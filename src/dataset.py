@@ -1,5 +1,9 @@
 import tensorflow as tf
 import numpy as np
+from knn_impute import knn_impute
+
+def remove_nans(data):
+    pass
 
 def IHDP_dataset(params, path_data="datasets/IHDP/csv/", file_prefix="ihdp_npci_", separate_files=False, file_index=None):
     binfeats = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
@@ -64,11 +68,54 @@ def IHDP_dataset(params, path_data="datasets/IHDP/csv/", file_prefix="ihdp_npci_
                                                 mu_0, 
                                                 mu_1))), scaling_data
 
+def TWINS_dataset(params, path_data="datasets/TWINS/"):
+
+    binfeats = [2, 3, 6, 9, 10, 13, 16, 18, 21, 25, 26, 27, 28, 30, 39, 40, 42, 43, 44, 45, 48, 49]
+    catfeats = [1, 4, 5, 7, 8, 11, 12, 14, 15, 19, 22, 23, 24, 31, 33, 33, 34, 35, 36, 37, 38, 41, 46, 47]
+    ordfeats = [17, 20]
+
+    data_t = np.loadtxt(f"{path_data}twin_pairs_T_3years_samesex.csv", 
+                        delimiter=',', dtype=np.float64, skiprows=1)
+    data_y = np.loadtxt(f"{path_data}twin_pairs_Y_3years_samesex.csv", 
+                        delimiter=',', dtype=np.float64, skiprows=1)
+    data_x = np.genfromtxt(f"{path_data}twin_pairs_X_3years_samesex.csv", 
+                           delimiter=',', skip_header=1)
+
+    t_0 = np.expand_dims(data_t[:, 1], axis=1)
+    t_1 = np.expand_dims(data_t[:, 2], axis=1)
+    y_0 = np.expand_dims(data_y[:, 1], axis=1)
+    y_1 = np.expand_dims(data_y[:, 2], axis=1)
+
+    x_bin = data_x[:, binfeats]
+    x_cat = data_x[:, catfeats]
+    x_ord = data_x[:, ordfeats]
+
+    knn_impute(x_bin) #TODO fixen
+    remove_nans(x_bin)
+    remove_nans(x_cat)
+    remove_nans(x_ord)
+
+    scaling_data = None
+
+    return tf.data.Dataset.from_tensor_slices(((x_bin, x_cat, x_ord,
+                                                t_0, t_1, 
+                                                y_0, y_1))), scaling_data
+
+
 if __name__ == "__main__":
-    import matplotlib.pyplot as plt
+    #import matplotlib.pyplot as plt
     
     params = {}
-    data = IHDP_dataset(params)
-    for _, data_sample in data.batch(7470).enumerate():
-        print(data_sample[5])
+    data, _ = IHDP_dataset(params)
+    print(data)
+    for _, data_sample in data.batch(5).enumerate():
+        print(data_sample)
+        break
+
+    print()
+    data, _ = TWINS_dataset(params)
+    print(data)
+    for _, data_sample in data.batch(5).enumerate():
+        print(data_sample)
+        break
 

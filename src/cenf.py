@@ -157,7 +157,7 @@ class FlowDecoder(Model):
                                     hidden_size=hidden_size, debug=debug)
         self.t_logits      = FC_net(z_size, 1, "t", nr_hidden=1, 
                                     hidden_size=hidden_size, debug=debug)
-        self.mu_y0         = FC_net(z_size + 1, 1, "mu_y0",
+        self.mu_y0         = FC_net(z_size + 1, 1, "mu_y0", nr_hidden=4,
                                     hidden_size=hidden_size, debug=debug)
         self.y_flow        = PlanarFlow(1, nr_flows)
 
