@@ -6,7 +6,7 @@
 \usepackage{amsmath}
 \usepackage{amsfonts}
 \usepackage{graphicx, color}
-\usepackage[a4paper,margin=2cm]{geometry}
+\usepackage[a4paper,margin=2.5cm]{geometry}
 
 \newcommand{\red}[1]{{\color{red}{#1}}}
 
@@ -201,10 +201,10 @@ The original version of the Normalising Flow had a slightly different approach. 
 
 \begin{equation}\label{equation:negative_free_energy_with_flow}
     \begin{split}
-    -\mathcal{F}(\bx) &= D_{KL}[q_\phi(\bz|\bx) || p(\bz)] + \E_{q_\phi(\bz|\bx)}[\ln p_\theta(\bx|\bz)]\\
+    -\mathcal{F}(\bx) &= -D_{KL}[q_\phi(\bz|\bx) || p(\bz)] + \E_{q_\phi(\bz|\bx)}[\ln p_\theta(\bx|\bz)]\\
     &= \E_{q_\phi(\bz|\bx)}[-\ln q_\phi(\bz|\bx) + \ln p(\bz) + \ln p_\theta(\bx|\bz)]\\
-    &= \E_{q_0(z_0)}[-\ln q_0(\bz_K) + \ln p(\bz_K) + \ln p_\theta(\bx|\bz_K)]\\
-    &= \E_{q_0(z_0)}[-\ln q_0(\bz_0) + \sum\limits^K_{k=1}\ln \left|\text{det} \parfrac{f_k}{f_{k-1}} \right| + \ln p(\bz_K) + \ln p_\theta(\bx|\bz_K)]\\
+    &= \E_{q_0(z_0)}[-\ln q_0(\bz_K) + \ln p(\bz) + \ln p_\theta(\bx|\bz_K)]\\
+    &= \E_{q_0(z_0)}[-\ln q_0(\bz_0) + \sum\limits^K_{k=1}\ln \left|\text{det} \parfrac{f_k}{\bz_{k-1}} \right| + \ln p(\bz) + \ln p_\theta(\bx|\bz_K)]\\
     \end{split}
 \end{equation}
 where we have $q_0(z_0)$ as the start of the flow, while also being a variational distribution. Several implementations of Normalising Flows have been made so far, the simplest of which is the planar flow and radial flow
@@ -267,7 +267,7 @@ This can be potentially be improved upon by using Normalising Flows. Their abili
 \noindent
 New definition of the ELBO:
 \begin{equation}
-    -\mathcal{F}(\bx) = \mathbb{E}_{q_0(\bz_0)}\left[\ln p(\bx, \bt | \bz_K) + \ln p(\bz_K) + \ln p(\by |\bt, \bz_K) - \ln q_0(\bz_0) + \sum\limits^K_{k=1} \ln \left| 1 + \bu_k^Th'(\bw^T_k\bz_{k-1} + b)\right| \right]
+    -\mathcal{F}(\bx) = \mathbb{E}_{q_0(\bz_0)}\left[\ln p(\bx, \bt | \bz_K) + \ln p(\bz) + \ln p(\by |\bt, \bz_K) - \ln q_0(\bz_0) + \sum\limits^K_{k=1} \ln \left| 1 + \bu_k^Th'(\bw^T_k\bz_{k-1} + b)\right| \right]
 \end{equation}
 
 
@@ -282,6 +282,10 @@ New definition of the ELBO:
 A possible way to extend this approach is to model $p(\bt|\bt,\bz)$ with a flow as well. In the original model there are two MLPs that model both $p(\by|\bt=1,\bz)$ and $p(\by|\bt=0,\bz)$. If we want our model to be able to generalise to more complex interventions we need to step away from an approach that requires multiple networks for multiple values of $\bt$. The problem that we face then is that the distribution of $p(\by|\bt,\bz)$ might not be a simple diagonal Gaussian. That is where Normalising Flows come into play. They might be able to capture the more complex distribution. 
 
 The immediate problem that we face is that in the simpler datasets $\by$ is just 1-dimensional. This means that we would have a flow that is also 1-dimensional, which might require a very long flow to make it work.
+
+\begin{equation}
+    \ln p(\by_K|\bt, \bz) := \ln p(\by_0|\bt, \bz) - \sum\limits^K_{k=1} \ln \left | \parfrac{g_k}{\by_{k-1}} \right|
+\end{equation}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \bibliography{references.bib}
