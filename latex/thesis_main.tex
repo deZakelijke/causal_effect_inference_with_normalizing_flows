@@ -6,7 +6,7 @@
 \usepackage{amsmath}
 \usepackage{amsfonts}
 \usepackage{graphicx, color}
-\usepackage[a4paper,margin=2cm]{geometry}
+\usepackage[a4paper,margin=2.5cm]{geometry}
 
 \newcommand{\red}[1]{{\color{red}{#1}}}
 
@@ -44,7 +44,7 @@
 %	HEADING SECTIONS
 %----------------------------------------------------------------------------------------
 
-\includegraphics[width=\linewidth]{uvaENG}\\[2.5cm]
+\includegraphics[width=\linewidth]{latex/Images/uvaENG.pdf}\\[2.5cm]
 \textsc{\Large MSc Artificial Intelligence}\\[0.2cm]
 % \textsc{\normalsize Track: \red{track}}\\[1.0cm] % track
 \textsc{\Large Master Thesis}\\[0.5cm] 
@@ -96,8 +96,8 @@ Dr. Efstratios Gavves% Supervisor's Name
 %	LOGO SECTION
 %----------------------------------------------------------------------------------------
 
-\framebox{\rule{0pt}{2.5cm}\rule{2.5cm}{0pt}}\\[0.5cm]
-%\includegraphics[width=2.5cm]{figure}\\ % Include a department/university logo - this will require the graphicx package
+%\framebox{\rule{0pt}{2.5cm}\rule{2.5cm}{0pt}}\\[0.5cm]
+\includegraphics[width=2.5cm]{latex/Images/quva-logo-header.png}\\ % Include a department/university logo - this will require the graphicx package
 \textsc{\large Instituut voor Informatica}\\[1.0cm] % 
  
 %----------------------------------------------------------------------------------------
@@ -112,13 +112,25 @@ Dr. Efstratios Gavves% Supervisor's Name
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \chapter{Introduction}
-Measuring the causal effect of an action or treatment on certain parts of the world and the people in it is a question that form the cornerstone of most sciences\footnote{\label{note:citation}Citation needed}. Most disciplines of science try to isolate and quantify such effects, to allow predictions of the future. in some cases this can be done through double-blind studies in which there is no confounding between the the action which we try to analyse and the resulting effect. But the vast majority of problems can only be viewed through observational studies in which there usually is (unobserved) confounding between the treatment and the outcome. Isolating the causal effect we are interested in from background variables can be a difficult task, as decades in statistical research has shown.
+Various scientific disciplines try to find patters in data. The patters that are usually uncovered are correlations between certain variables and features in the observations. In may fields this is a powerful tool that has resulted in tremendous scientific progress. Especially in AI we can perform a abundance of tasks, such as classification of images, translation of text or even the generation of new music. % citation needed
+But what most scientists actually want to find out is what the causal relations of things are and correlations are merely a way to indicate a possible causal relation. The inherent problem with correlation-based methods is of course that they can never find causal relations.
 
-Fortunately the work by Pearl et al.\cite{pearl2009causal} \cite{pearl1995causal} has yielded a framework in which these causal effects can be modelled in terms of probability densities and in which it is theoretically possible to isolate a direct causal effect of a variable $\bt$ on an outcome variable $\by$ if there are one ore more confounding variables $\bZ$.
+Every class in statistics starts with the phrase: "Correlation is not causation." This mantra tells us that we should never interpret a correlation between a variable $A$ and variable $B$ as $A$ causes $B$. This is very much true, but sometimes we do like to know: does $A$ cause $B$? To answer such questions we need causal inference. 
 
-The fact that we are interested in an unobserved confounder coincides quite nicely with the latent variable modelling methods. This area has made substantial progress to become more powerful
+Disciplines such as medicine approach this problem through double-blind studies, in which the only difference between groups is whether or not they received a treatment, meaning that any difference between the two trial groups must have been caused by the treatment. Unfortunately the vast majority of problems can only be viewed through observational studies in which there usually is (unobserved) confounding between a variable $A$ and a variable $B$. Isolating the causal effect we are interested in from background variables can be a difficult task, as decades in statistical research has shown.
 
-%Classically this is done through the use of randomised trials or other methods to isolate what is to be measured physically form any interference and by that preventing the existence of any possible confounder $\bZ$. Unfortunately this is not always possible and for those cases we shift our approach to the so-called \textit{do}-calculus. 
+Fortunately the work by Pearl et al.\cite{pearl2009causal} \cite{pearl1995causal} has yielded a framework in which these causal effects can be modelled in terms of probability densities and in which it is theoretically possible to isolate a direct causal effect of a variable on another variable if there are one ore more unobserved confounding variables. This has led to an abundance of scientific research on how to properly measure and analyse causal effects in the past two decades(citation needed), especially focusing on how to leverage the ever-increasing amount of data that is available to us. 
+
+
+%Measuring the causal effect of an action or treatment on certain parts of the world and the people in it is a question that form the cornerstone of most sciences\footnote{\label{note:citation}Citation needed}.
+
+
+% Bruggetje naar veel data gebruiken
+
+The area of generative modelling within AI has shown a series of successes in recent years. This area tries to learn the structure within data and uncover the process with which it was generated. Such models have the power to <> the latent variables of the data. That ability is invaluable if we want to want to model latent confounders and be able to estimate causal effects. Using machine learning techniques also indicates that having mode data is useful for making more accurate predictions.
+
+% VI al in de introductie? Op zich wel lijkt me. Op een gegeven moment switchen we toch naar wat we nou gaan doen. Dus dan komt VI en NF naar voren.
+
 
 %In cases where it is not possible to directly use equation \ref{equation:do_operation}, we use a proxy variable $\bx$ instead. The work of Louizos et al. \cite{louizos2017causal} has show that this can to some extend be done by using VAEs \cite{kingma2013auto}. This approach had the problem that the variational lower bound did not become as high as theoretically possible. To circumvent that problem we propose an alternative approach by using Normalising Flows \cite{rezende2016variational} to model the posterior distribution of $\bZ$ and use that to calculate the Average Treatment Effect.
 
@@ -201,10 +213,10 @@ The original version of the Normalising Flow had a slightly different approach. 
 
 \begin{equation}\label{equation:negative_free_energy_with_flow}
     \begin{split}
-    -\mathcal{F}(\bx) &= D_{KL}[q_\phi(\bz|\bx) || p(\bz)] + \E_{q_\phi(\bz|\bx)}[\ln p_\theta(\bx|\bz)]\\
+    -\mathcal{F}(\bx) &= -D_{KL}[q_\phi(\bz|\bx) || p(\bz)] + \E_{q_\phi(\bz|\bx)}[\ln p_\theta(\bx|\bz)]\\
     &= \E_{q_\phi(\bz|\bx)}[-\ln q_\phi(\bz|\bx) + \ln p(\bz) + \ln p_\theta(\bx|\bz)]\\
-    &= \E_{q_0(z_0)}[-\ln q_0(\bz_K) + \ln p(\bz_K) + \ln p_\theta(\bx|\bz_K)]\\
-    &= \E_{q_0(z_0)}[-\ln q_0(\bz_0) + \sum\limits^K_{k=1}\ln \left|\text{det} \parfrac{f_k}{f_{k-1}} \right| + \ln p(\bz_K) + \ln p_\theta(\bx|\bz_K)]\\
+    &= \E_{q_0(z_0)}[-\ln q_0(\bz_K) + \ln p(\bz) + \ln p_\theta(\bx|\bz_K)]\\
+    &= \E_{q_0(z_0)}[-\ln q_0(\bz_0) + \sum\limits^K_{k=1}\ln \left|\text{det} \parfrac{f_k}{\bz_{k-1}} \right| + \ln p(\bz) + \ln p_\theta(\bx|\bz_K)]\\
     \end{split}
 \end{equation}
 where we have $q_0(z_0)$ as the start of the flow, while also being a variational distribution. Several implementations of Normalising Flows have been made so far, the simplest of which is the planar flow and radial flow
@@ -267,7 +279,7 @@ This can be potentially be improved upon by using Normalising Flows. Their abili
 \noindent
 New definition of the ELBO:
 \begin{equation}
-    -\mathcal{F}(\bx) = \mathbb{E}_{q_0(\bz_0)}\left[\ln p(\bx, \bt | \bz_K) + \ln p(\bz_K) + \ln p(\by |\bt, \bz_K) - \ln q_0(\bz_0) + \sum\limits^K_{k=1} \ln \left| 1 + \bu_k^Th'(\bw^T_k\bz_{k-1} + b)\right| \right]
+    -\mathcal{F}(\bx) = \mathbb{E}_{q_0(\bz_0)}\left[\ln p(\bx, \bt | \bz_K) + \ln p(\bz) + \ln p(\by |\bt, \bz_K) - \ln q_0(\bz_0) + \sum\limits^K_{k=1} \ln \left| 1 + \bu_k^Th'(\bw^T_k\bz_{k-1} + b)\right| \right]
 \end{equation}
 
 
@@ -282,6 +294,10 @@ New definition of the ELBO:
 A possible way to extend this approach is to model $p(\bt|\bt,\bz)$ with a flow as well. In the original model there are two MLPs that model both $p(\by|\bt=1,\bz)$ and $p(\by|\bt=0,\bz)$. If we want our model to be able to generalise to more complex interventions we need to step away from an approach that requires multiple networks for multiple values of $\bt$. The problem that we face then is that the distribution of $p(\by|\bt,\bz)$ might not be a simple diagonal Gaussian. That is where Normalising Flows come into play. They might be able to capture the more complex distribution. 
 
 The immediate problem that we face is that in the simpler datasets $\by$ is just 1-dimensional. This means that we would have a flow that is also 1-dimensional, which might require a very long flow to make it work.
+
+\begin{equation}
+    \ln p(\by_K|\bt, \bz) := \ln p(\by_0|\bt, \bz) - \sum\limits^K_{k=1} \ln \left | \parfrac{g_k}{\by_{k-1}} \right|
+\end{equation}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \bibliography{references.bib}
