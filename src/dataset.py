@@ -1,9 +1,34 @@
 import tensorflow as tf
 import numpy as np
+import pandas as pd
 from knn_impute import knn_impute
 
-def remove_nans(data):
-    pass
+def remove_nans(data, binfeats, catfeats, contfeats):
+    # Iterate over columns that still contains nans. Select one with fewest nans
+    # Full up nans of selected column with knn function, based on all columns that don't have nans anymore
+
+    # Get indices of all columns that do have nans, sorted ascending on the amount of nans.
+    # Get indices of all columns that don't hav nans
+    # Iterate over nan indices and remove nans with current non-nan columns. Impute nans
+    # Add last index to cloumns that don't have nans.
+    
+
+
+    nan_counts = np.isnan(data).sum(axis=0)
+    full_indices = np.argwhere(nan_counts == 0)
+    nan_indices = np.nonzero(nan_counts)[0]
+    nan_indices = nan_indices[np.argsort(nan_counts[nan_indices])]
+
+    assert np.intersect1d(full_indices, nan_indices).size == 0
+    for index in nan_indices:
+        print(f"Removing nans in column: {index}")
+        result = np.squeeze(knn_impute(data[:, index], np.squeeze(data[:, full_indices]), k))
+        print(f"Nans remaining: {np.isnan(result).sum()}")
+        data[:, index] = result
+        full_indices = np.append(full_indices, index)
+    assert len(full_indices) == data.shape[1]
+
+
 
 def IHDP_dataset(params, path_data="datasets/IHDP/csv/", file_prefix="ihdp_npci_", separate_files=False, file_index=None):
     binfeats = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
@@ -60,6 +85,7 @@ def IHDP_dataset(params, path_data="datasets/IHDP/csv/", file_prefix="ihdp_npci_
     mu_1 = np.expand_dims(np.array(mu_1), axis=1)
     scaling_data = (y_mean, y_std)
 
+
     return tf.data.Dataset.from_tensor_slices(((x_bin, 
                                                 x_cont, 
                                                 t, 
@@ -68,36 +94,46 @@ def IHDP_dataset(params, path_data="datasets/IHDP/csv/", file_prefix="ihdp_npci_
                                                 mu_0, 
                                                 mu_1))), scaling_data
 
-def TWINS_dataset(params, path_data="datasets/TWINS/"):
+def TWINS_dataset(params, path_data="datasets/TWINS/", do_preprocessing=False):
 
     binfeats = [2, 3, 6, 9, 10, 13, 16, 18, 21, 25, 26, 27, 28, 30, 39, 40, 42, 43, 44, 45, 48, 49]
+    contfeats = [17, 20] # Actually ordinal data but fuck it
     catfeats = [1, 4, 5, 7, 8, 11, 12, 14, 15, 19, 22, 23, 24, 31, 33, 33, 34, 35, 36, 37, 38, 41, 46, 47]
-    ordfeats = [17, 20]
+
+    if do_preprocessing:
+        x = np.genfromtxt(f"{path_data}twin_pairs_X_3years_samesex.csv", 
+                               delimiter=',', skip_header=1)[:, 1:]
+        pandas_x = pd.DataFrame(x)
+        pandas_x = pandas_x.interpolate(method='pad', axis=1).fillna(method='backfill', axis=0)
+        x = pandas_x.to_numpy()
+        
+        x_bin = x[:, binfeats]
+        x_cat = x[:, catfeats]
+        x_cont = x[:, contfeats]
+        np.savetxt(f"{path_data}twin_pairs_X_preprocessed_3years_samesex.csv",
+                   x, delimiter=',', newline='\n')
+
+    else:
+        x = np.loadtxt(f"{path_data}twin_pairs_X_preprocessed_3years_samesex.csv", 
+                               delimiter=',')
+        x_bin = x[:, :len(binfeats)]
+        x_cat = x[:, len(binfeats):len(binfeats) + len(catfeats)]
+        x_cont = x[:, len(binfeats) + len(catfeats):]
 
     data_t = np.loadtxt(f"{path_data}twin_pairs_T_3years_samesex.csv", 
                         delimiter=',', dtype=np.float64, skiprows=1)
     data_y = np.loadtxt(f"{path_data}twin_pairs_Y_3years_samesex.csv", 
                         delimiter=',', dtype=np.float64, skiprows=1)
-    data_x = np.genfromtxt(f"{path_data}twin_pairs_X_3years_samesex.csv", 
-                           delimiter=',', skip_header=1)
-
+    
     t_0 = np.expand_dims(data_t[:, 1], axis=1)
     t_1 = np.expand_dims(data_t[:, 2], axis=1)
     y_0 = np.expand_dims(data_y[:, 1], axis=1)
     y_1 = np.expand_dims(data_y[:, 2], axis=1)
 
-    x_bin = data_x[:, binfeats]
-    x_cat = data_x[:, catfeats]
-    x_ord = data_x[:, ordfeats]
-
-    knn_impute(x_bin) #TODO fixen
-    remove_nans(x_bin)
-    remove_nans(x_cat)
-    remove_nans(x_ord)
-
     scaling_data = None
 
-    return tf.data.Dataset.from_tensor_slices(((x_bin, x_cat, x_ord,
+
+    return tf.data.Dataset.from_tensor_slices(((x_bin, x_cat, x_cont,
                                                 t_0, t_1, 
                                                 y_0, y_1))), scaling_data
 
@@ -106,15 +142,15 @@ if __name__ == "__main__":
     #import matplotlib.pyplot as plt
     
     params = {}
-    data, _ = IHDP_dataset(params)
-    print(data)
-    for _, data_sample in data.batch(5).enumerate():
-        print(data_sample)
-        break
+    #data, _ = IHDP_dataset(params)
+    #print(data)
+    #for _, data_sample in data.batch(5).enumerate():
+    #    print(data_sample)
+    #    break
 
     print()
-    data, _ = TWINS_dataset(params)
-    print(data)
+    data, _ = TWINS_dataset(params, do_preprocessing=True)
+
     for _, data_sample in data.batch(5).enumerate():
         print(data_sample)
         break
