@@ -21,13 +21,14 @@ class CENF(Model):
 
 
         """
-        super().__init__()
-        self.x_bin_size = params["x_bin_size"]
-        self.x_cont_size = params["x_cont_size"]
-        self.z_size = params["z_size"]
-        self.debug = params["debug"]
+        # super().__init__()
+        CIWorker.__init__(self, params, category_sizes)
+        # self.x_bin_size = params["x_bin_size"]
+        # self.x_cont_size = params["x_cont_size"]
+        # self.z_size = params["z_size"]
+        # self.debug = params["debug"]
+
         self.flow_decoder = True
-        
         self.encode = Encoder(self.x_bin_size, self.x_cont_size, self.z_size, hidden_size, self.debug)
         if self.flow_decoder:
             self.decode = FlowDecoder(self.x_bin_size, self.x_cont_size, 
@@ -111,13 +112,13 @@ class CENF(Model):
         elbo = tf.reduce_mean(input_tensor=elbo_local)
         return -elbo
 
-    def grad(self, features, step, params):
-        with tf.GradientTape() as tape:
-            encoder_params, qz_k, ldj, decoder_params = self(features, step, training=True)
-            loss = self.elbo(features, encoder_params, qz_k, ldj, decoder_params, step, params)
-        if self.debug:
-            print(f"Forward pass complete, step: {step}")
-        return loss, tape.gradient(loss, self.trainable_variables)
+    # def grad(self, features, step, params):
+    #     with tf.GradientTape() as tape:
+    #         encoder_params, qz_k, ldj, decoder_params = self(features, step, training=True)
+    #         loss = self.elbo(features, encoder_params, qz_k, ldj, decoder_params, step, params)
+    #     if self.debug:
+    #         print(f"Forward pass complete, step: {step}")
+    #     return loss, tape.gradient(loss, self.trainable_variables)
 
     def do_intervention(self, x, nr_samples):
         _, _, qz_mean, qz_std = self.encode(x, None, None, None, training=False)

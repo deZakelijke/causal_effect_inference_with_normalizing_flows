@@ -5,6 +5,7 @@ import tensorflow as tf
 from tensorflow.keras import layers, Model
 from tensorflow_probability import distributions as tfd
 
+# TODO add constraint to keep funciton invertible.
 
 class PlanarFlow(Model):
 

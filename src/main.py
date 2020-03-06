@@ -7,13 +7,16 @@ import sys
 import tensorflow as tf
 import time
 
-from cevae import CEVAE
 from cenf import CENF
+from cevae import CEVAE
+from contextlib import nullcontext
 from dataset import IHDP_dataset
 from evaluation import calc_stats
 
 VALID_MODELS = ["cevae", "cenf"]
 VALID_DATASETS = ["IHDP", "TWINS"]
+DATASET_DISTRIBUTION_DICT = {"IHDP": {'x': ['B', 'N'], 't': ['B'], 'y': ['N']},
+                             "TWINS": {'x': ['B', 'M', 'N'], 't': ['N', 'N'], 'y': ['B', 'B']}}
 
 tf.keras.backend.set_floatx('float64')
 
@@ -56,6 +59,7 @@ def parse_arguments():
     if args.debug:
         tf.random.set_seed(0)
         args.experiment_name = ""
+        args.log_steps = 1
     else:
         os.environ["TF_CPP_MIN_LOG_LEVEL"] = "1"
         logging.getLogger("tensorflow").setLevel(logging.WARNING)
@@ -80,7 +84,15 @@ def parse_arguments():
         print(f"Argument: {arg:<16} {value:<5}")
     print()
 
+    args.dataset_distributions = DATASET_DISTRIBUTION_DICT[args.dataset] 
+
     return vars(args)
+
+"""
+Make a dictionary of distribution types and add it to config. That way we can keep the code of the mode
+short without having to add a bunch of if statements everywhere in the forward pass.
+
+"""
 
 def print_stats(stats, index):
     print(f"Average ite: {stats[0]:.4f}, abs ate: {stats[1]:.4f}, pehe; {stats[2]:.4f}, "\
@@ -93,14 +105,15 @@ def print_stats(stats, index):
     tf.summary.scalar("metrics/y_counterfactual", stats[3][1], step=index)
 
 def main(params):
-    """ Main execution. Creates logging aand writer, and launches selected training. """
+    """ Main execution. Creates logging and writer, and launches selected training. """
     if params['dataset'] == "IHDP":
         params["x_bin_size"] = 19
+        params["x_cat_size"] = 0 + 19
         params["x_cont_size"] = 6
     if params['dataset'] == "TWINS":
         params["x_bin_size"] = 22
-        params["x_cat_size"] = 24
-        params["x_ord_size"] = 2
+        params["x_cat_size"] = 24 + 22
+        params["x_cont_size"] = 2
 
     params["z_size"] = 16
     repetitions = 10
@@ -113,60 +126,63 @@ def main(params):
     else:
         writer = None
 
-
     if params["separate_files"]:
         total_stats = []
         for i in range(repetitions):
-            dataset, scaling_data = eval(f"{params['dataset']}_dataset")(params, separate_files=True, file_index=i)
-            len_dataset = tf.data.experimental.cardinality(dataset)
-            dataset = dataset.shuffle(len_dataset)
-            stats = train(params, dataset, len_dataset, writer, scaling_data, i)
+            stats = train(params, writer, i)
             total_stats.append(stats)
         total_stats = np.array(total_stats)
         print("Final average results")
         if not params['debug']:
             with writer.as_default():
                 print_stats(total_stats.mean(0), repetitions * params['log_steps'] + 1)
-        
     else:
-        dataset, scaling_data = eval(f"{params['dataset']}_dataset")(params)
-        len_dataset = tf.data.experimental.cardinality(dataset)
-        dataset = dataset.shuffle(len_dataset)
-
-        train(params, dataset, len_dataset, writer, scaling_data)
+        train(params, writer)
 
 
-def train(params, dataset, len_dataset, writer, scaling_data, train_iteration=0):
-    """ Runs training of selected model. """
+def train(params, writer, train_iteration=0):
+    """ Runs training of selected model. 
+    
+    Loads a dataset and trains a new mode lfor the specified number of epochs.
+    All settings should be listed in the params dictionary.
+
+    Parameters
+    ----------
+    params : dict
+        Dictionary of all settings needed to define the training procedure.
+        Use the parse_arguments() function to generate a dictionary with the
+        required fileds
+
+    writer : tensorflow.summary.writer
+        The writer opbject to which all results and logs are written. Can be None
+
+    train_iteration : int, optional
+        Incrementor that should count the repetitions of times train() is called.
+        Used to correcly log a series of trainings in the writer.
+    
+    """
+
+    dataset, scaling_data, category_sizes = eval(f"{params['dataset']}_dataset")\
+    (params, separate_files=params['separate_files'], file_index=train_iteration)
+    # TODO do something smart with not loading everythin in memory at once.
+
+    len_dataset = tf.data.experimental.cardinality(dataset)
+    dataset = dataset.shuffle(len_dataset)
+
     if params["model"] == "cevae":
-        model = CEVAE(params)
+        model = CEVAE(params, category_sizes)
     if params["model"] == "cenf":
-        model = CENF(params)
+        model = CENF(params, category_sizes)
 
     optimizer = tf.keras.optimizers.Adam(learning_rate=params["learning_rate"])
     len_epoch = tf.data.experimental.cardinality(dataset.batch(params["batch_size"]))
-    global_train_step = train_iteration * params["epochs"] * tf.data.experimental.cardinality(dataset.batch(params["batch_size"]))
-    global_log_step = train_iteration * params["epochs"]
+    global_train_step = train_iteration * params["epochs"] * \
+                        tf.data.experimental.cardinality(dataset.batch(params["batch_size"]))
+    global_log_step   = train_iteration * params["epochs"]
 
-    if params["debug"]:
-        for epoch in range(10):
-            print(f"Epoch: {epoch}")
-            avg_loss = 0
-            step_start = global_train_step + epoch * len_epoch
-            for step, features in dataset.batch(params["batch_size"]).enumerate(step_start):
-                loss_value, grads = model.grad(features, step, params)
-                avg_loss += loss_value
-                optimizer.apply_gradients(zip(grads, model.trainable_variables))
-                #break
-            print(f"Epoch: {epoch}, average loss: {avg_loss / tf.dtypes.cast(len_epoch, tf.float64)}")
-            stats = calc_stats(model, dataset, scaling_data, params)
-            print(f"Average ite: {stats[0]:.4f}, abs ate: {stats[1]:.4f}, pehe; {stats[2]:.4f}, y_error factual: {stats[3][0]:.4f}, y_error counterfactual {stats[3][1]:.4f}")
-            print("Epoch done")
-        return stats
-
-
-    with writer.as_default():
+    with writer.as_default() if not writer is None else nullcontext():
         for epoch in range(params["epochs"]):
+            if params['debug']: print(f"Epoch: {epoch}")
             avg_loss = 0
             step_start = global_train_step + epoch * len_epoch
             for step, features in dataset.batch(params["batch_size"]).enumerate(step_start):
@@ -196,7 +212,7 @@ if __name__ == "__main__":
 
     gpus = tf.config.experimental.list_physical_devices("GPU")
     print(gpus)
-    sys.exit(0)
+    #sys.exit(0)
     if gpus:
         for gpu in gpus:
             tf.config.experimental.set_virtual_device_configuration(gpu, [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=2048)])

@@ -5,13 +5,14 @@ from tensorflow.keras import layers, Model
 from tensorflow.keras.activations import softplus
 from tensorflow_probability import distributions as tfd
 
+from causal_inference_worker import CIWorker
 from fc_net import FC_net
 from utils import get_log_prob, get_analytical_KL_divergence
 
 
-class CEVAE(Model):
+class CEVAE(CIWorker):
 
-    def __init__(self, params, hidden_size=200, debug=False):
+    def __init__(self, params, category_sizes, hidden_size=200, debug=False):
         """ CEVAE model with fc nets between random variables.
         https://github.com/tensorflow/probability/blob/master/tensorflow_probability/examples/vae.py
 
@@ -21,14 +22,9 @@ class CEVAE(Model):
         Several fc_nets have an output size of *2 something. This is to output both the mean and 
         std of a Normal distribution at once.
         """
-        super().__init__()
-        self.x_bin_size = params["x_bin_size"]
-        self.x_cont_size = params["x_cont_size"]
-        self.z_size = params["z_size"]
-        self.debug = params["debug"]
-        self.dataset_distributions = params["dataset_distributions"]
-        self.encode = Encoder(params, hidden_size)
-        self.decode = Decoder(params, hidden_size)
+        CIWorker.__init__(self, params, category_sizes)
+        self.encode = Encoder(params, category_sizes, hidden_size)
+        self.decode = Decoder(params, category_sizes, hidden_size)
 
     @tf.function
     def call(self, features, step, training=False):
@@ -41,12 +37,12 @@ class CEVAE(Model):
                     qt_prob, qy_mean, qz_mean, qz_std
 
                     decoder_params, parameters of all likelihoods
-                    x_bin_prob, x_cont_mean, x_cont_std, t_prob, y_mean
+                    x_cat_prob, x_cont_mean, x_cont_std, t_prob, y_mean
         """
         if self.debug:
             print("Starting forward pass")
-        x_bin, x_cont, t, y, y_cf, mu_0, mu_1 = features
-        x = tf.concat([x_bin, x_cont], 1)
+        x_cat, x_cont, t, y, y_cf, mu_0, mu_1 = features
+        x = tf.concat([x_cat, x_cont], 1)
 
         encoder_params = self.encode(x, t, y, step, training=training)
         _, _, qz_mean, qz_std = encoder_params
@@ -62,9 +58,11 @@ class CEVAE(Model):
     def elbo(self, features, encoder_params, decoder_params, step, params):
         if self.debug:
             print("Calculating loss")
-        x_bin, x_cont, t, y, y_cf, mu_0, mu_1 = features
+        x_cat, x_cont, t, y, y_cf, mu_0, mu_1 = features
         qt_prob, qy_mean, qz_mean, qz_std = encoder_params
-        x_bin_prob, x_cont_mean, x_cont_std, t_prob, y_mean = decoder_params
+        x_cat_prob, x_cont_mean, x_cont_std, t_prob, y_mean = decoder_params
+        x_cat_prob = tf.split(x_cat_prob, self.category_sizes, axis=1)[:-1]
+        x_cat      = tf.split(x_cat, self.category_sizes, axis=1)[:-1]
 
         # Get the y values corresponding to the values of t that were sampled during decoding
         # So I guess that this was wrong. We will now feed the real t into the decoder 
@@ -73,8 +71,9 @@ class CEVAE(Model):
         #t_incorrect = tf.where(tf.squeeze(t) != tf.squeeze(t_sample))
         #y_labels = tf.scatter_nd(t_correct, tf.squeeze(tf.gather(y, t_correct), axis=2), y.shape) + \
         #           tf.scatter_nd(t_incorrect, tf.squeeze(tf.gather(y_cf, t_incorrect), axis=2), y.shape)
+        # TODO fix datatype of the distortion. Make log probs take the correct dist type
 
-        distortion_x = -get_log_prob(x_bin, 'B', probs=x_bin_prob) \
+        distortion_x = -get_log_prob(x_cat, 'M', probs=x_cat_prob) \
                        -get_log_prob(x_cont, 'N', mean=x_cont_mean, std=x_cont_std)
         distortion_t = -get_log_prob(t, 'B', probs=t_prob)
         distortion_y = -get_log_prob(y, 'N', mean=y_mean)
@@ -99,17 +98,8 @@ class CEVAE(Model):
 
         return -elbo
 
-    def grad(self, features, step, params):
-        with tf.GradientTape() as tape:
-            encoder_params, decoder_params = self(features, step, training=True)
-            loss = self.elbo(features, encoder_params, decoder_params, step, params)
-        if self.debug:
-            print(f"Forward pass complete, step: {step}")
-        return loss, tape.gradient(loss, self.trainable_variables)
-
     def do_intervention(self, x, nr_samples):
         _, _, qz_mean, qz_std = self.encode(x, None, None, None, training=False)
-
         qz = tfd.Independent(tfd.Normal(loc=qz_mean, scale=qz_std),
                              reinterpreted_batch_ndims=1,
                              name="qz")
@@ -121,12 +111,13 @@ class CEVAE(Model):
 
 class Encoder(Model):
 
-    def __init__(self, params, hidden_size):
+    def __init__(self, params, category_sizes, hidden_size):
         super().__init__()
-        self.x_bin_size = params["x_bin_size"]
         self.x_cat_size = params["x_cat_size"]
         self.x_cont_size = params["x_cont_size"]
-        x_size = self.x_bin_size + self.x_cat_size + self.x_cont_size
+        #x_size = self.x_cat_size + self.x_cont_size
+        x_size = np.sum(category_sizes) + self.x_cont_size
+        print(f"x size: {x_size}")
         self.z_size = params["z_size"]
         self.debug = params["debug"]
 
@@ -149,6 +140,7 @@ class Encoder(Model):
     def call(self, x, t, y, step, training=False):
         if self.debug:
             print("Encoding")
+            print(f"x shape: {x.shape}")
         qt_prob = tf.sigmoid(self.qt_logits(x, step, training=training))
         qt = tfd.Independent(tfd.Bernoulli(probs=qt_prob), 
                              reinterpreted_batch_ndims=1,
@@ -188,27 +180,20 @@ class Encoder(Model):
 
 class Decoder(Model):
 
-    def __init__(self, params, hidden_size):
+    def __init__(self, params, category_sizes, hidden_size):
         super().__init__()
-        self.x_bin_size = params["x_bin_size"]
         self.x_cat_size = params["x_cat_size"]
         self.x_cont_size = params["x_cont_size"]
-        x_size = self.x_bin_size + self.x_cat_size + self.x_cont_size
+        x_size = self.x_cat_size + self.x_cont_size
         self.z_size = params["z_size"]
         self.debug = params["debug"]
 
         self.hx            = FC_net(self.z_size, hidden_size, "hx",              
                                     hidden_size=hidden_size, debug=self.debug)
-        if self.x_cont_size:
-            self.x_cont_logits = FC_net(hidden_size, self.x_cont_size * 2, "x_cont", 
+        self.x_cont_logits = FC_net(hidden_size, self.x_cont_size * 2, "x_cont", 
                                     hidden_size=hidden_size, debug=self.debug)
-        if self.x_bin_size:
-            self.x_bin_logits  = FC_net(hidden_size, self.x_bin_size, "x_bin",       
+        self.x_cat_logits  = FC_net(hidden_size, np.sum(category_sizes), "x_cat",       
                                     hidden_size=hidden_size, debug=self.debug)
-        if self.x_cat_size:
-            self.x_cat_logits  = FC_net(hidden_size, self.x_bin_size, "x_cat",       
-                                    hidden_size=hidden_size, debug=self.debug)
-
         self.t_logits      = FC_net(self.z_size, 1, "t", nr_hidden=1, 
                                     hidden_size=hidden_size, debug=self.debug)
         self.mu_y_t0       = FC_net(self.z_size, 1, "mu_y_t0", 
@@ -221,24 +206,18 @@ class Decoder(Model):
         if self.debug:
             print("Decoding")
         hidden_x = self.hx(z, step, training=training)
-        x_bin_prob = tf.sigmoid(self.x_bin_logits(hidden_x, step, training=training))
+        x_cat_prob = tf.sigmoid(self.x_cat_logits(hidden_x, step, training=training))
 
         x_cont_h = self.x_cont_logits(hidden_x, step, training=training)
         x_cont_mean = x_cont_h[:, :self.x_cont_size]
         x_cont_std = softplus(x_cont_h[:, self.x_cont_size:])
 
         t_prob = tf.sigmoid(self.t_logits(z, step, training=training))
-        #t = tfd.Independent(tfd.Bernoulli(probs=t_prob),
-        #                    reinterpreted_batch_ndims=1,
-        #                    name="t")
-
-        #t_sample = tf.dtypes.cast(t.sample(), tf.float64)
 
         mu_y0 = self.mu_y_t0(z, step, training=training)
         mu_y1 = self.mu_y_t1(z, step, training=training)
-        #y_mean = t_sample * mu_y1 + (1. - t_sample) * mu_y0
         y_mean = t * mu_y1 + (1. - t) * mu_y0
-        return x_bin_prob, x_cont_mean, x_cont_std, t_prob, y_mean
+        return x_cat_prob, x_cont_mean, x_cont_std, t_prob, y_mean
 
     def do_intervention(self, z, nr_samples):
         """ Computes the quantity E[y|z, do(t=0)] and E[y|z, do(t=1)]

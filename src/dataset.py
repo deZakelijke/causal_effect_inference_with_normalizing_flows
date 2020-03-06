@@ -1,7 +1,8 @@
+import sys
 import tensorflow as tf
 import numpy as np
 import pandas as pd
-from knn_impute import knn_impute
+from sklearn.preprocessing import OneHotEncoder
 
 def remove_nans(data, binfeats, catfeats, contfeats):
     # Iterate over columns that still contains nans. Select one with fewest nans
@@ -33,6 +34,7 @@ def remove_nans(data, binfeats, catfeats, contfeats):
 def IHDP_dataset(params, path_data="datasets/IHDP/csv/", file_prefix="ihdp_npci_", separate_files=False, file_index=None):
     binfeats = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
     contfeats = [i for i in range(25) if i not in binfeats]
+    catfeats = binfeats
     nr_files = 10
 
     t = []
@@ -72,7 +74,10 @@ def IHDP_dataset(params, path_data="datasets/IHDP/csv/", file_prefix="ihdp_npci_
                 x_cont.append(x[contfeats])
 
     x_cont = np.array(x_cont)
-    x_bin = np.array(x_bin)
+    x_bin = np.array(x_bin, dtype=int)
+    enc = OneHotEncoder(categories='auto')
+    enc.fit(x_bin)
+    x_bin = enc.transform(x_bin).toarray()
     t = np.expand_dims(np.array(t), axis=1)
     y = np.expand_dims(np.array(y), axis=1) 
     y_cf = np.expand_dims(np.array(y_cf), axis=1)
@@ -84,7 +89,9 @@ def IHDP_dataset(params, path_data="datasets/IHDP/csv/", file_prefix="ihdp_npci_
     mu_0 = np.expand_dims(np.array(mu_0), axis=1)
     mu_1 = np.expand_dims(np.array(mu_1), axis=1)
     scaling_data = (y_mean, y_std)
+    category_sizes = np.repeat(2, len(binfeats))
 
+    metadata = (scaling_data, category_sizes, enc)
 
     return tf.data.Dataset.from_tensor_slices(((x_bin, 
                                                 x_cont, 
@@ -92,33 +99,42 @@ def IHDP_dataset(params, path_data="datasets/IHDP/csv/", file_prefix="ihdp_npci_
                                                 y, 
                                                 y_cf, 
                                                 mu_0, 
-                                                mu_1))), scaling_data
+                                                mu_1))), scaling_data, category_sizes
 
 def TWINS_dataset(params, path_data="datasets/TWINS/", do_preprocessing=False):
 
     binfeats = [2, 3, 6, 9, 10, 13, 16, 18, 21, 25, 26, 27, 28, 30, 39, 40, 42, 43, 44, 45, 48, 49]
     contfeats = [17, 20] # Actually ordinal data but fuck it
     catfeats = [1, 4, 5, 7, 8, 11, 12, 14, 15, 19, 22, 23, 24, 31, 33, 33, 34, 35, 36, 37, 38, 41, 46, 47]
+    catfeats += binfeats
 
     if do_preprocessing:
         x = np.genfromtxt(f"{path_data}twin_pairs_X_3years_samesex.csv", 
                                delimiter=',', skip_header=1)[:, 1:]
         pandas_x = pd.DataFrame(x)
         pandas_x = pandas_x.interpolate(method='pad', axis=1).fillna(method='backfill', axis=0)
+        nr_unique_values = pandas_x.nunique()
         x = pandas_x.to_numpy()
         
-        x_bin = x[:, binfeats]
+        print(np.sum(nr_unique_values))
         x_cat = x[:, catfeats]
+        category_sizes = nr_unique_values[catfeats]
         x_cont = x[:, contfeats]
         np.savetxt(f"{path_data}twin_pairs_X_preprocessed_3years_samesex.csv",
                    x, delimiter=',', newline='\n')
 
     else:
+        raise NotImplementedError("Doesn't work any more, just preprocess every time")
         x = np.loadtxt(f"{path_data}twin_pairs_X_preprocessed_3years_samesex.csv", 
                                delimiter=',')
         x_bin = x[:, :len(binfeats)]
         x_cat = x[:, len(binfeats):len(binfeats) + len(catfeats)]
         x_cont = x[:, len(binfeats) + len(catfeats):]
+
+    enc = OneHotEncoder(categories='auto')
+    enc.fit(x_cat)
+    x_cat = enc.transform(x_cat[:10000]).toarray()
+    # TODO do this transformation per batch
 
     data_t = np.loadtxt(f"{path_data}twin_pairs_T_3years_samesex.csv", 
                         delimiter=',', dtype=np.float64, skiprows=1)
@@ -132,24 +148,26 @@ def TWINS_dataset(params, path_data="datasets/TWINS/", do_preprocessing=False):
 
     scaling_data = None
 
+    metadata = (scaling_data, category_sizes, enc)
 
-    return tf.data.Dataset.from_tensor_slices(((x_bin, x_cat, x_cont,
+    return tf.data.Dataset.from_tensor_slices(((x_cat, x_cont,
                                                 t_0, t_1, 
-                                                y_0, y_1))), scaling_data
+                                                y_0, y_1))), scaling_data, category_sizes
 
 
 if __name__ == "__main__":
     #import matplotlib.pyplot as plt
     
     params = {}
-    #data, _ = IHDP_dataset(params)
-    #print(data)
-    #for _, data_sample in data.batch(5).enumerate():
-    #    print(data_sample)
-    #    break
+    data, _, _ = IHDP_dataset(params)
+    print(data)
+    for _, data_sample in data.batch(5).enumerate():
+       print(data_sample[0])
+       break
 
     print()
-    data, _ = TWINS_dataset(params, do_preprocessing=True)
+    data, _, nr_unique_values = TWINS_dataset(params, do_preprocessing=True)
+    print(np.sum(nr_unique_values))
 
     for _, data_sample in data.batch(5).enumerate():
         print(data_sample)
