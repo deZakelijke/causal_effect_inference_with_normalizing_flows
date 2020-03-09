@@ -61,17 +61,13 @@ class CEVAE(CIWorker):
         x_cat, x_cont, t, y, y_cf, mu_0, mu_1 = features
         qt_prob, qy_mean, qz_mean, qz_std = encoder_params
         x_cat_prob, x_cont_mean, x_cont_std, t_prob, y_mean = decoder_params
-        x_cat_prob = tf.split(x_cat_prob, self.category_sizes, axis=1)[:-1]
-        x_cat      = tf.split(x_cat, self.category_sizes, axis=1)[:-1]
+        # x_cat_prob = tf.split(x_cat_prob, self.category_sizes, axis=1)[:-1]
+        # x_cat      = tf.split(x_cat, self.category_sizes, axis=1)[:-1]
+        l, f = x_cat.shape
+        x_cat_prob = tf.reshape(x_cat_prob, (l, f//self.category_sizes, self.category_sizes))
+        x_cat = tf.reshape(x_cat, (l, f//self.category_sizes, self.category_sizes))
 
-        # Get the y values corresponding to the values of t that were sampled during decoding
-        # So I guess that this was wrong. We will now feed the real t into the decoder 
-        # during training instead of sampling t.
-        #t_correct = tf.where(tf.squeeze(t) == tf.squeeze(t_sample))
-        #t_incorrect = tf.where(tf.squeeze(t) != tf.squeeze(t_sample))
-        #y_labels = tf.scatter_nd(t_correct, tf.squeeze(tf.gather(y, t_correct), axis=2), y.shape) + \
-        #           tf.scatter_nd(t_incorrect, tf.squeeze(tf.gather(y_cf, t_incorrect), axis=2), y.shape)
-        # TODO fix datatype of the distortion. Make log probs take the correct dist type
+
 
         distortion_x = -get_log_prob(x_cat, 'M', probs=x_cat_prob) \
                        -get_log_prob(x_cont, 'N', mean=x_cont_mean, std=x_cont_std)
@@ -115,9 +111,7 @@ class Encoder(Model):
         super().__init__()
         self.x_cat_size = params["x_cat_size"]
         self.x_cont_size = params["x_cont_size"]
-        #x_size = self.x_cat_size + self.x_cont_size
-        x_size = np.sum(category_sizes) + self.x_cont_size
-        print(f"x size: {x_size}")
+        x_size = self.x_cat_size * category_sizes + self.x_cont_size
         self.z_size = params["z_size"]
         self.debug = params["debug"]
 
@@ -140,7 +134,6 @@ class Encoder(Model):
     def call(self, x, t, y, step, training=False):
         if self.debug:
             print("Encoding")
-            print(f"x shape: {x.shape}")
         qt_prob = tf.sigmoid(self.qt_logits(x, step, training=training))
         qt = tfd.Independent(tfd.Bernoulli(probs=qt_prob), 
                              reinterpreted_batch_ndims=1,
@@ -182,7 +175,7 @@ class Decoder(Model):
 
     def __init__(self, params, category_sizes, hidden_size):
         super().__init__()
-        self.x_cat_size = params["x_cat_size"]
+        self.x_cat_size = params["x_cat_size"] * category_sizes
         self.x_cont_size = params["x_cont_size"]
         x_size = self.x_cat_size + self.x_cont_size
         self.z_size = params["z_size"]
@@ -192,7 +185,7 @@ class Decoder(Model):
                                     hidden_size=hidden_size, debug=self.debug)
         self.x_cont_logits = FC_net(hidden_size, self.x_cont_size * 2, "x_cont", 
                                     hidden_size=hidden_size, debug=self.debug)
-        self.x_cat_logits  = FC_net(hidden_size, np.sum(category_sizes), "x_cat",       
+        self.x_cat_logits  = FC_net(hidden_size, self.x_cat_size, "x_cat",       
                                     hidden_size=hidden_size, debug=self.debug)
         self.t_logits      = FC_net(self.z_size, 1, "t", nr_hidden=1, 
                                     hidden_size=hidden_size, debug=self.debug)

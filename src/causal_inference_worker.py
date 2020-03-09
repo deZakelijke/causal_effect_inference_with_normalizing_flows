@@ -16,7 +16,7 @@ class CIWorker(Model):
         self.debug = params["debug"]
         self.dataset_distributions = params["dataset_distributions"]
         self.category_sizes = category_sizes
-        self.cumulative_sizes = np.cumsum(category_sizes)
+        # self.cumulative_sizes = np.cumsum(category_sizes)
 
     def elbo(self, features, output, step, params):
         raise NotImplementedError("elbo must be implemented in child class")

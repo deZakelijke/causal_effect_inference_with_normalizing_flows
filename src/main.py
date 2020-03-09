@@ -10,13 +10,13 @@ import time
 from cenf import CENF
 from cevae import CEVAE
 from contextlib import nullcontext
-from dataset import IHDP_dataset
+from dataset import IHDP_dataset, TWINS_dataset
 from evaluation import calc_stats
 
 VALID_MODELS = ["cevae", "cenf"]
 VALID_DATASETS = ["IHDP", "TWINS"]
-DATASET_DISTRIBUTION_DICT = {"IHDP": {'x': ['B', 'N'], 't': ['B'], 'y': ['N']},
-                             "TWINS": {'x': ['B', 'M', 'N'], 't': ['N', 'N'], 'y': ['B', 'B']}}
+DATASET_DISTRIBUTION_DICT = {"IHDP": {'x': ['M', 'N'], 't': ['B'], 'y': ['N']},
+                             "TWINS": {'x': ['M', 'N'], 't': ['B'], 'y': ['B', 'B']}}
 
 tf.keras.backend.set_floatx('float64')
 
@@ -162,9 +162,11 @@ def train(params, writer, train_iteration=0):
     
     """
 
-    dataset, scaling_data, category_sizes = eval(f"{params['dataset']}_dataset")\
+    dataset, metadata = eval(f"{params['dataset']}_dataset")\
     (params, separate_files=params['separate_files'], file_index=train_iteration)
-    # TODO do something smart with not loading everythin in memory at once.
+    scaling_data = metadata[0]
+    category_sizes = metadata[1]
+    # batch_mapper = metadata[2]
 
     len_dataset = tf.data.experimental.cardinality(dataset)
     dataset = dataset.shuffle(len_dataset)

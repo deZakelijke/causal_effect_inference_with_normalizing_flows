@@ -4,38 +4,13 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import OneHotEncoder
 
-def remove_nans(data, binfeats, catfeats, contfeats):
-    # Iterate over columns that still contains nans. Select one with fewest nans
-    # Full up nans of selected column with knn function, based on all columns that don't have nans anymore
 
-    # Get indices of all columns that do have nans, sorted ascending on the amount of nans.
-    # Get indices of all columns that don't hav nans
-    # Iterate over nan indices and remove nans with current non-nan columns. Impute nans
-    # Add last index to cloumns that don't have nans.
-    
-
-
-    nan_counts = np.isnan(data).sum(axis=0)
-    full_indices = np.argwhere(nan_counts == 0)
-    nan_indices = np.nonzero(nan_counts)[0]
-    nan_indices = nan_indices[np.argsort(nan_counts[nan_indices])]
-
-    assert np.intersect1d(full_indices, nan_indices).size == 0
-    for index in nan_indices:
-        print(f"Removing nans in column: {index}")
-        result = np.squeeze(knn_impute(data[:, index], np.squeeze(data[:, full_indices]), k))
-        print(f"Nans remaining: {np.isnan(result).sum()}")
-        data[:, index] = result
-        full_indices = np.append(full_indices, index)
-    assert len(full_indices) == data.shape[1]
-
-
-
-def IHDP_dataset(params, path_data="datasets/IHDP/csv/", file_prefix="ihdp_npci_", separate_files=False, file_index=None):
+def IHDP_dataset(params, path_data="datasets/IHDP/csv/", separate_files=False, file_index=None):
     binfeats = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
     contfeats = [i for i in range(25) if i not in binfeats]
     catfeats = binfeats
     nr_files = 10
+    file_prefix="ihdp_npci_"
 
     t = []
     y = []
@@ -75,9 +50,9 @@ def IHDP_dataset(params, path_data="datasets/IHDP/csv/", file_prefix="ihdp_npci_
 
     x_cont = np.array(x_cont)
     x_bin = np.array(x_bin, dtype=int)
-    enc = OneHotEncoder(categories='auto')
-    enc.fit(x_bin)
-    x_bin = enc.transform(x_bin).toarray()
+    x_bin = tf.one_hot(x_bin, 2, axis=-1, dtype=tf.float64)
+    x_bin = tf.reshape(x_bin, (len(x_bin), len(binfeats) * 2))
+
     t = np.expand_dims(np.array(t), axis=1)
     y = np.expand_dims(np.array(y), axis=1) 
     y_cf = np.expand_dims(np.array(y_cf), axis=1)
@@ -89,9 +64,8 @@ def IHDP_dataset(params, path_data="datasets/IHDP/csv/", file_prefix="ihdp_npci_
     mu_0 = np.expand_dims(np.array(mu_0), axis=1)
     mu_1 = np.expand_dims(np.array(mu_1), axis=1)
     scaling_data = (y_mean, y_std)
-    category_sizes = np.repeat(2, len(binfeats))
 
-    metadata = (scaling_data, category_sizes, enc)
+    metadata = (scaling_data, 2)
 
     return tf.data.Dataset.from_tensor_slices(((x_bin, 
                                                 x_cont, 
@@ -99,75 +73,74 @@ def IHDP_dataset(params, path_data="datasets/IHDP/csv/", file_prefix="ihdp_npci_
                                                 y, 
                                                 y_cf, 
                                                 mu_0, 
-                                                mu_1))), scaling_data, category_sizes
+                                                mu_1))), metadata
 
-def TWINS_dataset(params, path_data="datasets/TWINS/", do_preprocessing=False):
-
-    binfeats = [2, 3, 6, 9, 10, 13, 16, 18, 21, 25, 26, 27, 28, 30, 39, 40, 42, 43, 44, 45, 48, 49]
-    contfeats = [17, 20] # Actually ordinal data but fuck it
-    catfeats = [1, 4, 5, 7, 8, 11, 12, 14, 15, 19, 22, 23, 24, 31, 33, 33, 34, 35, 36, 37, 38, 41, 46, 47]
-    catfeats += binfeats
-
-    if do_preprocessing:
-        x = np.genfromtxt(f"{path_data}twin_pairs_X_3years_samesex.csv", 
-                               delimiter=',', skip_header=1)[:, 1:]
-        pandas_x = pd.DataFrame(x)
-        pandas_x = pandas_x.interpolate(method='pad', axis=1).fillna(method='backfill', axis=0)
-        nr_unique_values = pandas_x.nunique()
-        x = pandas_x.to_numpy()
-        
-        print(np.sum(nr_unique_values))
-        x_cat = x[:, catfeats]
-        category_sizes = nr_unique_values[catfeats]
-        x_cont = x[:, contfeats]
-        np.savetxt(f"{path_data}twin_pairs_X_preprocessed_3years_samesex.csv",
-                   x, delimiter=',', newline='\n')
-
-    else:
-        raise NotImplementedError("Doesn't work any more, just preprocess every time")
-        x = np.loadtxt(f"{path_data}twin_pairs_X_preprocessed_3years_samesex.csv", 
-                               delimiter=',')
-        x_bin = x[:, :len(binfeats)]
-        x_cat = x[:, len(binfeats):len(binfeats) + len(catfeats)]
-        x_cont = x[:, len(binfeats) + len(catfeats):]
-
-    enc = OneHotEncoder(categories='auto')
-    enc.fit(x_cat)
-    x_cat = enc.transform(x_cat[:10000]).toarray()
-    # TODO do this transformation per batch
+def TWINS_dataset(params, path_data="datasets/TWINS/", do_preprocessing=True, separate_files=None, file_index=None):
 
     data_t = np.loadtxt(f"{path_data}twin_pairs_T_3years_samesex.csv", 
-                        delimiter=',', dtype=np.float64, skiprows=1)
+            delimiter=',', dtype=np.float64, skiprows=1)[:, 1:]
     data_y = np.loadtxt(f"{path_data}twin_pairs_Y_3years_samesex.csv", 
-                        delimiter=',', dtype=np.float64, skiprows=1)
+            delimiter=',', dtype=np.float64, skiprows=1)[:, 1:]
+ 
+    indices = np.logical_and(data_t[:, 0] < 2000.0, data_t[:, 1] < 2000.0)
+
+    unused = ["infant_id_0", "infant_id_1"]
+    covar_types = eval(open(f"{path_data}covar_type.txt", 'r').read())
+    cont_keys = []
+    cat_keys = []
+    bin_keys = []
+    for key, value in covar_types.items():
+        if value == "ord":
+            cont_keys.append(key)
+        if value == "cat":
+            cat_keys.append(key)
+        if value == "bin":
+            if key != 'bord':
+                bin_keys.append(key)
+
+    cat_keys += bin_keys
+    x = pd.read_csv(f"{path_data}twin_pairs_X_3years_samesex.csv", sep=',', dtype=np.float64)
+    x = x.loc[indices]
+    x = x.interpolate(method='pad', axis=0).fillna(method='backfill', axis=0)
+    nr_unique_values = np.max(x[cat_keys].nunique())
+    x_cont = x[cont_keys].to_numpy()
+    x_cat = x[cat_keys].to_numpy()
+    x_cat = tf.one_hot(x_cat, nr_unique_values, axis=-1, dtype=tf.float64)
+    x_cat = tf.reshape(x_cat, (len(x_cat), x_cat.shape[1] * nr_unique_values))
+    # x_bin = x[bin_keys].to_numpy()
     
-    t_0 = np.expand_dims(data_t[:, 1], axis=1)
-    t_1 = np.expand_dims(data_t[:, 2], axis=1)
-    y_0 = np.expand_dims(data_y[:, 1], axis=1)
-    y_1 = np.expand_dims(data_y[:, 2], axis=1)
+   
+    # t_0 = np.expand_dims(data_t[indices, 0], axis=1)
+    # t_1 = np.expand_dims(data_t[indices, 1], axis=1)
+    t = np.expand_dims(indices.astype(float), axis=1)
+    y_0 = np.expand_dims(data_y[indices, 0], axis=1)
+    y_1 = np.expand_dims(data_y[indices, 1], axis=1)
+    # y = tf.where(
+
 
     scaling_data = None
-
-    metadata = (scaling_data, category_sizes, enc)
+    metadata = (scaling_data, nr_unique_values)
 
     return tf.data.Dataset.from_tensor_slices(((x_cat, x_cont,
-                                                t_0, t_1, 
-                                                y_0, y_1))), scaling_data, category_sizes
+                                                t, y_0, y_1))), metadata
 
 
 if __name__ == "__main__":
-    #import matplotlib.pyplot as plt
+    import matplotlib.pyplot as plt
     
     params = {}
-    data, _, _ = IHDP_dataset(params)
-    print(data)
-    for _, data_sample in data.batch(5).enumerate():
-       print(data_sample[0])
-       break
+    # data, metadata = IHDP_dataset(params)
+    # nr_unique_values = metadata[1]
+    # batch_mapper = metadata[2]
+    #
+    # for _, data_sample in data.batch(5).enumerate():
+    #     data_sample = batch_mapper(*data_sample)
+    #     print(data_sample)
+    #     break
 
     print()
-    data, _, nr_unique_values = TWINS_dataset(params, do_preprocessing=True)
-    print(np.sum(nr_unique_values))
+    data, metadata = TWINS_dataset(params, do_preprocessing=True)
+    nr_unique_values = metadata[1]
 
     for _, data_sample in data.batch(5).enumerate():
         print(data_sample)

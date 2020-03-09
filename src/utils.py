@@ -15,12 +15,15 @@ def get_log_prob(data, dist, mean=None, std=None, probs=None, name=None):
     elif dist == 'B':
         assert probs is not None, "No probs provided for dsitribution"
         distribution = tfd.Bernoulli(probs=probs)
+    elif dist == 'M':
+        assert probs is not None, "No probs provided for this distribution"
+        distribution = tfd.OneHotCategorical(probs=probs, dtype=tf.float64)
     else:
-        raise NotImplementedError("Only Normal (N) and Bernoulli (B) have been implemeted")
+        raise NotImplementedError("Only Normal (N), Bernoulli (B) and Categorical (M) have been implemeted")
         
-
     distribution = tfd.Independent(distribution, reinterpreted_batch_ndims=1, name=name)
     return distribution.log_prob(data)
+
 
 @tf.function
 def get_analytical_KL_divergence(mean, std):
