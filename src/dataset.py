@@ -126,16 +126,16 @@ def TWINS_dataset(params, path_data="datasets/TWINS/", do_preprocessing=True, se
     noise = math.logical_not(noise)
     noisy_proxy += tf.scatter_nd(tf.where(noise), tf.boolean_mask(proxy, noise), (len(z), 30))
 
-    x_cat = noisy_proxy
-    x_cont = tf.zeros((len(x_cat), 0))
-    y = tf.expand_dims(data_y[indices, t], axis=1)
-    y_cf = tf.expand_dims(data_y[indices, 1-t], axis=1)
-    t = tf.expand_dims(t, axis=1)
-    mu_1 = tf.zeros((len(x_cat), 0))
-    mu_0 = tf.zeros((len(x_cat), 0))
+    x_cat  = noisy_proxy
+    x_cont = tf.zeros((len(x_cat), 0), dtype=tf.float64)
+    y      = tf.cast(tf.expand_dims(data_y[indices, t], axis=1), tf.float64)
+    y_cf   = tf.cast(tf.expand_dims(data_y[indices, 1-t], axis=1), tf.float64)
+    t      = tf.cast(tf.expand_dims(t, axis=1), tf.float64)
+    mu_1   = tf.cast(tf.expand_dims(data_y[indices, 1], axis=1), tf.float64)
+    mu_0   = tf.cast(tf.expand_dims(data_y[indices, 0], axis=1), tf.float64)
 
-    scaling_data = None
-    nr_unique_values = None
+    scaling_data = (0, 1)
+    nr_unique_values = 10
     metadata = (scaling_data, nr_unique_values)
 
     return tf.data.Dataset.from_tensor_slices(((x_cat, x_cont,

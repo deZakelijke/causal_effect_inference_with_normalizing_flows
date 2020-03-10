@@ -111,9 +111,9 @@ def main(params):
         params["x_cat_size"] = 0 + 19
         params["x_cont_size"] = 6
     if params['dataset'] == "TWINS":
-        params["x_bin_size"] = 22
-        params["x_cat_size"] = 24 + 22
-        params["x_cont_size"] = 2
+        params["x_bin_size"] = 0
+        params["x_cat_size"] = 3
+        params["x_cont_size"] = 0
 
     params["z_size"] = 16
     repetitions = 10

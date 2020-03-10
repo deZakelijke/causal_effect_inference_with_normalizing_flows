@@ -16,7 +16,8 @@ def calc_stats(model, dataset, scaling_data, params):
     nr_samples = 100
 
     def rmse_ite(ypred1, ypred0, y):
-        pred_ite = tf.zeros_like(true_ite)
+        # pred_ite = tf.zeros_like(true_ite)
+        pred_ite = tf.zeros((len(true_ite), 1), dtype=tf.float64)
         t_new = tf.squeeze(t)
         idx1, idx0 = tf.where(t_new == 1), tf.where(t_new == 0)
         ite1 = tf.gather_nd(y, idx1) - tf.gather_nd(ypred0, idx1)
