@@ -3,6 +3,8 @@ import tensorflow as tf
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import OneHotEncoder
+from scipy.special import expit
+from tensorflow import math
 
 
 def IHDP_dataset(params, path_data="datasets/IHDP/csv/", separate_files=False, file_index=None):
@@ -77,6 +79,7 @@ def IHDP_dataset(params, path_data="datasets/IHDP/csv/", separate_files=False, f
 
 def TWINS_dataset(params, path_data="datasets/TWINS/", do_preprocessing=True, separate_files=None, file_index=None):
 
+    flip_prob = 0.05
     data_t = np.loadtxt(f"{path_data}twin_pairs_T_3years_samesex.csv", 
             delimiter=',', dtype=np.float64, skiprows=1)[:, 1:]
     data_y = np.loadtxt(f"{path_data}twin_pairs_Y_3years_samesex.csv", 
@@ -89,60 +92,75 @@ def TWINS_dataset(params, path_data="datasets/TWINS/", do_preprocessing=True, se
     cont_keys = []
     cat_keys = []
     bin_keys = []
+    z_key = 'gestat10'
     for key, value in covar_types.items():
         if value == "ord":
             cont_keys.append(key)
         if value == "cat":
-            cat_keys.append(key)
+            if key != z_key:
+                cat_keys.append(key)
         if value == "bin":
             if key != 'bord':
                 bin_keys.append(key)
-
     cat_keys += bin_keys
+    cat_keys += cont_keys
+    w_o = np.random.normal(loc=0, scale=0.1, size=(len(cat_keys), 1))
+    w_h = np.random.normal(loc=5, scale=0.1)
+
+
     x = pd.read_csv(f"{path_data}twin_pairs_X_3years_samesex.csv", sep=',', dtype=np.float64)
     x = x.loc[indices]
     x = x.interpolate(method='pad', axis=0).fillna(method='backfill', axis=0)
-    nr_unique_values = np.max(x[cat_keys].nunique())
-    x_cont = x[cont_keys].to_numpy()
-    x_cat = x[cat_keys].to_numpy()
-    x_cat = tf.one_hot(x_cat, nr_unique_values, axis=-1, dtype=tf.float64)
-    x_cat = tf.reshape(x_cat, (len(x_cat), x_cat.shape[1] * nr_unique_values))
-    # x_bin = x[bin_keys].to_numpy()
-    
-   
-    # t_0 = np.expand_dims(data_t[indices, 0], axis=1)
-    # t_1 = np.expand_dims(data_t[indices, 1], axis=1)
-    t = np.expand_dims(indices.astype(float), axis=1)
-    y_0 = np.expand_dims(data_y[indices, 0], axis=1)
-    y_1 = np.expand_dims(data_y[indices, 1], axis=1)
-    # y = tf.where(
+    z = x[z_key].to_numpy(int)
+    x = x[cat_keys].to_numpy()
+    x_w = x @ w_o
+    z_w = np.expand_dims((z / 10 - 0.1) * w_h, axis=1)
+    t = np.squeeze(np.random.binomial(1, expit(x_w + z_w)))
 
+    proxy = tf.one_hot(z, 10, axis=-1, dtype=tf.float64)
+    proxy = tf.concat([proxy, proxy, proxy], axis=1)
+    noise = tf.random.uniform(proxy.shape, minval=0, maxval=1)
+    noise = math.less(noise, flip_prob)
+    noisy_proxy = tf.zeros_like(proxy)
+    noisy_proxy += tf.scatter_nd(tf.where(noise), tf.boolean_mask(1 - proxy, noise), (len(z), 30))
+    noise = math.logical_not(noise)
+    noisy_proxy += tf.scatter_nd(tf.where(noise), tf.boolean_mask(proxy, noise), (len(z), 30))
+
+    x_cat = noisy_proxy
+    x_cont = tf.zeros((len(x_cat), 0))
+    y = tf.expand_dims(data_y[indices, t], axis=1)
+    y_cf = tf.expand_dims(data_y[indices, 1-t], axis=1)
+    t = tf.expand_dims(t, axis=1)
+    mu_1 = tf.zeros((len(x_cat), 0))
+    mu_0 = tf.zeros((len(x_cat), 0))
 
     scaling_data = None
+    nr_unique_values = None
     metadata = (scaling_data, nr_unique_values)
 
     return tf.data.Dataset.from_tensor_slices(((x_cat, x_cont,
-                                                t, y_0, y_1))), metadata
+                                                t, y, y_cf,
+                                                mu_1, mu_0))), metadata
 
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
     
     params = {}
-    # data, metadata = IHDP_dataset(params)
-    # nr_unique_values = metadata[1]
-    # batch_mapper = metadata[2]
-    #
-    # for _, data_sample in data.batch(5).enumerate():
-    #     data_sample = batch_mapper(*data_sample)
-    #     print(data_sample)
-    #     break
+    data, metadata = IHDP_dataset(params)
+    nr_unique_values = metadata[1]
+
+    for _, data_sample in data.batch(5).enumerate():
+        for data in data_sample:
+            print(data)
+        break
 
     print()
     data, metadata = TWINS_dataset(params, do_preprocessing=True)
     nr_unique_values = metadata[1]
 
     for _, data_sample in data.batch(5).enumerate():
-        print(data_sample)
+        for data in data_sample:
+            print(data)
         break
 

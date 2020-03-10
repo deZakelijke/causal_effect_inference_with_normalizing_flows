@@ -135,7 +135,7 @@ def main(params):
         print("Final average results")
         if not params['debug']:
             with writer.as_default():
-                print_stats(total_stats.mean(0), repetitions * params['log_steps'] + 1)
+                print_stats(total_stats.mean(0), params['epochs'] * repetitions // params['log_steps'] + 1)
     else:
         train(params, writer)
 
