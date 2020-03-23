@@ -70,7 +70,7 @@ class CENF(CIWorker):
         distortion_y = -get_log_prob(y, 'N', mean=y_mean)
 
         rate = get_analytical_KL_divergence(qz_mean, qz_std)
-        ldj_z = tf.reduce_mean(-ldj_z)
+        # ldj_z = tf.reduce_mean(-ldj_z)
 
         variational_t = -get_log_prob(t, 'B', probs=qt_prob)
         variational_y = -get_log_prob(y, 'N', mean=qy_mean)
@@ -81,13 +81,13 @@ class CENF(CIWorker):
             tf.summary.scalar("partial_loss/distortion_t", tf.reduce_mean(distortion_t), step=l_step)
             tf.summary.scalar("partial_loss/distortion_y", tf.reduce_mean(distortion_y), step=l_step)
             tf.summary.scalar("partial_loss/rate_z", tf.reduce_mean(rate), step=l_step)
-            tf.summary.scalar("partial_loss/ldj_z", ldj_z, step=l_step)
+            tf.summary.scalar("partial_loss/ldj_z", tf.reduce_mean(-ldj_z), step=l_step)
             tf.summary.scalar("partial_loss/variational_t", tf.reduce_mean(variational_t), step=l_step)
             tf.summary.scalar("partial_loss/variational_y", tf.reduce_mean(variational_y), step=l_step)
 
 
         elbo_local = -(rate + distortion_x + distortion_t + distortion_y + \
-                       variational_t + variational_y + ldj_z)
+                       variational_t + variational_y - ldj_z)
         elbo = tf.reduce_mean(input_tensor=elbo_local)
         return -elbo
 

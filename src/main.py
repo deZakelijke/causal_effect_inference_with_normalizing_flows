@@ -15,13 +15,35 @@ from evaluation import calc_stats
 
 VALID_MODELS = ["cevae", "cenf"]
 VALID_DATASETS = ["IHDP", "TWINS"]
-DATASET_DISTRIBUTION_DICT = {"IHDP": {'x': ['M', 'N'], 't': ['B'], 'y': ['N']},
-                             "TWINS": {'x': ['M', 'N'], 't': ['B'], 'y': ['B', 'B']}}
+DATASET_DISTRIBUTION_DICT = {"IHDP": {'x': ['M', 'N'], 't': 'B', 'y': 'N'},
+                            "TWINS": {'x': ['M', 'N'], 't': 'B', 'y': 'B'}}
+
 
 tf.keras.backend.set_floatx('float64')
 
 def parse_arguments():
-    """ Parse all arguments and check for faulty input. """
+    """ Parse all arguments and check for faulty input. 
+    
+    Parses all input arguments of the program. Several argumets, such as model
+    and dataset are checked for validity. Raises error if invald arguments are
+    passed to the program.
+
+    Raises
+    ------
+    NotImplementedError
+        If an invalid model, mode or dataset are passed.
+
+    ValueError
+        If the name of the experiment contains invalid characters or if no 
+        exeriment name is provided.
+
+    Return
+    ------
+    params : dict
+        A dictionary containing all parameters are passed. Keys are the aruments
+        and the values are the values of the parsed arguments or their default value.
+
+    """
     parser = argparse.ArgumentParser(description="Causal effect Normalizing Flow trainer")
     parser.add_argument("--batch_size", type=int, default=32, 
                         help="Batch size (default=32)")
@@ -88,13 +110,20 @@ def parse_arguments():
 
     return vars(args)
 
-"""
-Make a dictionary of distribution types and add it to config. That way we can keep the code of the mode
-short without having to add a bunch of if statements everywhere in the forward pass.
-
-"""
-
 def print_stats(stats, index):
+    """ Prints the statistics and puts them in Tensorboard.
+
+    Prints the tuple of statistics in a readable format and passes them to the 
+    Tensorboard writer if one is active in the current context.
+
+    Parameters
+    ----------
+    stats : (float, float, float (float, float))
+        The statistic that should be printed.
+    index : int
+        Index used for the graph in tensorboard. Each next call of print_stats
+        should have the consecutive index.
+    """
     print(f"Average ite: {stats[0]:.4f}, abs ate: {stats[1]:.4f}, pehe; {stats[2]:.4f}, "\
           f"y_error factual: {stats[3][0]:.4f}, y_error counterfactual {stats[3][1]:.4f}")
  
@@ -103,42 +132,6 @@ def print_stats(stats, index):
     tf.summary.scalar("metrics/pehe", stats[2], step=index)
     tf.summary.scalar("metrics/y_factual", stats[3][0], step=index)
     tf.summary.scalar("metrics/y_counterfactual", stats[3][1], step=index)
-
-def main(params):
-    """ Main execution. Creates logging and writer, and launches selected training. """
-    if params['dataset'] == "IHDP":
-        params["x_bin_size"] = 19
-        params["x_cat_size"] = 0 + 19
-        params["x_cont_size"] = 6
-    if params['dataset'] == "TWINS":
-        params["x_bin_size"] = 0
-        params["x_cat_size"] = 3
-        params["x_cont_size"] = 0
-
-    params["z_size"] = 16
-    repetitions = 10
-
-    timestamp = time.strftime("%Y:%m:%d/%X")
-    if not params["debug"]:
-        logdir = (f"{params['model_dir']}{params['model']}/{params['dataset']}/"
-                  f"{params['learning_rate']}/{timestamp}/{params['experiment_name']}")
-        writer = tf.summary.create_file_writer(logdir)
-    else:
-        writer = None
-
-    if params["separate_files"]:
-        total_stats = []
-        for i in range(repetitions):
-            stats = train(params, writer, i)
-            total_stats.append(stats)
-        total_stats = np.array(total_stats)
-        print("Final average results")
-        if not params['debug']:
-            with writer.as_default():
-                print_stats(total_stats.mean(0), params['epochs'] * repetitions // params['log_steps'] + 1)
-    else:
-        train(params, writer)
-
 
 def train(params, writer, train_iteration=0):
     """ Runs training of selected model. 
@@ -160,13 +153,17 @@ def train(params, writer, train_iteration=0):
         Incrementor that should count the repetitions of times train() is called.
         Used to correcly log a series of trainings in the writer.
     
+    Returns
+    -------
+    stats : tuple
+        Tuple of the statistics that were calculated after the last epoch.
+
     """
 
     dataset, metadata = eval(f"{params['dataset']}_dataset")\
     (params, separate_files=params['separate_files'], file_index=train_iteration)
     scaling_data = metadata[0]
     category_sizes = metadata[1]
-    # batch_mapper = metadata[2]
 
     len_dataset = tf.data.experimental.cardinality(dataset)
     dataset = dataset.shuffle(len_dataset)
@@ -205,9 +202,44 @@ def train(params, writer, train_iteration=0):
         tf.summary.scalar("metrics/loss", loss_value, step=l_step)
         return stats
 
-
 def test(params):
-    pass
+    raise NotImplementedError("Test mode not implemented yet.")
+
+def main(params):
+    """ Main execution. Creates logging and writer, and launches selected training. """
+    if params['dataset'] == "IHDP":
+        params["x_bin_size"] = 19
+        params["x_cat_size"] = 0 + 19
+        params["x_cont_size"] = 6
+    if params['dataset'] == "TWINS":
+        params["x_bin_size"] = 0
+        params["x_cat_size"] = 3
+        params["x_cont_size"] = 0
+
+    params["z_size"] = 16
+    repetitions = 10
+
+    timestamp = time.strftime("%Y:%m:%d/%X")
+    if not params["debug"]:
+        logdir = (f"{params['model_dir']}{params['model']}/{params['dataset']}/"
+                  f"{params['learning_rate']}/{timestamp}/{params['experiment_name']}")
+        writer = tf.summary.create_file_writer(logdir)
+    else:
+        writer = None
+
+    if params["separate_files"]:
+        total_stats = []
+        for i in range(repetitions):
+            stats = train(params, writer, i)
+            total_stats.append(stats)
+        total_stats = np.array(total_stats)
+        print("Final average results")
+        if not params['debug']:
+            with writer.as_default():
+                print_stats(total_stats.mean(0), params['epochs'] * repetitions // params['log_steps'] + 1)
+    else:
+        train(params, writer)
+
 
 if __name__ == "__main__":
     params = parse_arguments()

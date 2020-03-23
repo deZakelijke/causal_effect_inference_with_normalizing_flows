@@ -3,6 +3,7 @@ import numpy as np
 import tensorflow as tf
 
 from tensorflow.keras import layers, Model
+from tensorflow import math
 from tensorflow_probability import distributions as tfd
 
 # TODO add constraint to keep funciton invertible.
@@ -51,28 +52,34 @@ class PlanarFlowLayer(Model):
         self.w = tf.Variable(initializer([z_size, 1], dtype=tf.dtypes.float64), dtype="float64", name="w")
         self.b = tf.Variable(initializer([1, 1], dtype=tf.dtypes.float64), dtype="float64", name="b")
 
-
     @tf.function
     def call(self, z, step, training=False):
+        uw = tf.transpose(self.w) @ self.u
+        norm_w = tf.transpose(self.w) @ self.w
+        u = self.u + (-1 + math.softplus(uw) - uw) * self.w / norm_w
+
         with tf.name_scope("planar_flow") as scope:
             if training and not step is None:
                 tf.summary.histogram(f"flow_{self.flow_nr}/{self.b.name}", self.b, step=step)
                 tf.summary.histogram(f"flow_{self.flow_nr}/{self.w.name}", self.w, step=step)
                 tf.summary.histogram(f"flow_{self.flow_nr}/{self.u.name}", self.u, step=step)
             h1 = tf.tanh(z @ self.w + self.b)
-            return z + h1 @ tf.transpose(self.u)
+            return z + h1 @ tf.transpose(u)
 
     @staticmethod
     def tanh_deriv(x):
         return 1 - tf.tanh(x) ** 2
 
     def logdet_jacobian(self, z):
+        uw = tf.transpose(self.w) @ self.u
+        norm_w = tf.transpose(self.w) @ self.w
+        u = self.u + (-1 + math.softplus(uw) - uw) * self.w / norm_w
+
         psi = self.tanh_deriv(z @ self.w + self.b) @ tf.transpose(self.w)
-        return tf.math.log(tf.abs(1 + psi @ self.u))
+        return math.log(tf.abs(1 + psi @ u))
 
 
 def test_flow():
-    # tests
     z_size = 4
     batch_size = 8
     single_flow = PlanarFlowLayer(z_size, flow_nr=0)
@@ -88,8 +95,6 @@ def test_flow():
     out, ldj = flow(z, step=0, training=True)
     assert out.shape == z.shape
     assert ldj.shape == (batch_size, 1)
-
-
     
     print("All assertions passed, test successful")
 

@@ -3,6 +3,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras import layers, Model
 from tensorflow.keras.activations import softplus
+from tensorflow import nn
 from tensorflow_probability import distributions as tfd
 
 from causal_inference_worker import CIWorker
@@ -67,10 +68,11 @@ class CEVAE(CIWorker):
 
 
 
+        y_type = params['dataset_distributions']['y']
         distortion_x = -get_log_prob(x_cat, 'M', probs=x_cat_prob) \
                        -get_log_prob(x_cont, 'N', mean=x_cont_mean, std=x_cont_std)
         distortion_t = -get_log_prob(t, 'B', probs=t_prob)
-        distortion_y = -get_log_prob(y, 'N', mean=y_mean)
+        distortion_y = -get_log_prob(y, y_type, mean=y_mean, probs=y_mean)
 
         rate = get_analytical_KL_divergence(qz_mean, qz_std)
 
@@ -86,10 +88,9 @@ class CEVAE(CIWorker):
             tf.summary.scalar("partial_loss/variational_t", tf.reduce_mean(variational_t), step=l_step)
             tf.summary.scalar("partial_loss/variational_y", tf.reduce_mean(variational_y), step=l_step)
 
-        elbo_local = -(params['beta'] * rate + distortion_x + distortion_t + \
-                       distortion_y + variational_t + variational_y)
+        elbo_local = -(rate + distortion_x + distortion_t + distortion_y + \
+                       variational_t + variational_y)
         elbo = tf.reduce_mean(elbo_local)
-
         return -elbo
 
     def do_intervention(self, x, nr_samples):
@@ -173,9 +174,10 @@ class Decoder(Model):
 
     def __init__(self, params, category_sizes, hidden_size):
         super().__init__()
-        self.x_cat_size = params["x_cat_size"] * category_sizes
+        self.x_cat_size = params["x_cat_size"]
+        self.category_sizes = category_sizes
         self.x_cont_size = params["x_cont_size"]
-        x_size = self.x_cat_size + self.x_cont_size
+        # x_size = self.x_cat_size + self.x_cont_size
         self.z_size = params["z_size"]
         self.debug = params["debug"]
 
@@ -183,7 +185,7 @@ class Decoder(Model):
                                     hidden_size=hidden_size, debug=self.debug)
         self.x_cont_logits = FC_net(hidden_size, self.x_cont_size * 2, "x_cont", 
                                     hidden_size=hidden_size, debug=self.debug)
-        self.x_cat_logits  = FC_net(hidden_size, self.x_cat_size, "x_cat",       
+        self.x_cat_logits  = FC_net(hidden_size, self.x_cat_size * category_sizes, "x_cat",       
                                     hidden_size=hidden_size, debug=self.debug)
         self.t_logits      = FC_net(self.z_size, 1, "t", nr_hidden=1, 
                                     hidden_size=hidden_size, debug=self.debug)
@@ -197,7 +199,10 @@ class Decoder(Model):
         if self.debug:
             print("Decoding")
         hidden_x = self.hx(z, step, training=training)
-        x_cat_prob = tf.sigmoid(self.x_cat_logits(hidden_x, step, training=training))
+        x_cat_logits = self.x_cat_logits(hidden_x, step, training=training)
+        x_cat_prob = nn.softmax(tf.reshape(x_cat_logits, 
+                     (len(x_cat_logits), self.x_cat_size, self.category_sizes)))
+        x_cat_prob = tf.reshape(x_cat_prob, (len(x_cat_prob), self.x_cat_size * self.category_sizes))
 
         x_cont_h = self.x_cont_logits(hidden_x, step, training=training)
         x_cont_mean = x_cont_h[:, :self.x_cont_size]

@@ -79,7 +79,7 @@ def IHDP_dataset(params, path_data="datasets/IHDP/csv/", separate_files=False, f
 
 def TWINS_dataset(params, path_data="datasets/TWINS/", do_preprocessing=True, separate_files=None, file_index=None):
 
-    flip_prob = 0.05
+    flip_prob = 0.3
     data_t = np.loadtxt(f"{path_data}twin_pairs_T_3years_samesex.csv", 
             delimiter=',', dtype=np.float64, skiprows=1)[:, 1:]
     data_y = np.loadtxt(f"{path_data}twin_pairs_Y_3years_samesex.csv", 
