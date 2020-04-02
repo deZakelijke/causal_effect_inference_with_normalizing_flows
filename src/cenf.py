@@ -27,7 +27,7 @@ class CENF(CIWorker):
         # self.flow_decoder = True
         self.encode = Encoder(params, category_sizes, hidden_size)
         # if self.flow_decoder:
-        #     self.decode = FlowDecoder(self.x_cat_size, self.x_cont_size, 
+        #     self.decode = FlowDecoder(self.x_cat_size, self.x_cont_size,
         #                               self.z_size, hidden_size, params['nr_flows'], self.debug)
         # else:
         self.decode = Decoder(params, category_sizes, hidden_size)
@@ -65,7 +65,7 @@ class CENF(CIWorker):
         x_cat = tf.reshape(x_cat, (l, f//self.category_sizes, self.category_sizes))
 
         distortion_x = -get_log_prob(x_cat, 'M', probs=x_cat_prob) \
-                       -get_log_prob(x_cont, 'N', mean=x_cont_mean, std=x_cont_std)
+                       - get_log_prob(x_cont, 'N', mean=x_cont_mean, std=x_cont_std)
         distortion_t = -get_log_prob(t, 'B', probs=t_prob)
         distortion_y = -get_log_prob(y, 'N', mean=y_mean)
 
@@ -75,7 +75,7 @@ class CENF(CIWorker):
         variational_t = -get_log_prob(t, 'B', probs=qt_prob)
         variational_y = -get_log_prob(y, 'N', mean=qy_mean)
 
-        if not step is None and step % (params['log_steps'] * 5) == 0:
+        if step is not None and step % (params['log_steps'] * 5) == 0:
             l_step = step // (params['log_steps'] * 5)
             tf.summary.scalar("partial_loss/distortion_x", tf.reduce_mean(distortion_x), step=l_step)
             tf.summary.scalar("partial_loss/distortion_t", tf.reduce_mean(distortion_t), step=l_step)
@@ -85,8 +85,7 @@ class CENF(CIWorker):
             tf.summary.scalar("partial_loss/variational_t", tf.reduce_mean(variational_t), step=l_step)
             tf.summary.scalar("partial_loss/variational_y", tf.reduce_mean(variational_y), step=l_step)
 
-
-        elbo_local = -(rate + distortion_x + distortion_t + distortion_y + \
+        elbo_local = -(rate + distortion_x + distortion_t + distortion_y +
                        variational_t + variational_y - ldj_z)
         elbo = tf.reduce_mean(input_tensor=elbo_local)
         return -elbo
@@ -102,75 +101,6 @@ class CENF(CIWorker):
 
         mu_y0, mu_y1 = self.decode.do_intervention(qz_k, nr_samples)
         return mu_y0, mu_y1
-
-# class FlowDecoder(Model):
-#     """ A variation of the decoder that models p(y|t,z) with a normalising flow.
-#
-#     This class is very similar to the Decoder of the cevae and the first version of
-#     the cenf. The main difference is that we no longer use two MLPs to model
-#     p(y|t=1,z) and p(y|t=0,z), but use one MLP for both and then use a Normalising Flow
-#     to capture a more complex distribution than a diagonal Gaussian with unit covariance.
-#
-#     """
-#
-#     def __init__(self, x_bin_size, x_cont_size, z_size, hidden_size, nr_flows, debug):
-#         super().__init__()
-#         self.x_bin_size = x_bin_size 
-#         self.x_cont_size = x_cont_size 
-#         x_size = x_bin_size + x_cont_size
-#         self.z_size = z_size
-#         self.debug = debug
-#
-#         self.hx            = FC_net(z_size, hidden_size, "hx",              
-#                                     hidden_size=hidden_size, debug=debug)
-#         self.x_cont_logits = FC_net(hidden_size, x_cont_size * 2, "x_cont", 
-#                                     hidden_size=hidden_size, debug=debug)
-#         self.x_bin_logits  = FC_net(hidden_size, x_bin_size, "x_bin",       
-#                                     hidden_size=hidden_size, debug=debug)
-#         self.t_logits      = FC_net(z_size, 1, "t", nr_hidden=1, 
-#                                     hidden_size=hidden_size, debug=debug)
-#         self.mu_y0         = FC_net(z_size + 1, 1, "mu_y0", nr_hidden=4,
-#                                     hidden_size=hidden_size, debug=debug)
-#         self.y_flow        = PlanarFlow(1, nr_flows)
-#
-#     @tf.function
-#     def call(self, z, step, training=False):
-#         if self.debug:
-#             print("Decoding")
-#         hidden_x = self.hx(z, step, training=training)
-#         x_bin_prob = tf.sigmoid(self.x_bin_logits(hidden_x, step, training=training))
-#
-#         x_cont_h = self.x_cont_logits(hidden_x, step, training=training)
-#         x_cont_mean = x_cont_h[:, :self.x_cont_size]
-#         x_cont_std = softplus(x_cont_h[:, self.x_cont_size:])
-#
-#         t_prob = tf.sigmoid(self.t_logits(z, step, training=training))
-#         t = tfd.Independent(tfd.Bernoulli(probs=t_prob),
-#                             reinterpreted_batch_ndims=1,
-#                             name="t")
-#
-#         t_sample = tf.dtypes.cast(t.sample(), tf.float64)
-#
-#         y0 = self.mu_y0(tf.concat([z, t_sample], 1), step, training=training)
-#         yK, ldj = self.y_flow(y0, step, training=training)
-#         return x_bin_prob, x_cont_mean, x_cont_std, t_prob, t_sample, y0, yK, ldj
-#
-#
-#
-#     def do_intervention(self, z, nr_samples):
-#         t0 = tf.zeros((z.shape[0], z.shape[1], 1), dtype=tf.float64)
-#         t1 = tf.ones((z.shape[0], z.shape[1], 1), dtype=tf.float64)
-#
-#         y0_t0 = self.mu_y0(tf.concat([z, t0], 2), None, training=False)
-#         y0_t1 = self.mu_y0(tf.concat([z, t1], 2), None, training=False)
-#
-#         yK_t0, ldj_t0 = self.y_flow(y0_t0, None, training=False)
-#         yK_t1, ldj_t1 = self.y_flow(y0_t1, None, training=False)
-#
-#         mu_y_t0 = tf.reduce_mean(yK_t0, axis=0)
-#         mu_y_t1 = tf.reduce_mean(yK_t1, axis=0)
-#         return mu_y_t0, mu_y_t1
-#
 
 if __name__ == "__main__":
     pass

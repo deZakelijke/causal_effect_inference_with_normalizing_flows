@@ -5,11 +5,11 @@ import tensorflow as tf
 def calc_stats(model, dataset, scaling_data, params):
     """ Function for evaluating a model according to our metrics
 
-   
-    Function that calls all individual metrics that we wat to computes 
+
+    Function that calls all individual metrics that we wat to computes
         and returns a tuple of all metrics.
 
-        Args: 
+        Args:
             ypred1, ypred0: output of get_y0_y1, rescaled with original std and mean of y
     """
 
@@ -29,13 +29,12 @@ def calc_stats(model, dataset, scaling_data, params):
          Usually that is not a problem but it might be a problem because I now take the root in
          between the two averagings, while it should be done at the end.
         """
-        #return tf.sqrt(tf.reduce_mean(tf.square(true_ite - pred_ite)))
         return tf.square(true_ite - pred_ite)
 
     def abs_ate(ypred1, ypred0, true_ite):
-        """ 
-         This would average out different effects if the treatment would work differently on different
-         on different parts of the population.
+        """
+         This would average out different effects if the treatment would
+         work differently on different on different parts of the population.
         """
         return tf.concat([ypred1 - ypred0, true_ite], 1)
 
@@ -58,11 +57,11 @@ def calc_stats(model, dataset, scaling_data, params):
 
     len_dataset = 0
     for _ in dataset:
-        len_dataset +=1
+        len_dataset += 1
     dataset = dataset.shuffle(len_dataset)
 
-    ite_scores  = tf.Variable(tf.zeros((len_dataset, 1), dtype=tf.double))
-    ate_scores  = tf.Variable(tf.zeros((len_dataset, 2), dtype=tf.double))
+    ite_scores = tf.Variable(tf.zeros((len_dataset, 1), dtype=tf.double))
+    ate_scores = tf.Variable(tf.zeros((len_dataset, 2), dtype=tf.double))
     pehe_scores = tf.Variable(tf.zeros((len_dataset, 1), dtype=tf.double))
     y_error_val = tf.Variable(tf.zeros((len_dataset, 2), dtype=tf.double))
 
@@ -78,15 +77,14 @@ def calc_stats(model, dataset, scaling_data, params):
         y_cf = y_cf * y_std + y_mean
 
         slice_indices = (i * features[0].shape[0], (i + 1) * features[0].shape[0])
-        ite_scores  = ite_scores[slice_indices[0]:slice_indices[1]].assign(rmse_ite(ypred1, ypred0, y))
-        ate_scores  = ate_scores[slice_indices[0]:slice_indices[1]].assign(abs_ate(ypred1, ypred0, true_ite))
+        ite_scores = ite_scores[slice_indices[0]:slice_indices[1]].assign(rmse_ite(ypred1, ypred0, y))
+        ate_scores = ate_scores[slice_indices[0]:slice_indices[1]].assign(abs_ate(ypred1, ypred0, true_ite))
         pehe_scores = pehe_scores[slice_indices[0]:slice_indices[1]].assign(pehe(ypred1, ypred0, mu_1, mu_0))
         y_error_val = y_error_val[slice_indices[0]:slice_indices[1]].assign(y_errors(ypred1, ypred0, y, y_cf))
-    
+
     ite = tf.sqrt(tf.reduce_mean(ite_scores))
     ate = tf.abs(tf.reduce_mean(ate_scores[:, 0]) - tf.reduce_mean(ate_scores[:, 1]))
     pehe = tf.sqrt(tf.reduce_mean(pehe_scores))
     y_rmse = tf.sqrt(tf.reduce_mean(y_error_val, axis=1))
- 
-    return ite, ate, pehe, y_rmse
 
+    return ite, ate, pehe, y_rmse

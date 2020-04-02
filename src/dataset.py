@@ -12,7 +12,7 @@ def IHDP_dataset(params, path_data="datasets/IHDP/csv/", separate_files=False, f
     contfeats = [i for i in range(25) if i not in binfeats]
     catfeats = binfeats
     nr_files = 10
-    file_prefix="ihdp_npci_"
+    file_prefix = "ihdp_npci_"
 
     t = []
     y = []
@@ -21,7 +21,7 @@ def IHDP_dataset(params, path_data="datasets/IHDP/csv/", separate_files=False, f
     mu_1 = []
     x_bin = []
     x_cont = []
-    
+
     if separate_files:
         assert file_index is not None, "No file index given"
         assert file_index < nr_files, "File index invalid"
@@ -40,13 +40,13 @@ def IHDP_dataset(params, path_data="datasets/IHDP/csv/", separate_files=False, f
         for i in range(1, nr_files + 1):
             data = np.loadtxt(f"{path_data}{file_prefix}{i}.csv", delimiter=',', dtype=np.float64)
             for line in data:
-                t.append(line[0])      
-                y.append(line[1])       
-                y_cf.append(line[2])    
-                mu_0.append(line[3])    
-                mu_1.append(line[4])    
-                x = line[5:]            
-                x[13] -= 1              
+                t.append(line[0])
+                y.append(line[1])
+                y_cf.append(line[2])
+                mu_0.append(line[3])
+                mu_1.append(line[4])
+                x = line[5:]
+                x[13] -= 1
                 x_bin.append(x[binfeats])
                 x_cont.append(x[contfeats])
 
@@ -56,7 +56,7 @@ def IHDP_dataset(params, path_data="datasets/IHDP/csv/", separate_files=False, f
     x_bin = tf.reshape(x_bin, (len(x_bin), len(binfeats) * 2))
 
     t = np.expand_dims(np.array(t), axis=1)
-    y = np.expand_dims(np.array(y), axis=1) 
+    y = np.expand_dims(np.array(y), axis=1)
     y_cf = np.expand_dims(np.array(y_cf), axis=1)
 
     y_mean, y_std = np.mean(tf.concat([y, y_cf], 1)), np.std(tf.concat([y, y_cf], 1))
@@ -69,22 +69,23 @@ def IHDP_dataset(params, path_data="datasets/IHDP/csv/", separate_files=False, f
 
     metadata = (scaling_data, 2)
 
-    return tf.data.Dataset.from_tensor_slices(((x_bin, 
-                                                x_cont, 
-                                                t, 
-                                                y, 
-                                                y_cf, 
-                                                mu_0, 
+    return tf.data.Dataset.from_tensor_slices(((x_bin,
+                                                x_cont,
+                                                t,
+                                                y,
+                                                y_cf,
+                                                mu_0,
                                                 mu_1))), metadata
+
 
 def TWINS_dataset(params, path_data="datasets/TWINS/", do_preprocessing=True, separate_files=None, file_index=None):
 
     flip_prob = 0.3
-    data_t = np.loadtxt(f"{path_data}twin_pairs_T_3years_samesex.csv", 
-            delimiter=',', dtype=np.float64, skiprows=1)[:, 1:]
-    data_y = np.loadtxt(f"{path_data}twin_pairs_Y_3years_samesex.csv", 
-            delimiter=',', dtype=np.float64, skiprows=1)[:, 1:]
- 
+    data_t = np.loadtxt(f"{path_data}twin_pairs_T_3years_samesex.csv",
+                        delimiter=',', dtype=np.float64, skiprows=1)[:, 1:]
+    data_y = np.loadtxt(f"{path_data}twin_pairs_Y_3years_samesex.csv",
+                        delimiter=',', dtype=np.float64, skiprows=1)[:, 1:]
+
     indices = np.logical_and(data_t[:, 0] < 2000.0, data_t[:, 1] < 2000.0)
 
     unused = ["infant_id_0", "infant_id_1"]
@@ -107,7 +108,6 @@ def TWINS_dataset(params, path_data="datasets/TWINS/", do_preprocessing=True, se
     w_o = np.random.normal(loc=0, scale=0.1, size=(len(cat_keys), 1))
     w_h = np.random.normal(loc=5, scale=0.1)
 
-
     x = pd.read_csv(f"{path_data}twin_pairs_X_3years_samesex.csv", sep=',', dtype=np.float64)
     x = x.loc[indices]
     x = x.interpolate(method='pad', axis=0).fillna(method='backfill', axis=0)
@@ -126,13 +126,13 @@ def TWINS_dataset(params, path_data="datasets/TWINS/", do_preprocessing=True, se
     noise = math.logical_not(noise)
     noisy_proxy += tf.scatter_nd(tf.where(noise), tf.boolean_mask(proxy, noise), (len(z), 30))
 
-    x_cat  = noisy_proxy
+    x_cat = noisy_proxy
     x_cont = tf.zeros((len(x_cat), 0), dtype=tf.float64)
-    y      = tf.cast(tf.expand_dims(data_y[indices, t], axis=1), tf.float64)
-    y_cf   = tf.cast(tf.expand_dims(data_y[indices, 1-t], axis=1), tf.float64)
-    t      = tf.cast(tf.expand_dims(t, axis=1), tf.float64)
-    mu_1   = tf.cast(tf.expand_dims(data_y[indices, 1], axis=1), tf.float64)
-    mu_0   = tf.cast(tf.expand_dims(data_y[indices, 0], axis=1), tf.float64)
+    y = tf.cast(tf.expand_dims(data_y[indices, t], axis=1), tf.float64)
+    y_cf = tf.cast(tf.expand_dims(data_y[indices, 1-t], axis=1), tf.float64)
+    t = tf.cast(tf.expand_dims(t, axis=1), tf.float64)
+    mu_1 = tf.cast(tf.expand_dims(data_y[indices, 1], axis=1), tf.float64)
+    mu_0 = tf.cast(tf.expand_dims(data_y[indices, 0], axis=1), tf.float64)
 
     scaling_data = (0, 1)
     nr_unique_values = 10
@@ -145,7 +145,7 @@ def TWINS_dataset(params, path_data="datasets/TWINS/", do_preprocessing=True, se
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
-    
+
     params = {}
     data, metadata = IHDP_dataset(params)
     nr_unique_values = metadata[1]
@@ -163,4 +163,3 @@ if __name__ == "__main__":
         for data in data_sample:
             print(data)
         break
-
