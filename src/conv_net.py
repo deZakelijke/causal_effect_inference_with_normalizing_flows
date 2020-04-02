@@ -1,10 +1,11 @@
 import tensorflow as tf
 from tensorflow.keras import layers, Model
 
+
 class CNN(Model):
     """ Convolutional Neural Network."""
 
-    def __init__(self, in_dims, out_dims, name_tag, nr_convs=3, nr_hidden=1, 
+    def __init__(self, in_dims, out_dims, name_tag, nr_convs=3, nr_hidden=1,
                  activation='elu', filters=32, skip_connection=True,
                  debug=False):
         """
@@ -12,22 +13,30 @@ class CNN(Model):
         ----------
         in_dims : int
             The number of nodes for the input layer.
+
         out_dims : int
             Thenumber of nodes for the output layer.
+
         name_tag : str
-            A tag used to identify the model in tensorboard. Should be unique 
+            A tag used to identify the model in tensorboard. Should be unique
             for all instances of the class.
+
         nr_hidden : int
             The number of hidden layers.
+
         hidden_size : int
             The number of nodes in the hidden layers.
+
         activation : str
             Activation function after every layer.
+
         filters : int
             Number of filters to use in the first convolutional block.
+
         skip_connection : bool
             Flag to use residual convolutional blocks instead of regular
             convolutional blocks.
+
         debug : bool
             Flag to enable debug mode. Currently unused.
 
@@ -47,7 +56,6 @@ class CNN(Model):
         with tf.name_scope(f"CNN/{name_tag}") as scope:
             new_block = block()
 
-
     @tf.function
     def call(self, x, step, training=False):
         pass
@@ -61,7 +69,6 @@ class ConvBlock(Model):
 
     def __init__(self):
         super().__init__()
-
 
     @tf.function
     def call(selc, x, step, training=False):
@@ -77,7 +84,6 @@ class ResidualConvBlock(Model):
 
     def __init__(self):
         super().__init__()
-
 
     @tf.function
     def call(self, x, step, training=False):

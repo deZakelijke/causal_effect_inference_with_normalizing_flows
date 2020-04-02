@@ -20,7 +20,7 @@ class CEVAE(CIWorker):
         After some attempts to port the example code 1 to 1 to TF2, I decided to restructure the
         encoder and decoder to a Model subclass instead to two functions.
 
-        Several fc_nets have an output size of *2 something. This is to output both the mean and 
+        Several fc_nets have an output size of *2 something. This is to output both the mean and
         std of a Normal distribution at once.
         """
         CIWorker.__init__(self, params, category_sizes)
@@ -66,11 +66,9 @@ class CEVAE(CIWorker):
         x_cat_prob = tf.reshape(x_cat_prob, (l, f//self.category_sizes, self.category_sizes))
         x_cat = tf.reshape(x_cat, (l, f//self.category_sizes, self.category_sizes))
 
-
-
         y_type = params['dataset_distributions']['y']
         distortion_x = -get_log_prob(x_cat, 'M', probs=x_cat_prob) \
-                       -get_log_prob(x_cont, 'N', mean=x_cont_mean, std=x_cont_std)
+                       - get_log_prob(x_cont, 'N', mean=x_cont_mean, std=x_cont_std)
         distortion_t = -get_log_prob(t, 'B', probs=t_prob)
         distortion_y = -get_log_prob(y, y_type, mean=y_mean, probs=y_mean)
 
@@ -79,7 +77,7 @@ class CEVAE(CIWorker):
         variational_t = -get_log_prob(t, 'B', probs=qt_prob)
         variational_y = -get_log_prob(y, 'N', mean=qy_mean)
 
-        if not step is None and step % (params['log_steps']  * 5) == 0:
+        if step is not None and step % (params['log_steps'] * 5) == 0:
             l_step = step // (params['log_steps'] * 5)
             tf.summary.scalar("partial_loss/distortion_x", tf.reduce_mean(distortion_x), step=l_step)
             tf.summary.scalar("partial_loss/distortion_t", tf.reduce_mean(distortion_t), step=l_step)
@@ -88,7 +86,7 @@ class CEVAE(CIWorker):
             tf.summary.scalar("partial_loss/variational_t", tf.reduce_mean(variational_t), step=l_step)
             tf.summary.scalar("partial_loss/variational_y", tf.reduce_mean(variational_y), step=l_step)
 
-        elbo_local = -(rate + distortion_x + distortion_t + distortion_y + \
+        elbo_local = -(rate + distortion_x + distortion_t + distortion_y +
                        variational_t + variational_y)
         elbo = tf.reduce_mean(elbo_local)
         return -elbo
@@ -114,35 +112,35 @@ class Encoder(Model):
         self.z_size = params["z_size"]
         self.debug = params["debug"]
 
-        self.qt_logits = FC_net(x_size, 1, "qt", nr_hidden=1, 
+        self.qt_logits = FC_net(x_size, 1, "qt", nr_hidden=1,
                                 hidden_size=hidden_size, debug=self.debug)
-        self.hqy       = FC_net(x_size, hidden_size, "hqy",
-                                hidden_size=hidden_size, debug=self.debug)
-        self.mu_qy_t0  = FC_net(hidden_size, 1, "mu_qy_t0",
-                                hidden_size=hidden_size, debug=self.debug)
-        self.mu_qy_t1  = FC_net(hidden_size, 1, "mu_qy_t1",
-                                hidden_size=hidden_size, debug=self.debug)
-        self.hqz       = FC_net(x_size + 1, hidden_size, "hqz", 
-                                hidden_size=hidden_size, debug=self.debug)
-        self.qz_t0     = FC_net(hidden_size, self.z_size * 2, "qz_t0", 
-                                hidden_size=hidden_size, debug=self.debug) 
-        self.qz_t1     = FC_net(hidden_size, self.z_size * 2, "qz_t1", 
-                                hidden_size=hidden_size, debug=self.debug) 
+        self.hqy = FC_net(x_size, hidden_size, "hqy",
+                          hidden_size=hidden_size, debug=self.debug)
+        self.mu_qy_t0 = FC_net(hidden_size, 1, "mu_qy_t0",
+                               hidden_size=hidden_size, debug=self.debug)
+        self.mu_qy_t1 = FC_net(hidden_size, 1, "mu_qy_t1",
+                               hidden_size=hidden_size, debug=self.debug)
+        self.hqz = FC_net(x_size + 1, hidden_size, "hqz",
+                          hidden_size=hidden_size, debug=self.debug)
+        self.qz_t0 = FC_net(hidden_size, self.z_size * 2, "qz_t0",
+                            hidden_size=hidden_size, debug=self.debug)
+        self.qz_t1 = FC_net(hidden_size, self.z_size * 2, "qz_t1",
+                            hidden_size=hidden_size, debug=self.debug)
 
     @tf.function
     def call(self, x, t, y, step, training=False):
         if self.debug:
             print("Encoding")
         qt_prob = tf.sigmoid(self.qt_logits(x, step, training=training))
-        qt = tfd.Independent(tfd.Bernoulli(probs=qt_prob), 
+        qt = tfd.Independent(tfd.Bernoulli(probs=qt_prob),
                              reinterpreted_batch_ndims=1,
                              name="qt")
         qt_sample = tf.dtypes.cast(qt.sample(), tf.float64)
-        
+
         hqy = self.hqy(x, step, training=training)
         mu_qy0 = self.mu_qy_t0(hqy, step, training=training)
         mu_qy1 = self.mu_qy_t1(hqy, step, training=training)
-        if  training:
+        if training:
             qy_mean = t * mu_qy1 + (1. - t) * mu_qy0
         else:
             qy_mean = qt_sample * mu_qy1 + (1. - qt_sample) * mu_qy0
@@ -150,12 +148,12 @@ class Encoder(Model):
         qy = tfd.Independent(tfd.Normal(loc=qy_mean, scale=tf.ones_like(qy_mean)),
                              reinterpreted_batch_ndims=1,
                              name="qy")
-        
+
         if training:
             xy = tf.concat([x, y], 1)
         else:
             xy = tf.concat([x, qy.sample()], 1)
-        
+
         hidden_z = self.hqz(xy, step, training=training)
         qz0 = self.qz_t0(hidden_z, step, training=training)
         qz1 = self.qz_t1(hidden_z, step, training=training)
@@ -181,18 +179,18 @@ class Decoder(Model):
         self.z_size = params["z_size"]
         self.debug = params["debug"]
 
-        self.hx            = FC_net(self.z_size, hidden_size, "hx",              
+        self.hx = FC_net(self.z_size, hidden_size, "hx",
+                         hidden_size=hidden_size, debug=self.debug)
+        self.x_cont_logits = FC_net(hidden_size, self.x_cont_size * 2, "x_cont",
                                     hidden_size=hidden_size, debug=self.debug)
-        self.x_cont_logits = FC_net(hidden_size, self.x_cont_size * 2, "x_cont", 
-                                    hidden_size=hidden_size, debug=self.debug)
-        self.x_cat_logits  = FC_net(hidden_size, self.x_cat_size * category_sizes, "x_cat",       
-                                    hidden_size=hidden_size, debug=self.debug)
-        self.t_logits      = FC_net(self.z_size, 1, "t", nr_hidden=1, 
-                                    hidden_size=hidden_size, debug=self.debug)
-        self.mu_y_t0       = FC_net(self.z_size, 1, "mu_y_t0", 
-                                    hidden_size=hidden_size, debug=self.debug)
-        self.mu_y_t1       = FC_net(self.z_size, 1, "mu_y_t1", 
-                                    hidden_size=hidden_size, debug=self.debug)
+        self.x_cat_logits = FC_net(hidden_size, self.x_cat_size * category_sizes, "x_cat",
+                                   hidden_size=hidden_size, debug=self.debug)
+        self.t_logits = FC_net(self.z_size, 1, "t", nr_hidden=1,
+                               hidden_size=hidden_size, debug=self.debug)
+        self.mu_y_t0 = FC_net(self.z_size, 1, "mu_y_t0",
+                              hidden_size=hidden_size, debug=self.debug)
+        self.mu_y_t1 = FC_net(self.z_size, 1, "mu_y_t1",
+                              hidden_size=hidden_size, debug=self.debug)
 
     @tf.function
     def call(self, z, t, step, training=False):
@@ -200,9 +198,11 @@ class Decoder(Model):
             print("Decoding")
         hidden_x = self.hx(z, step, training=training)
         x_cat_logits = self.x_cat_logits(hidden_x, step, training=training)
-        x_cat_prob = nn.softmax(tf.reshape(x_cat_logits, 
-                     (len(x_cat_logits), self.x_cat_size, self.category_sizes)))
-        x_cat_prob = tf.reshape(x_cat_prob, (len(x_cat_prob), self.x_cat_size * self.category_sizes))
+        x_cat_prob = nn.softmax(tf.reshape(x_cat_logits,
+                                           (len(x_cat_logits), self.x_cat_size,
+                                            self.category_sizes)))
+        x_cat_prob = tf.reshape(x_cat_prob, (len(x_cat_prob), self.x_cat_size *
+                                             self.category_sizes))
 
         x_cont_h = self.x_cont_logits(hidden_x, step, training=training)
         x_cont_mean = x_cont_h[:, :self.x_cont_size]
@@ -230,4 +230,3 @@ class Decoder(Model):
         # Is this correct? Do we average and sample correctly?
 
         return mu_y0, mu_y1
-
