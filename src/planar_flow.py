@@ -6,18 +6,26 @@ from tensorflow.keras import layers, Model
 from tensorflow import math
 from tensorflow_probability import distributions as tfd
 
-# TODO add constraint to keep funciton invertible.
 
 class PlanarFlow(Model):
+    """ Planar flow model
+
+    Combines several Planar Flows, as described in https://arxiv.org/abs/1505.05770
+    by J. Rezende and S. Mohamed.
+
+    Singular flows are defined in a separate class in this file.
+    """
 
     def __init__(self, z_size, nr_flows):
-        """ Planar flow model
-
-        Combines several Planar Flows, as described in https://arxiv.org/abs/1505.05770
-        by J. Rezende and S. Mohamed.
-
-        Singular flows are defined in a separate class in this file.
         """
+        Parameters
+        ----------
+        z_size : int
+            Number of latent dimensions of the flow.
+        nr_flows : int
+            Number of planar flows in the model.
+        """
+
         super().__init__()
         assert nr_flows >= 0 and type(nr_flows) == int, "Number of flows must be larger than 0"
         self.nr_flows = nr_flows
@@ -37,14 +45,22 @@ class PlanarFlow(Model):
         return z, ldj
 
 class PlanarFlowLayer(Model):
+    """ Single planar flow model
 
+    Implements a single planar flow layer. Several flows need to be
+    stacked sequentialy to get a complete Normalising Flow
+    """
     def __init__(self, z_size, flow_nr=0):
-        """ Single planar flow model
-
-        Implements a single planar flow layer. Several flows need to be
-        stacked sequentialy to get a complete Normalising Flow
-
         """
+        Parameters
+        ----------
+        z_size : int
+            Number of latent dimensions of the flow.
+        flow_nr : int
+            Index of the flow in the larger set of flows. Used for indexing
+            in Tensorboard.
+        """
+
         super().__init__()
         self.flow_nr = flow_nr
         initializer = tf.initializers.GlorotNormal()

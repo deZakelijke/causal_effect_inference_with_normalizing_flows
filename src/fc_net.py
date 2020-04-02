@@ -2,16 +2,29 @@ import tensorflow as tf
 from tensorflow.keras import layers, Model
 
 class FC_net(Model):
+    """ Simple fully connected net with not activation after the last layer."""
+
     def __init__(self, in_dims, out_dims, name_tag, nr_hidden=2, hidden_size=256, activation='elu', debug=False):
-        """ Simple fully connected net with not activation after the last layer.
-
-        Args:   in_dims: number of nodes for the input layer
-                out_dims: number of nodes for the output layer
-                nr_hidden: number of hidden layers
-                hidden_size: number of nodes in the hidden layers
-                activation: activation function after every layer
-
         """
+        Parameters
+        ----------
+        in_dims : int
+            The number of nodes for the input layer.
+        out_dims : int
+            Thenumber of nodes for the output layer.
+        name_tag : str
+            A tag used to identify the model in tensorboard. Should be unique 
+            for all instances of the class.
+        nr_hidden : int
+            The number of hidden layers.
+        hidden_size : int
+            The number of nodes in the hidden layers.
+        activation : str
+            Activation function after every layer.
+        debug : bool
+            Flag to enable debug mode. Currently unused.
+        """
+
         super().__init__()
 
         self.debug = debug

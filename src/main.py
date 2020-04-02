@@ -42,8 +42,8 @@ def parse_arguments():
     params : dict
         A dictionary containing all parameters are passed. Keys are the aruments
         and the values are the values of the parsed arguments or their default value.
-
     """
+
     parser = argparse.ArgumentParser(description="Causal effect Normalizing Flow trainer")
     parser.add_argument("--batch_size", type=int, default=32, 
                         help="Batch size (default=32)")
@@ -124,6 +124,7 @@ def print_stats(stats, index):
         Index used for the graph in tensorboard. Each next call of print_stats
         should have the consecutive index.
     """
+
     print(f"Average ite: {stats[0]:.4f}, abs ate: {stats[1]:.4f}, pehe; {stats[2]:.4f}, "\
           f"y_error factual: {stats[3][0]:.4f}, y_error counterfactual {stats[3][1]:.4f}")
  
@@ -157,7 +158,6 @@ def train(params, writer, train_iteration=0):
     -------
     stats : tuple
         Tuple of the statistics that were calculated after the last epoch.
-
     """
 
     dataset, metadata = eval(f"{params['dataset']}_dataset")\
