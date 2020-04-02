@@ -10,8 +10,8 @@ from tensorflow_probability import distributions as tfd
 class PlanarFlow(Model):
     """ Planar flow model
 
-    Combines several Planar Flows, as described in https://arxiv.org/abs/1505.05770
-    by J. Rezende and S. Mohamed.
+    Combines several Planar Flows, as described in
+    https://arxiv.org/abs/1505.05770 by J. Rezende and S. Mohamed.
 
     Singular flows are defined in a separate class in this file.
     """
@@ -27,13 +27,13 @@ class PlanarFlow(Model):
         """
 
         super().__init__()
-        assert nr_flows >= 0 and type(nr_flows) == int, "Number of flows must be larger than 0"
+        assert nr_flows >= 0 and type(nr_flows) == int,
+        "Number of flows must be larger than 0"
         self.nr_flows = nr_flows
         self.flows = []
         for i in range(nr_flows):
             next_flow = PlanarFlowLayer(z_size, flow_nr=i)
             self.flows.append(next_flow)
-
 
     @tf.function
     def call(self, z, step, training=False):
@@ -41,8 +41,8 @@ class PlanarFlow(Model):
         for i in range(self.nr_flows):
             ldj += self.flows[i].logdet_jacobian(z)
             z = self.flows[i](z, step, training=training)
-            
         return z, ldj
+
 
 class PlanarFlowLayer(Model):
     """ Single planar flow model
@@ -64,9 +64,12 @@ class PlanarFlowLayer(Model):
         super().__init__()
         self.flow_nr = flow_nr
         initializer = tf.initializers.GlorotNormal()
-        self.u = tf.Variable(initializer([z_size, 1], dtype=tf.dtypes.float64), dtype="float64", name="u")
-        self.w = tf.Variable(initializer([z_size, 1], dtype=tf.dtypes.float64), dtype="float64", name="w")
-        self.b = tf.Variable(initializer([1, 1], dtype=tf.dtypes.float64), dtype="float64", name="b")
+        self.u = tf.Variable(initializer([z_size, 1], dtype=tf.dtypes.float64),
+                             dtype="float64", name="u")
+        self.w = tf.Variable(initializer([z_size, 1], dtype=tf.dtypes.float64),
+                             dtype="float64", name="w")
+        self.b = tf.Variable(initializer([1, 1], dtype=tf.dtypes.float64),
+                             dtype="float64", name="b")
 
     @tf.function
     def call(self, z, step, training=False):
@@ -75,10 +78,13 @@ class PlanarFlowLayer(Model):
         u = self.u + (-1 + math.softplus(uw) - uw) * self.w / norm_w
 
         with tf.name_scope("planar_flow") as scope:
-            if training and not step is None:
-                tf.summary.histogram(f"flow_{self.flow_nr}/{self.b.name}", self.b, step=step)
-                tf.summary.histogram(f"flow_{self.flow_nr}/{self.w.name}", self.w, step=step)
-                tf.summary.histogram(f"flow_{self.flow_nr}/{self.u.name}", self.u, step=step)
+            if training and step is not None:
+                tf.summary.histogram(f"flow_{self.flow_nr}/{self.b.name}",
+                                     self.b, step=step)
+                tf.summary.histogram(f"flow_{self.flow_nr}/{self.w.name}",
+                                     self.w, step=step)
+                tf.summary.histogram(f"flow_{self.flow_nr}/{self.u.name}",
+                                     self.u, step=step)
             h1 = tf.tanh(z @ self.w + self.b)
             return z + h1 @ tf.transpose(u)
 
@@ -111,10 +117,9 @@ def test_flow():
     out, ldj = flow(z, step=0, training=True)
     assert out.shape == z.shape
     assert ldj.shape == (batch_size, 1)
-    
+
     print("All assertions passed, test successful")
 
 if __name__ == "__main__":
     tf.keras.backend.set_floatx('float64')
     test_flow()
-
