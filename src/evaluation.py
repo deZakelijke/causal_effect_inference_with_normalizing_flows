@@ -7,7 +7,7 @@ def calc_stats(model, dataset, scaling_data, params):
 
 
     Function that calls all individual metrics that we wat to computes
-        and returns a tuple of all metrics.
+    and returns a tuple of all metrics.
 
         Args:
             ypred1, ypred0: output of get_y0_y1, rescaled with original std and mean of y

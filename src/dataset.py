@@ -8,6 +8,37 @@ from tensorflow import math
 
 
 def IHDP_dataset(params, path_data="datasets/IHDP/csv/", separate_files=False, file_index=None):
+    """ Tensorflow Dataset generator for the IHDP dataset.
+    
+    Parameters
+    ----------
+    params : dict
+        Dictionary that contains all hyperparameters of the program. Use
+        the function parse_arguments() in main.py to generate it.
+
+    path_data : str
+        Path to the folder that contains the csv files with data
+        
+    separate_files : bool
+        Flag to determine if the files should all create a separate Dataset
+        object or if they should become one large dataset.
+
+    file_index : int
+        Index used to pick a specific csv file to create a Dataset with. Only
+        used if the separate_files flag is set.
+
+    Returns
+    -------
+    dataset : tensorflow.data.Dataset
+        The generated dataset
+
+    metadata : ((float, float), int)
+        Metadata used with the dataset. The first two floats are the original
+        mean and std of the data, needed to rescale the data back to its
+        original version. The third number is the number of classes for each
+        categorical variable.
+    """
+
     binfeats = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
     contfeats = [i for i in range(25) if i not in binfeats]
     catfeats = binfeats
@@ -79,6 +110,34 @@ def IHDP_dataset(params, path_data="datasets/IHDP/csv/", separate_files=False, f
 
 
 def TWINS_dataset(params, path_data="datasets/TWINS/", do_preprocessing=True, separate_files=None, file_index=None):
+    """Tensorflow Dataset generator for the TWINS dataset.
+        
+    Parameters
+    ----------
+    params : dict
+        Dictionary that contains all hyperparameters of the program. Use
+        the function parse_arguments() in main.py to generate it.
+
+    do_preprocessing : str
+        
+    separate_files : bool
+        kept_for compatibility with other datasets.
+
+    file_index : int
+        kept_for compatibility with other datasets.
+
+    Returns
+    -------
+    dataset : tensorflow.data.Dataset
+        The generated dataset
+
+    metadata : ((float, float), int)
+        Metadata used with the dataset. The first two floats are the original
+        mean and std of the data, needed to rescale the data back to its
+        original version. The third number is the number of classes for each
+        categorical variable.
+
+    """
 
     flip_prob = 0.3
     data_t = np.loadtxt(f"{path_data}twin_pairs_T_3years_samesex.csv",
