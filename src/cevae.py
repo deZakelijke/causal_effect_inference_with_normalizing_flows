@@ -6,12 +6,11 @@ from tensorflow.keras.activations import softplus
 from tensorflow import nn
 from tensorflow_probability import distributions as tfd
 
-from causal_inference_worker import CIWorker
 from fc_net import FC_net
 from utils import get_log_prob, get_analytical_KL_divergence
 
 
-class CEVAE(CIWorker):
+class CEVAE(Model):
 
     def __init__(self, params, category_sizes, hidden_size=200, debug=False):
         """ CEVAE model with fc nets between random variables.
@@ -23,7 +22,7 @@ class CEVAE(CIWorker):
         Several fc_nets have an output size of *2 something. This is to output both the mean and
         std of a Normal distribution at once.
         """
-        CIWorker.__init__(self, params, category_sizes)
+        super().__init__()
         self.encode = Encoder(params, category_sizes, hidden_size)
         self.decode = Decoder(params, category_sizes, hidden_size)
 
@@ -56,7 +55,7 @@ class CEVAE(CIWorker):
         return encoder_params, decoder_params
 
     @tf.function
-    def elbo(self, features, encoder_params, decoder_params, step, params):
+    def loss(self, features, encoder_params, decoder_params, step, params):
         if self.debug:
             print("Calculating loss")
         x_cat, x_cont, t, y, y_cf, mu_0, mu_1 = features

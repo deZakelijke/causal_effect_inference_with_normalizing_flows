@@ -6,7 +6,6 @@ from tensorflow.keras import layers, Model
 from tensorflow.keras.activations import softplus
 from tensorflow_probability import distributions as tfd
 
-from causal_inference_worker import CIWorker
 from cevae import Encoder, Decoder
 from dataset import IHDP_dataset
 from evaluation import calc_stats
@@ -15,21 +14,16 @@ from planar_flow import PlanarFlow
 from utils import get_log_prob, get_analytical_KL_divergence
 
 
-class CENF(CIWorker):
+class CENF(Model):
 
     def __init__(self, params, category_sizes, hidden_size=200, debug=False):
         """ Causal Effect Normalising Flow
 
 
         """
-        CIWorker.__init__(self, params, category_sizes)
+        super().__init__()
 
-        # self.flow_decoder = True
         self.encode = Encoder(params, category_sizes, hidden_size)
-        # if self.flow_decoder:
-        #     self.decode = FlowDecoder(self.x_cat_size, self.x_cont_size,
-        #                               self.z_size, hidden_size, params['nr_flows'], self.debug)
-        # else:
         self.decode = Decoder(params, category_sizes, hidden_size)
         self.z_flow = PlanarFlow(self.z_size, params["nr_flows"])
 
@@ -54,7 +48,7 @@ class CENF(CIWorker):
         return encoder_params, qz_k, ldj, decoder_params
 
     @tf.function
-    def elbo(self, features, encoder_params, qz_k, ldj_z, decoder_params, step, params):
+    def logg(self, features, encoder_params, qz_k, ldj_z, decoder_params, step, params):
         if self.debug:
             print("Calculating loss")
         x_cat, x_cont, t, y, y_cf, mu_0, mu_1 = features

@@ -7,8 +7,7 @@ import sys
 import tensorflow as tf
 import time
 
-from cenf import CENF
-from cevae import CEVAE
+from causal_inference_worker import CIWorker
 from contextlib import nullcontext
 from dataset import IHDP_dataset, TWINS_dataset
 from evaluation import calc_stats
@@ -89,9 +88,11 @@ def parse_arguments():
         os.environ["TF_CPP_MIN_LOG_LEVEL"] = "1"
         logging.getLogger("tensorflow").setLevel(logging.WARNING)
         if args.experiment_name is None:
-            raise ValueError("Experiment name is required if debug mode is disabled")
+            raise ValueError("Experiment name is required if debug mode is "
+                             "disabled")
         if not re.match(r'^[A-Za-z0-9_]+$', args.experiment_name):
-            raise ValueError("Experment name may only contain alphanumerical and underscore")
+            raise ValueError("Experment name may only contain alphanumerical "
+                             "and underscore")
 
     if args.model not in VALID_MODELS:
         raise NotImplementedError(f"Model {args.model} is not implemented")
@@ -177,10 +178,7 @@ def train(params, writer, train_iteration=0):
     len_dataset = tf.data.experimental.cardinality(dataset)
     dataset = dataset.shuffle(len_dataset)
 
-    if params["model"] == "cevae":
-        model = CEVAE(params, category_sizes)
-    if params["model"] == "cenf":
-        model = CENF(params, category_sizes)
+    model = CIWorker(params, category_sizes)
 
     optimizer = tf.keras.optimizers.Adam(learning_rate=params["learning_rate"])
     len_epoch = tf.data.experimental.cardinality(dataset.batch(params["batch_size"]))
@@ -206,7 +204,8 @@ def train(params, writer, train_iteration=0):
                 print_stats(stats, l_step)
                 tf.summary.scalar("metrics/loss", loss_value, step=l_step)
 
-        print(f"Epoch: {epoch}, average loss: {(avg_loss / tf.dtypes.cast(len_epoch, tf.float64)):.4f}")
+        print(f"Epoch: {epoch}, average loss: {(avg_loss / "
+              f"tf.dtypes.cast(len_epoch, tf.float64)):.4f}")
         stats = calc_stats(model, dataset, scaling_data, params)
         l_step = (epoch + global_log_step + 1) // params['log_steps']
         print_stats(stats, l_step)
