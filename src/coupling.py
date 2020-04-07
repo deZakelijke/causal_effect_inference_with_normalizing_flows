@@ -8,7 +8,7 @@ from tensorflow.keras import Model
 class CouplingLayers(Model):
     """ Implementation of the coupling layers of the RealNVP."""
 
-    def __init__(self, in_dims, out_dims, nr_blocks=3, activation='relu',
+    def __init__(self, in_dims, out_dims, name_tag, nr_blocks=3, activation='relu',
                  model_type="FC_net", n_flows=3, debug=False):
         """
         Parameters
@@ -21,28 +21,28 @@ class CouplingLayers(Model):
             with alternatingly inverted masks.
         """
 
-        super().__init()
+        super().__init__(name=name_tag)
 
         mask = self.get_mask(in_dims)
-        self.layers = []
+        self.nn_layers = []
         for i in range(n_flows):
-            self.layers.append(Coupling(in_dims, out_dims,
-                                        f"Coupling_layer_{i * 2 + 1}",
-                                        nr_blocs, activation, mask, model_type,
-                                        debug=debug))
-            self.layers.append(Coupling(in_dims, out_dims,
-                                        f"Coupling_layer_{i * 2}",
-                                        nr_blocks, activation, 1 - mask,
-                                        model_type, debug=debug))
+            self.nn_layers.append(Coupling(in_dims, out_dims,
+                                           f"Coupling_layer_{i * 2}",
+                                           nr_blocks, activation, mask, model_type,
+                                           debug=debug))
+            self.nn_layers.append(Coupling(in_dims, out_dims,
+                                           f"Coupling_layer_{i * 2 + 1}",
+                                           nr_blocks, activation, 1 - mask,
+                                           model_type, debug=debug))
 
     @tf.function
     def call(self, z, ldj, reverse=False, training=False):
         # TODO I have to do some channel stacking here
         if not reverse:
-            for layer in self.layers:
+            for layer in self.nn_layers:
                 z, ldj = layer(z, ldj, training=training)
         else:
-            for layer in reversed(self.layers):
+            for layer in reversed(self.nn_layers):
                 z, ldj = layer(z, ldj, reverse=True, training=training)
 
         return z, ldj
@@ -67,7 +67,7 @@ class Coupling(Model):
         ----------
         mask : tensor
         """
-        super().__init__()
+        super().__init__(name=name_tag)
         self.mask = mask
         self.name_tag = name_tag
 
@@ -115,11 +115,10 @@ def test_coupling():
     dims = 100
     x = tf.ones((batch_size, dims), dtype=tf.float64)
     ldj = tf.zeros((batch_size), dtype=tf.float64)
-    model_type = "FC_net"
 
     mask = CouplingLayers.get_mask(dims)
     coupling = Coupling(dims, dims, name_tag, nr_blocks, activation,
-                        mask, model_type=model_type)
+                        mask, model_type="FC_net")
     z, ldj = coupling(x, ldj, training=True)
     x_recon, ldj = coupling(z, ldj, reverse=True, training=True)
     tf.debugging.assert_near(x, z, message="Coupling does not init close "
@@ -131,11 +130,10 @@ def test_coupling():
     dims = (15, 15, 3)
     x = tf.ones((batch_size, *dims), dtype=tf.float64)
     ldj = tf.zeros((batch_size), dtype=tf.float64)
-    model_type = "ResNet"
 
     mask = CouplingLayers.get_mask(dims)
     coupling = Coupling(dims, dims, name_tag, nr_blocks, activation,
-                        mask, model_type=model_type)
+                        mask, model_type="ResNet")
     z, ldj = coupling(x, ldj, training=True)
     x_recon, ldj = coupling(z, ldj, reverse=True, training=True)
     tf.debugging.assert_near(x, z, message="Coupling does not init close "
@@ -146,7 +144,37 @@ def test_coupling():
 
 
 def test_coupling_layers():
-    pass
+    batch_size = 4
+    name_tag = "test"
+    nr_blocks = 3
+    activation = "relu"
+    filters = 32
+
+    dims = 100
+    x = tf.ones((batch_size, dims), dtype=tf.float64)
+    ldj = tf.zeros((batch_size), dtype=tf.float64)
+    coupling = CouplingLayers(dims, dims, name_tag, nr_blocks, activation,
+                              model_type="FC_net", n_flows=3, debug=True)
+    z, ldj = coupling(x, ldj, training=True)
+    x_recon, ldj = coupling(z, ldj, reverse=True, training=True)
+    tf.debugging.assert_near(x, z, message="Coupling does not init close "
+                                           "to identity.")
+    tf.debugging.assert_near(x, x_recon, message="Inverse of coupling "
+                                                 "incorrect")
+    print(coupling.summary())
+
+    dims = (15, 15, 3)
+    x = tf.ones((batch_size, *dims), dtype=tf.float64)
+    ldj = tf.zeros((batch_size), dtype=tf.float64)
+    coupling = CouplingLayers(dims, dims, name_tag, nr_blocks, activation,
+                              model_type="ResNet", n_flows=3, debug=True)
+    z, ldj = coupling(x, ldj, training=True)
+    x_recon, ldj = coupling(z, ldj, reverse=True, training=True)
+    tf.debugging.assert_near(x, z, message="Coupling does not init close "
+                                           "to identity.")
+    tf.debugging.assert_near(x, x_recon, message="Inverse of coupling "
+                                                 "incorrect")
+    print(coupling.summary())
 
 
 if __name__ == "__main__":
