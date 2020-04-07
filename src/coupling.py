@@ -1,3 +1,4 @@
+import numpy as np
 import tensorflow as tf
 from fc_net import FC_net
 from res_net import ResNet
@@ -36,6 +37,7 @@ class CouplingLayers(Model):
 
     @tf.function
     def call(self, z, ldj, reverse=False, training=False):
+        # TODO I have to do some channel stacking here
         if not reverse:
             for layer in self.layers:
                 z, ldj = layer(z, ldj, training=training)
@@ -48,14 +50,14 @@ class CouplingLayers(Model):
     @staticmethod
     def get_mask(in_dims):
         size = tf.reduce_prod(in_dims)
-        mask = torch.zeros((size), dtype=tf.float64)
+        mask = np.zeros((size))
         for i in range(0, size // 2, 2):
             mask[i] = 1
-        mask = tf.reshape(mask, in_dims)
-        return mask
+        mask = np.reshape(mask, in_dims)
+        return tf.convert_to_tensor(mask, dtype=tf.float64)
 
 
-def Coupling(Model):
+class Coupling(Model):
     """ Single coupling layer."""
 
     def __init__(self, in_dims, out_dims, name_tag, nr_blocks, activation,
@@ -66,15 +68,20 @@ def Coupling(Model):
         mask : tensor
         """
         super().__init__()
-
         self.mask = mask
+        self.name_tag = name_tag
+
         if model_type == "FC_net":
-            self.nn = FC_net(in_dims, out_dims, name_tag, nr_blocks,
+            self.nn = FC_net(in_dims, 2 * out_dims, name_tag, nr_blocks,
                              activation=activation, debug=debug)
         if model_type == "ResNet":
-            self.nn == ResNet(in_dims, out_dims, name_tag, nr_blocks,
-                              activation=activation, debug=debug)
-        # Do something to make the final weights zero to start with identity mapping.
+            out_dims = out_dims[:-1] + (2 * out_dims[-1], )
+            self.nn = ResNet(in_dims, out_dims, name_tag, nr_blocks,
+                             activation=activation, debug=debug)
+
+        weights = self.nn.layers[-1].weights
+        self.nn.layers[-1].set_weights([tf.zeros_like(weights[0]),
+                                        tf.zeros_like(weights[1])])
 
     @tf.function
     def call(self, z, ldj, reverse=False, training=False):
@@ -86,21 +93,56 @@ def Coupling(Model):
             if not reverse:
                 scale = tf.math.exp(log_scale)
                 z = self.mask * z + (1 - self.mask) * (z * scale + translation)
-                ldj += tf.reduce_sum(log_scale * (1 - self.mask), axis=-1)
+                ldj += tf.reduce_sum(log_scale * (1 - self.mask),
+                                     axis=tf.range(1, tf.rank(log_scale)))
             else:
                 scale = tf.math.exp(-log_scale)
-                z = z * self.mask + ((z - translation) * scale) * (1 - self.mask)
+                z = z * self.mask + ((z - translation) * scale)\
+                    * (1 - self.mask)
                 ldj = ldj  # TODO dit klopt niet
 
         return z, ldj
 
 
 def test_coupling():
-    pass
-# test some shapes
-# test both fc and resnet
-# test to see if it is the identity at start
-# test to see if the inverse is actually the inverse
+    """ Unit test for single coupling layer."""
+    batch_size = 4
+    name_tag = "test"
+    nr_blocks = 3
+    activation = "relu"
+    filters = 32
+
+    dims = 100
+    x = tf.ones((batch_size, dims), dtype=tf.float64)
+    ldj = tf.zeros((batch_size), dtype=tf.float64)
+    model_type = "FC_net"
+
+    mask = CouplingLayers.get_mask(dims)
+    coupling = Coupling(dims, dims, name_tag, nr_blocks, activation,
+                        mask, model_type=model_type)
+    z, ldj = coupling(x, ldj, training=True)
+    x_recon, ldj = coupling(z, ldj, reverse=True, training=True)
+    tf.debugging.assert_near(x, z, message="Coupling does not init close "
+                                           "to identity.")
+    tf.debugging.assert_near(x, x_recon, message="Inverse of coupling "
+                                                 "incorrect")
+    print(coupling.summary())
+
+    dims = (15, 15, 3)
+    x = tf.ones((batch_size, *dims), dtype=tf.float64)
+    ldj = tf.zeros((batch_size), dtype=tf.float64)
+    model_type = "ResNet"
+
+    mask = CouplingLayers.get_mask(dims)
+    coupling = Coupling(dims, dims, name_tag, nr_blocks, activation,
+                        mask, model_type=model_type)
+    z, ldj = coupling(x, ldj, training=True)
+    x_recon, ldj = coupling(z, ldj, reverse=True, training=True)
+    tf.debugging.assert_near(x, z, message="Coupling does not init close "
+                                           "to identity.")
+    tf.debugging.assert_near(x, x_recon, message="Inverse of coupling "
+                                                 "incorrect")
+    print(coupling.summary())
 
 
 def test_coupling_layers():

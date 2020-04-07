@@ -76,10 +76,10 @@ class ResNet(Model):
         self.bn_out = BatchNormalization(axis=3, dtype=tf.float64,
                                          fused=False, name="BN_in")
         self.bn_out.build((None, *image_size, filters))
-        self.conv_out = Conv2D(channels_out, kernel_size=(1, 1), padding="same",
-                               data_format="channels_last", activation=None,
-                               use_bias=True, dtype=tf.float64,
-                               name="Conv_out")
+        self.conv_out = Conv2D(channels_out, kernel_size=(1, 1),
+                               padding="same", data_format="channels_last",
+                               activation=None, use_bias=True,
+                               dtype=tf.float64, name="Conv_out")
         self.conv_out.build((None, *image_size, filters))
 
     @tf.function
@@ -226,7 +226,8 @@ def test_residual_block():
 
     block = ResidualConvBlock(dims, name_tag, activation, filters)
     out = block(x, 0, training=True)
-    assert out.shape == x.shape, "shape mismatch in res block"
+    tf.debugging.assert_equal(out.shape, x.shape,
+                              "shape mismatch in res block")
     print(block.summary())
 
 
@@ -243,7 +244,8 @@ def test_residual_network():
     model = ResNet(in_dims, out_dims, name_tag, residual_blocks, activation,
                    filters)
     out = model(x, 0, training=True)
-    assert out.shape == (2, *out_dims), "Shape mismatch in resnet"
+    tf.debugging.assert_equal(out.shape, (2, *out_dims),
+                              "Shape mismatch in resnet")
     print(model.summary())
 
 if __name__ == "__main__":
