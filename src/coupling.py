@@ -8,8 +8,9 @@ from tensorflow.keras import Model
 class CouplingLayers(Model):
     """ Implementation of the coupling layers of the RealNVP."""
 
-    def __init__(self, dims, name_tag, n_blocks=3, activation='relu', 
-                 architecture_type="FC_net", n_flows=3, debug=False):
+    def __init__(self, dims, name_tag, n_blocks=3, activation='relu',
+                 architecture_type="FC_net", n_flows=3, squeeze=True,
+                 debug=False):
         """
         Parameters
         ----------
@@ -23,7 +24,8 @@ class CouplingLayers(Model):
 
         super().__init__(name=name_tag)
 
-        mask = self.get_mask(in_dims)
+        mask = self.get_checkerboard_mask(in_dims)
+        # TODO add flag to switch to channel mask
         self.nn_layers = []
         for i in range(n_flows):
             self.nn_layers.append(Coupling(dims, dims,
@@ -48,13 +50,52 @@ class CouplingLayers(Model):
         return z, ldj
 
     @staticmethod
-    def get_mask(in_dims):
+    def get_checkerboard_mask(in_dims):
         size = tf.reduce_prod(in_dims)
         mask = np.zeros((size))
         for i in range(0, size // 2, 2):
             mask[i] = 1
         mask = np.reshape(mask, in_dims)
         return tf.convert_to_tensor(mask, dtype=tf.float64)
+
+    @staticmethod
+    def squeeze(z, reverse=False):
+        """ Squeezes the input to quadruple the number of channels.
+
+        For each channel, it divides the input into subsquares of 2x2xc,
+        then reshapes them into subsquares of 1x1x4c. The squeezing operation
+        transforms a sxsxc tensor into and (s/2)x(s/2)x4c tensor.
+
+        This squeezing is not the same as a reshape where parts of feature maps
+        get stacked in the channel dimensions. See the paper for full details:
+        https://arxiv.org/abs/1605.08803
+
+        Parameters
+        ----------
+        z : tensor
+            The tensor that will be squeezed.
+
+        reverse : bool
+            Flag to invert the squeezing operation.
+
+        Returns
+        -------
+        z : tensor
+            The squeezed version of the input tensor.
+        """
+
+        if not reverse:
+            z = tf.concat([z[:, 0::2, 0::2], z[:, 0::2, 1::2],
+                           z[:, 1::2, 0::2], z[:, 1::2, 1::2]], axis=3)
+        else:
+            shape = z.shape
+            h = shape[1]
+            w = shape[2]
+            c = shape[3]
+            z = tf.concat([tf.concat([tf.reshape(z[:, i, j], (1, 2, 2, 1))
+                                      for j in range(w)], axis=2)
+                           for i in range(h)], axis=1)
+        return z
 
 
 class Coupling(Model):
