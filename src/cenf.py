@@ -48,18 +48,22 @@ class CENF(Model):
         return encoder_params, qz_k, ldj, decoder_params
 
     @tf.function
-    def logg(self, features, encoder_params, qz_k, ldj_z, decoder_params, step, params):
+    def loss(self, features, encoder_params, qz_k, ldj_z, decoder_params,
+             step, params):
         if self.debug:
             print("Calculating loss")
         x_cat, x_cont, t, y, y_cf, mu_0, mu_1 = features
         qt_prob, qy_mean, qz_mean, qz_std = encoder_params
         x_cat_prob, x_cont_mean, x_cont_std, t_prob, y_mean = decoder_params
         l, f = x_cat.shape
-        x_cat_prob = tf.reshape(x_cat_prob, (l, f//self.category_sizes, self.category_sizes))
-        x_cat = tf.reshape(x_cat, (l, f//self.category_sizes, self.category_sizes))
+        x_cat_prob = tf.reshape(x_cat_prob, (l, f//self.category_sizes,
+                                             self.category_sizes))
+        x_cat = tf.reshape(x_cat, (l, f//self.category_sizes,
+                                   self.category_sizes))
 
         distortion_x = -get_log_prob(x_cat, 'M', probs=x_cat_prob) \
-                       - get_log_prob(x_cont, 'N', mean=x_cont_mean, std=x_cont_std)
+                       - get_log_prob(x_cont, 'N', mean=x_cont_mean,
+                                      std=x_cont_std)
         distortion_t = -get_log_prob(t, 'B', probs=t_prob)
         distortion_y = -get_log_prob(y, 'N', mean=y_mean)
 
@@ -71,13 +75,20 @@ class CENF(Model):
 
         if step is not None and step % (params['log_steps'] * 5) == 0:
             l_step = step // (params['log_steps'] * 5)
-            tf.summary.scalar("partial_loss/distortion_x", tf.reduce_mean(distortion_x), step=l_step)
-            tf.summary.scalar("partial_loss/distortion_t", tf.reduce_mean(distortion_t), step=l_step)
-            tf.summary.scalar("partial_loss/distortion_y", tf.reduce_mean(distortion_y), step=l_step)
-            tf.summary.scalar("partial_loss/rate_z", tf.reduce_mean(rate), step=l_step)
-            tf.summary.scalar("partial_loss/ldj_z", tf.reduce_mean(-ldj_z), step=l_step)
-            tf.summary.scalar("partial_loss/variational_t", tf.reduce_mean(variational_t), step=l_step)
-            tf.summary.scalar("partial_loss/variational_y", tf.reduce_mean(variational_y), step=l_step)
+            tf.summary.scalar("partial_loss/distortion_x",
+                              tf.reduce_mean(distortion_x), step=l_step)
+            tf.summary.scalar("partial_loss/distortion_t",
+                              tf.reduce_mean(distortion_t), step=l_step)
+            tf.summary.scalar("partial_loss/distortion_y",
+                              tf.reduce_mean(distortion_y), step=l_step)
+            tf.summary.scalar("partial_loss/rate_z",
+                              tf.reduce_mean(rate), step=l_step)
+            tf.summary.scalar("partial_loss/ldj_z",
+                              tf.reduce_mean(-ldj_z), step=l_step)
+            tf.summary.scalar("partial_loss/variational_t",
+                              tf.reduce_mean(variational_t), step=l_step)
+            tf.summary.scalar("partial_loss/variational_y",
+                              tf.reduce_mean(variational_y), step=l_step)
 
         elbo_local = -(rate + distortion_x + distortion_t + distortion_y +
                        variational_t + variational_y - ldj_z)
@@ -85,7 +96,7 @@ class CENF(Model):
         return -elbo
 
     def do_intervention(self, x, nr_samples):
-        _, _, qz_mean, qz_std = self.encode(x, None, None, None, training=False)
+        *_, qz_mean, qz_std = self.encode(x, None, None, None, training=False)
         qz = tfd.Independent(tfd.Normal(loc=qz_mean, scale=qz_std),
                              reinterpreted_batch_ndims=1,
                              name="qz")

@@ -16,11 +16,12 @@ class CEVAE(Model):
         """ CEVAE model with fc nets between random variables.
         https://github.com/tensorflow/probability/blob/master/tensorflow_probability/examples/vae.py
 
-        After some attempts to port the example code 1 to 1 to TF2, I decided to restructure the
-        encoder and decoder to a Model subclass instead to two functions.
+        After some attempts to port the example code 1 to 1 to TF2, I decided
+        to restructure the encoder and decoder to a Model subclass instead to
+        two functions.
 
-        Several fc_nets have an output size of *2 something. This is to output both the mean and
-        std of a Normal distribution at once.
+        Several fc_nets have an output size of *2 something. This is to output
+        both the mean and std of a Normal distribution at once.
         """
         super().__init__()
         self.encode = Encoder(params, category_sizes, hidden_size)
@@ -62,12 +63,15 @@ class CEVAE(Model):
         qt_prob, qy_mean, qz_mean, qz_std = encoder_params
         x_cat_prob, x_cont_mean, x_cont_std, t_prob, y_mean = decoder_params
         l, f = x_cat.shape
-        x_cat_prob = tf.reshape(x_cat_prob, (l, f//self.category_sizes, self.category_sizes))
-        x_cat = tf.reshape(x_cat, (l, f//self.category_sizes, self.category_sizes))
+        x_cat_prob = tf.reshape(x_cat_prob, (l, f//self.category_sizes,
+                                             self.category_sizes))
+        x_cat = tf.reshape(x_cat, (l, f//self.category_sizes,
+                                   self.category_sizes))
 
         y_type = params['dataset_distributions']['y']
         distortion_x = -get_log_prob(x_cat, 'M', probs=x_cat_prob) \
-                       - get_log_prob(x_cont, 'N', mean=x_cont_mean, std=x_cont_std)
+                       - get_log_prob(x_cont, 'N', mean=x_cont_mean,
+                                      std=x_cont_std)
         distortion_t = -get_log_prob(t, 'B', probs=t_prob)
         distortion_y = -get_log_prob(y, y_type, mean=y_mean, probs=y_mean)
 
@@ -78,12 +82,18 @@ class CEVAE(Model):
 
         if step is not None and step % (params['log_steps'] * 5) == 0:
             l_step = step // (params['log_steps'] * 5)
-            tf.summary.scalar("partial_loss/distortion_x", tf.reduce_mean(distortion_x), step=l_step)
-            tf.summary.scalar("partial_loss/distortion_t", tf.reduce_mean(distortion_t), step=l_step)
-            tf.summary.scalar("partial_loss/distortion_y", tf.reduce_mean(distortion_y), step=l_step)
-            tf.summary.scalar("partial_loss/rate_z", tf.reduce_mean(rate), step=l_step)
-            tf.summary.scalar("partial_loss/variational_t", tf.reduce_mean(variational_t), step=l_step)
-            tf.summary.scalar("partial_loss/variational_y", tf.reduce_mean(variational_y), step=l_step)
+            tf.summary.scalar("partial_loss/distortion_x",
+                              tf.reduce_mean(distortion_x), step=l_step)
+            tf.summary.scalar("partial_loss/distortion_t",
+                              tf.reduce_mean(distortion_t), step=l_step)
+            tf.summary.scalar("partial_loss/distortion_y",
+                              tf.reduce_mean(distortion_y), step=l_step)
+            tf.summary.scalar("partial_loss/rate_z",
+                              tf.reduce_mean(rate), step=l_step)
+            tf.summary.scalar("partial_loss/variational_t",
+                              tf.reduce_mean(variational_t), step=l_step)
+            tf.summary.scalar("partial_loss/variational_y",
+                              tf.reduce_mean(variational_y), step=l_step)
 
         elbo_local = -(rate + distortion_x + distortion_t + distortion_y +
                        variational_t + variational_y)
@@ -91,7 +101,8 @@ class CEVAE(Model):
         return -elbo
 
     def do_intervention(self, x, nr_samples):
-        _, _, qz_mean, qz_std = self.encode(x, None, None, None, training=False)
+        _, _, qz_mean, qz_std = self.encode(x, None, None, None,
+                                            training=False)
         qz = tfd.Independent(tfd.Normal(loc=qz_mean, scale=qz_std),
                              reinterpreted_batch_ndims=1,
                              name="qz")
@@ -144,7 +155,8 @@ class Encoder(Model):
         else:
             qy_mean = qt_sample * mu_qy1 + (1. - qt_sample) * mu_qy0
 
-        qy = tfd.Independent(tfd.Normal(loc=qy_mean, scale=tf.ones_like(qy_mean)),
+        qy = tfd.Independent(tfd.Normal(loc=qy_mean,
+                                        scale=tf.ones_like(qy_mean)),
                              reinterpreted_batch_ndims=1,
                              name="qy")
 
@@ -158,12 +170,16 @@ class Encoder(Model):
         qz1 = self.qz_t1(hidden_z, step, training=training)
 
         if training:
-            qz_mean = t * qz1[:, :self.z_size] + (1. - t) * qz0[:, :self.z_size]
-            qz_std = t * softplus(qz1[:, self.z_size:]) + (1. - t) * softplus(qz0[:, self.z_size:])
+            qz_mean = t * qz1[:, :self.z_size] + (1. - t) *\
+                      qz0[:, :self.z_size]
+            qz_std = t * softplus(qz1[:, self.z_size:]) + (1. - t) *\
+                     softplus(qz0[:, self.z_size:])
 
         else:
-            qz_mean = qt_sample * qz1[:, :self.z_size] + (1. - qt_sample) * qz0[:, :self.z_size]
-            qz_std = qt_sample * softplus(qz1[:, self.z_size:]) + (1. - qt_sample) * softplus(qz0[:, self.z_size:])
+            qz_mean = qt_sample * qz1[:, :self.z_size] + (1. - qt_sample) *\
+                      qz0[:, :self.z_size]
+            qz_std = qt_sample * softplus(qz1[:, self.z_size:]) +\
+                     (1. - qt_sample) * softplus(qz0[:, self.z_size:])
         return qt_prob, qy_mean, qz_mean, qz_std
 
 
@@ -180,9 +196,11 @@ class Decoder(Model):
 
         self.hx = FC_net(self.z_size, hidden_size, "hx",
                          hidden_size=hidden_size, debug=self.debug)
-        self.x_cont_logits = FC_net(hidden_size, self.x_cont_size * 2, "x_cont",
+        self.x_cont_logits = FC_net(hidden_size,
+                                    self.x_cont_size * 2, "x_cont",
                                     hidden_size=hidden_size, debug=self.debug)
-        self.x_cat_logits = FC_net(hidden_size, self.x_cat_size * category_sizes, "x_cat",
+        self.x_cat_logits = FC_net(hidden_size,
+                                   self.x_cat_size * category_sizes, "x_cat",
                                    hidden_size=hidden_size, debug=self.debug)
         self.t_logits = FC_net(self.z_size, 1, "t", nr_hidden=1,
                                hidden_size=hidden_size, debug=self.debug)

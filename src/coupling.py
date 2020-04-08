@@ -8,8 +8,8 @@ from tensorflow.keras import Model
 class CouplingLayers(Model):
     """ Implementation of the coupling layers of the RealNVP."""
 
-    def __init__(self, in_dims, out_dims, name_tag, nr_blocks=3, activation='relu',
-                 model_type="FC_net", n_flows=3, debug=False):
+    def __init__(self, dims, name_tag, n_blocks=3, activation='relu', 
+                 architecture_type="FC_net", n_flows=3, debug=False):
         """
         Parameters
         ----------
@@ -26,14 +26,14 @@ class CouplingLayers(Model):
         mask = self.get_mask(in_dims)
         self.nn_layers = []
         for i in range(n_flows):
-            self.nn_layers.append(Coupling(in_dims, out_dims,
+            self.nn_layers.append(Coupling(dims, dims,
                                            f"Coupling_layer_{i * 2}",
-                                           nr_blocks, activation, mask, model_type,
-                                           debug=debug))
-            self.nn_layers.append(Coupling(in_dims, out_dims,
+                                           n_blocks, activation, mask,
+                                           architecture_type, debug=debug))
+            self.nn_layers.append(Coupling(dims, dims,
                                            f"Coupling_layer_{i * 2 + 1}",
-                                           nr_blocks, activation, 1 - mask,
-                                           model_type, debug=debug))
+                                           n_blocks, activation, 1 - mask,
+                                           architecture_type, debug=debug))
 
     @tf.function
     def call(self, z, ldj, reverse=False, training=False):
@@ -60,8 +60,8 @@ class CouplingLayers(Model):
 class Coupling(Model):
     """ Single coupling layer."""
 
-    def __init__(self, in_dims, out_dims, name_tag, nr_blocks, activation,
-                 mask, model_type="FC_net", debug=False):
+    def __init__(self, in_dims, out_dims, name_tag, n_blocks, activation,
+                 mask, architecture_type="FC_net", debug=False):
         """
         Parameters
         ----------
@@ -71,12 +71,12 @@ class Coupling(Model):
         self.mask = mask
         self.name_tag = name_tag
 
-        if model_type == "FC_net":
-            self.nn = FC_net(in_dims, 2 * out_dims, name_tag, nr_blocks,
+        if architecture_type == "FC_net":
+            self.nn = FC_net(in_dims, 2 * out_dims, name_tag, n_blocks,
                              activation=activation, debug=debug)
-        if model_type == "ResNet":
+        if architecture_type == "ResNet":
             out_dims = out_dims[:-1] + (2 * out_dims[-1], )
-            self.nn = ResNet(in_dims, out_dims, name_tag, nr_blocks,
+            self.nn = ResNet(in_dims, out_dims, name_tag, n_blocks,
                              activation=activation, debug=debug)
 
         weights = self.nn.layers[-1].weights
@@ -108,7 +108,7 @@ def test_coupling():
     """ Unit test for single coupling layer."""
     batch_size = 4
     name_tag = "test"
-    nr_blocks = 3
+    n_blocks = 3
     activation = "relu"
     filters = 32
 
@@ -117,8 +117,8 @@ def test_coupling():
     ldj = tf.zeros((batch_size), dtype=tf.float64)
 
     mask = CouplingLayers.get_mask(dims)
-    coupling = Coupling(dims, dims, name_tag, nr_blocks, activation,
-                        mask, model_type="FC_net")
+    coupling = Coupling(dims, dims, name_tag, n_blocks, activation,
+                        mask, architecture_type="FC_net")
     z, ldj = coupling(x, ldj, training=True)
     x_recon, ldj = coupling(z, ldj, reverse=True, training=True)
     tf.debugging.assert_near(x, z, message="Coupling does not init close "
@@ -132,8 +132,8 @@ def test_coupling():
     ldj = tf.zeros((batch_size), dtype=tf.float64)
 
     mask = CouplingLayers.get_mask(dims)
-    coupling = Coupling(dims, dims, name_tag, nr_blocks, activation,
-                        mask, model_type="ResNet")
+    coupling = Coupling(dims, dims, name_tag, n_blocks, activation,
+                        mask, architecture_type="ResNet")
     z, ldj = coupling(x, ldj, training=True)
     x_recon, ldj = coupling(z, ldj, reverse=True, training=True)
     tf.debugging.assert_near(x, z, message="Coupling does not init close "
@@ -146,15 +146,16 @@ def test_coupling():
 def test_coupling_layers():
     batch_size = 4
     name_tag = "test"
-    nr_blocks = 3
+    n_blocks = 3
     activation = "relu"
     filters = 32
 
     dims = 100
     x = tf.ones((batch_size, dims), dtype=tf.float64)
     ldj = tf.zeros((batch_size), dtype=tf.float64)
-    coupling = CouplingLayers(dims, dims, name_tag, nr_blocks, activation,
-                              model_type="FC_net", n_flows=3, debug=True)
+    coupling = CouplingLayers(dims, dims, name_tag, n_blocks, activation,
+                              architecture_type="FC_net", n_flows=3,
+                              debug=True)
     z, ldj = coupling(x, ldj, training=True)
     x_recon, ldj = coupling(z, ldj, reverse=True, training=True)
     tf.debugging.assert_near(x, z, message="Coupling does not init close "
@@ -166,8 +167,9 @@ def test_coupling_layers():
     dims = (15, 15, 3)
     x = tf.ones((batch_size, *dims), dtype=tf.float64)
     ldj = tf.zeros((batch_size), dtype=tf.float64)
-    coupling = CouplingLayers(dims, dims, name_tag, nr_blocks, activation,
-                              model_type="ResNet", n_flows=3, debug=True)
+    coupling = CouplingLayers(dims, dims, name_tag, n_blocks, activation,
+                              architecture_type="ResNet", n_flows=3,
+                              debug=True)
     z, ldj = coupling(x, ldj, training=True)
     x_recon, ldj = coupling(z, ldj, reverse=True, training=True)
     tf.debugging.assert_near(x, z, message="Coupling does not init close "

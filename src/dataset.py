@@ -7,9 +7,10 @@ from scipy.special import expit
 from tensorflow import math
 
 
-def IHDP_dataset(params, path_data="datasets/IHDP/csv/", separate_files=False, file_index=None):
+def IHDP_dataset(params, path_data="datasets/IHDP/csv/", separate_files=False,
+                 file_index=None):
     """ Tensorflow Dataset generator for the IHDP dataset.
-    
+
     Parameters
     ----------
     params : dict
@@ -18,7 +19,7 @@ def IHDP_dataset(params, path_data="datasets/IHDP/csv/", separate_files=False, f
 
     path_data : str
         Path to the folder that contains the csv files with data
-        
+ 
     separate_files : bool
         Flag to determine if the files should all create a separate Dataset
         object or if they should become one large dataset.
@@ -111,7 +112,7 @@ def IHDP_dataset(params, path_data="datasets/IHDP/csv/", separate_files=False, f
 
 def TWINS_dataset(params, path_data="datasets/TWINS/", do_preprocessing=True, separate_files=None, file_index=None):
     """Tensorflow Dataset generator for the TWINS dataset.
-        
+
     Parameters
     ----------
     params : dict
@@ -119,7 +120,7 @@ def TWINS_dataset(params, path_data="datasets/TWINS/", do_preprocessing=True, se
         the function parse_arguments() in main.py to generate it.
 
     do_preprocessing : str
-        
+
     separate_files : bool
         kept_for compatibility with other datasets.
 

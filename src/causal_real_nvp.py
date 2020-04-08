@@ -1,4 +1,6 @@
 import tensorflow as tf
+
+from coupling import CouplingLayers
 from tensorflow.keras import Model
 
 
@@ -15,13 +17,49 @@ class CausalRealNVP(Model):
     connects them.
     """
 
-    def __init__(self):
+    def __init__(self, dims, name_tag, n_flows, activation="relu",
+                 n_blocks=3, architecture_type="FC_net", debug=False):
         """
         Parameters
         ----------
 
         """
-        pass
+        super().__init__(name=name_tag)
+
+        with tf.name_scope(f"RealNVP/{name_tag}") as scope:
+            self.flow_x = CouplingLayers(dims, "flow_x", n_blocks, activation,
+                                         architecture_type, n_flows, debug)
+            self.flow_y = CouplingLayers(dims, "flow_y", n_blocks, activation,
+                                         architecture_type, n_flows, debug)
+            # TODO I have to adjust flow_y in such a way that it also uses the
+            # context variable
+            dims = dims[:-1] + (2 * dims[-1], )
+            self.flow_z = CouplingLayers(dims, "flow_z", n_blocks, activation,
+                                         architecture_type, n_flows, debug)
+
+    def dequantize(self z):
+        return z + tf.random.uniform(z.shape, dtype=tf.float64)
+
+    def logit_normalize(self, z, logdet, reverse=False):
+        """ Inverse sigmoid normalisation."""
+        alpha = 1e-5
+
+        return z, logdet
+
+    @staticmethod
+    def log_prior(z):
+        """ The prior log probability of a standard Gaussian: N(z|mu=0, sig=1)
+
+        Parameters
+        ----------
+        z : tensor
+            The tensor of which the prior probability should be calculated.
+            Can be any shape
+        """
+
+        norm_term = tf.math.log(1 / tf.math.sqrt(2 * tf.math.pi))
+        logp = norm_term - 0.5 * tf.math.square(z)
+        return tf.reduce_sum(logp)
 
     @tf.function
     def call(self, x, t, y, step, training=False):
@@ -57,3 +95,17 @@ class CausalRealNVP(Model):
         log_pxy : float
             The log likelihood of both x and y.
         """
+
+        ldj = tf.zeros(x.shape[0], dtype=tf.float64)
+
+        x_input = self.dequantize(x)
+        y_input = self.dequantize(y)
+
+        # Logit normalize
+        # Flow x
+        # Flow y with context t
+        # Concat
+        # Flow z
+
+        # Log prior z
+        # Log pxy = log prior + ldj
