@@ -49,15 +49,18 @@ class ResNet(Model):
         self.bn_in = BatchNormalization(axis=3, dtype=tf.float64,
                                         fused=False, name="BN_in")
         self.bn_in.build((None, *image_size, channels_in))
+
         self.conv_in = Conv2D(filters, kernel_size=(3, 3), padding="same",
                               data_format="channels_last", activation=None,
                               use_bias=True, dtype=tf.float64, name="Conv_in")
         self.conv_in.build((None, *image_size, channels_in * 2))
+
         self.conv_skip = Conv2D(filters, kernel_size=(1, 1), padding="same",
                                 data_format="channels_last", activation=None,
                                 use_bias=True, dtype=tf.float64,
                                 name="Conv_skip_0")
         self.conv_skip.build((None, *image_size, filters))
+
         self.res_blocks = [ResidualConvBlock(intermediate_dim, f"i",
                                              activation, filters)
                            for i in range(nr_res_blocks)]
@@ -69,9 +72,11 @@ class ResNet(Model):
                       for i in range(nr_res_blocks)]
         for skip in self.skips:
             skip.build((None, *image_size, filters))
+
         self.bn_out = BatchNormalization(axis=3, dtype=tf.float64,
                                          fused=False, name="BN_in")
         self.bn_out.build((None, *image_size, filters))
+
         self.conv_out = Conv2D(channels_out, kernel_size=(1, 1),
                                padding="same", data_format="channels_last",
                                activation=None, use_bias=True,

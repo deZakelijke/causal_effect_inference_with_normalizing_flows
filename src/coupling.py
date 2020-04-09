@@ -23,44 +23,51 @@ class CouplingLayers(Model):
         """
 
         super().__init__(name=name_tag)
+        self.name_tag = name_tag
 
         self.is_last_block = scale_idx == num_scales - 1
+        self.no_squeeze = architecture_type == "FC_net"
 
-        mask_cb = self.get_checkerboard_mask(dims)
-        mask_ch = self.get_channel_mask(dims)
+        mask = self.get_checkerboard_mask(dims)
 
         self.in_couplings = [
             Coupling(dims, filters, "Coupling_layer_1", n_blocks,
-                     activation, mask_cb, architecture_type, debug),
+                     activation, mask, architecture_type, debug),
             Coupling(dims, filters, "Coupling_layer_2", n_blocks,
-                     activation, 1 - mask_cb, architecture_type, debug),
+                     activation, 1 - mask, architecture_type, debug),
             Coupling(dims, filters, "Coupling_layer_3", n_blocks,
-                     activation, mask_cb, architecture_type, debug)
+                     activation, mask, architecture_type, debug)
         ]
 
         if self.is_last_block:
             self.in_couplings.append(
-                Coupling(dims, dims, "Coupling_layer_4", n_blocks, activation,
-                         1 - mask_cb, architecture_type, debug)
+                Coupling(dims, filters, "Coupling_layer_4", n_blocks, activation,
+                         1 - mask, architecture_type, debug)
             )
         else:
-            filters *= 2
-            dims = dims[:-1] + (4 * dims[-1], )
+            if architecture_type == "ResNet":
+                filters *= 2
+                dims = (dims[0] // 2, dims[1] // 2, 4 * dims[-1])
+                mask = self.get_channel_mask(dims)
+
             self.out_couplings = [
                 Coupling(dims, filters, "Coupling_layer_4", n_blocks,
-                         activation, mask_ch, architecture_type, debug),
+                         activation, 1 - mask, architecture_type, debug),
                 Coupling(dims, filters, "Coupling_layer_5", n_blocks,
-                         activation, 1 - mask_ch, architecture_type, debug),
+                         activation, mask, architecture_type, debug),
                 Coupling(dims, filters, "Coupling_layer_6", n_blocks,
-                         activation, mask_ch, architecture_type, debug)
+                         activation, 1 - mask, architecture_type, debug)
             ]
 
-            name_tag = "?"  # TODO
-            dims = dims[:-1] + (dims[-1] // 2, )
+            name_tag = "TODO_make_better_name"  # TODO
+            if architecture_type == "ResNet":
+                dims = dims[:-1] + (dims[-1] // 2, )
+            else:
+                dims = dims // 2
             self.next_couplings = CouplingLayers(dims, name_tag, filters,
-                                                 scale_idx + 1, n_blocks,
-                                                 activation, architecture_type,
-                                                 debug)
+                                                 scale_idx + 1, num_scales,
+                                                 n_blocks, activation,
+                                                 architecture_type, debug)
 
     @tf.function
     def call(self, z, ldj, reverse=False, training=False):
@@ -86,7 +93,7 @@ class CouplingLayers(Model):
                 z = tf.concat([z, z_split], axis=-1)
                 for coupling in self.out_couplings:
                     z, ldj = coupling(z, ldj, reverse=True, training=training)
-                z = zelf.squeeze(z, reverse=True)
+                z = self.squeeze(z, reverse=True)
 
             for coupling in self.in_couplings:
                 z, ldj = coupling(z, ldj, reverse=True, training=training)
@@ -106,13 +113,12 @@ class CouplingLayers(Model):
     @staticmethod
     def get_channel_mask(dims):
         """ Create channel mask."""
-        dims = dims[:-1] = (dims[-1] // 2, )
+        dims = dims[:-1] + (dims[-1] // 2, )
         zero_half = tf.zeros(dims, dtype=tf.float64)
         one_half = tf.ones(dims, dtype=tf.float64)
         return tf.concat([zero_half, one_half], axis=-1)
 
-    @staticmethod
-    def squeeze(z, reverse=False):
+    def squeeze(self, z, reverse=False):
         """ Squeezes the input to quadruple the number of channels.
 
         For each channel, it divides the input into subsquares of 2x2xc,
@@ -125,7 +131,9 @@ class CouplingLayers(Model):
 
         Apparently you can also do this by first reshaping to a rank-6 tensor,
         then transposing in a weird order and then reshaping to the desired
-        end shape. Can be reversed in the same way
+        end shape. Can be reversed in the same way.
+        That's what I did. Kudos go to:
+        https://github.com/chrischute/real-nvp/blob/master/util/array_util.py
 
         Parameters
         ----------
@@ -139,19 +147,27 @@ class CouplingLayers(Model):
         -------
         z : tensor
             The squeezed version of the input tensor.
-        """
+        """ 
+
+        if self.no_squeeze:
+            return z
+
+        shape = z.shape
+        b = shape[0]
+        h = shape[1]
+        w = shape[2]
+        c = shape[3]
 
         if not reverse:
-            z = tf.concat([z[:, 0::2, 0::2], z[:, 0::2, 1::2],
-                           z[:, 1::2, 0::2], z[:, 1::2, 1::2]], axis=3)
+            z = tf.reshape(z, (b, h // 2, 2, w // 2, 2, c))
+            z = tf.transpose(z, (0, 1, 3, 5, 2, 4))
+            z = tf.reshape(z, (b, h // 2, w // 2, c * 4))
+
         else:
-            shape = z.shape
-            h = shape[1]
-            w = shape[2]
-            c = shape[3]
-            z = tf.concat([tf.concat([tf.reshape(z[:, i, j], (1, 2, 2, 1))
-                                      for j in range(w)], axis=2)
-                           for i in range(h)], axis=1)
+            z = tf.reshape(z, (b, h, w, c // 4, 2, 2))
+            z = tf.transpose(z, (0, 1, 4, 2, 5, 3))
+            z = tf.reshape(z, (b, h * 2, w * 2, c // 4))
+
         return z
 
 
@@ -224,19 +240,19 @@ class Coupling(Model):
 
 def test_coupling():
     """ Unit test for single coupling layer."""
-    batch_size = 4
+    batch_size = 8
     name_tag = "test"
-    n_blocks = 3
+    n_blocks = 4
     activation = "relu"
-    filters = 32
-
+    filters = 128
     dims = 100
+
     x = tf.ones((batch_size, dims), dtype=tf.float64)
     ldj = tf.zeros((batch_size), dtype=tf.float64)
 
-    mask = CouplingLayers.get_mask(dims)
-    coupling = Coupling(dims, dims, name_tag, n_blocks, activation,
-                        mask, architecture_type="FC_net")
+    mask = CouplingLayers.get_checkerboard_mask(dims)
+    coupling = Coupling(dims, filters, name_tag, n_blocks, activation,
+                        mask, architecture_type="FC_net", debug=True)
     z, ldj = coupling(x, ldj, training=True)
     x_recon, ldj = coupling(z, ldj, reverse=True, training=True)
     tf.debugging.assert_near(x, z, message="Coupling does not init close "
@@ -245,13 +261,15 @@ def test_coupling():
                                                  "incorrect")
     print(coupling.summary())
 
-    dims = (15, 15, 3)
+    filters = 32
+    dims = (15, 15, 4)
+
     x = tf.ones((batch_size, *dims), dtype=tf.float64)
     ldj = tf.zeros((batch_size), dtype=tf.float64)
 
-    mask = CouplingLayers.get_mask(dims)
-    coupling = Coupling(dims, dims, name_tag, n_blocks, activation,
-                        mask, architecture_type="ResNet")
+    mask = CouplingLayers.get_channel_mask(dims)
+    coupling = Coupling(dims, filters, name_tag, n_blocks, activation,
+                        mask, architecture_type="ResNet", debug=True)
     z, ldj = coupling(x, ldj, training=True)
     x_recon, ldj = coupling(z, ldj, reverse=True, training=True)
     tf.debugging.assert_near(x, z, message="Coupling does not init close "
@@ -263,16 +281,17 @@ def test_coupling():
 
 def test_coupling_layers():
     batch_size = 4
-    name_tag = "test"
+    name_tag = "test_coupling_layers_fc_net"
     n_blocks = 3
     activation = "relu"
-    filters = 32
-
+    num_scales = 2
+    filters = 128
     dims = 100
+
     x = tf.ones((batch_size, dims), dtype=tf.float64)
     ldj = tf.zeros((batch_size), dtype=tf.float64)
-    coupling = CouplingLayers(dims, dims, name_tag, n_blocks, activation,
-                              architecture_type="FC_net", n_flows=3,
+    coupling = CouplingLayers(dims, name_tag, filters, 0, num_scales, n_blocks,
+                              activation, architecture_type="FC_net",
                               debug=True)
     z, ldj = coupling(x, ldj, training=True)
     x_recon, ldj = coupling(z, ldj, reverse=True, training=True)
@@ -282,11 +301,14 @@ def test_coupling_layers():
                                                  "incorrect")
     print(coupling.summary())
 
-    dims = (15, 15, 3)
+    name_tag = "test_coupling_layers_resnet"
+    filters = 32
+    dims = (32, 32, 4)
+
     x = tf.ones((batch_size, *dims), dtype=tf.float64)
     ldj = tf.zeros((batch_size), dtype=tf.float64)
-    coupling = CouplingLayers(dims, dims, name_tag, n_blocks, activation,
-                              architecture_type="ResNet", n_flows=3,
+    coupling = CouplingLayers(dims, name_tag, filters, 0, num_scales, n_blocks,
+                              activation, architecture_type="ResNet",
                               debug=True)
     z, ldj = coupling(x, ldj, training=True)
     x_recon, ldj = coupling(z, ldj, reverse=True, training=True)
