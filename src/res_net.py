@@ -7,8 +7,7 @@ class ResNet(Model):
     """Residual Convolutional Neural Network."""
 
     def __init__(self, in_dims, out_dims, name_tag, nr_res_blocks=3,
-                 activation='elu', filters=32, skip_connection=True,
-                 debug=False):
+                 activation='elu', filters=32, debug=False):
         """
         Parameters
         ----------
@@ -31,9 +30,6 @@ class ResNet(Model):
 
         filters : int
             Number of filters to use in the residual blocks.
-
-        skip_connection : bool
-            Flag to use skip connections inbetween the residual blocks.
 
         debug : bool
             Flag to enable debug mode. Currently unused.

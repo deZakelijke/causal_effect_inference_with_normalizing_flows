@@ -26,6 +26,10 @@ class CausalRealNVP(Model):
         """
         super().__init__(name=name_tag)
 
+        if len(dims) > 1:
+            # We need to do layer stacking
+            # This is actually also a flag of the CouplingLayers class
+
         with tf.name_scope(f"RealNVP/{name_tag}") as scope:
             self.flow_x = CouplingLayers(dims, "flow_x", n_blocks, activation,
                                          architecture_type, n_flows, debug)
@@ -40,9 +44,42 @@ class CausalRealNVP(Model):
     def dequantize(self z):
         return z + tf.random.uniform(z.shape, dtype=tf.float64)
 
-    def logit_normalize(self, z, logdet, reverse=False):
-        """ Inverse sigmoid normalisation."""
-        alpha = 1e-5
+    def logit_normalize(self, z, ldj, reverse=False, alpha=1e-5):
+        """ Inverse sigmoid normalisation.
+        
+        Parameters
+        ----------
+        z : tensor
+            The data that will be normalised. Alle values should lie between
+            zero and one.
+
+        ldj : tensor
+            The log determinant of the Jacobian needed to define the
+            probability of z after the normalisation.
+
+        reverse : bool
+            Flag to use the inverse of the normalisation, which is a regular
+            sigmoid transform.
+
+        alpha : float
+            Small value to prevent the calculation from yielding NaNs when z
+            is very close to zero or one.
+        """
+
+        if not reverse:
+            z /= 256
+            ldj -= tf.math.log(256) * tf.reduce_prod(z.shape[1:])
+            z = z * (1 - alpha) + alpha * 0.5
+            ldj += tf.reduce_sum(-tf.math.log(z) - tf.math.log(1 - z), axis=1)
+            # TODO shouldn't the axis of the sum here be all axes except the first?
+            z = tf.math.log(z) - tf.math.log(1 - z)
+
+        else:
+            # TODO is this order really the inverse?
+            ldj -= tf.reduce_sum(-tf.math.log(z) - tf.math.log(1 - z), axis=1)
+            z = tf.math.sigmoid(z)
+            z *= 256
+            ldj += tf.math.log(256) * tf.reduce_prod(z.shape[1:])
 
         return z, logdet
 
