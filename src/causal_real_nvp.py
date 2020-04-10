@@ -1,4 +1,6 @@
+import math
 import tensorflow as tf
+import time
 
 from coupling import CouplingLayers
 from tensorflow.keras import Model
@@ -17,36 +19,59 @@ class CausalRealNVP(Model):
     connects them.
     """
 
-    def __init__(self, dims, name_tag, n_flows, activation="relu",
-                 n_blocks=3, architecture_type="FC_net", debug=False):
+    def __init__(self, dims, name_tag, filters, n_scales, n_blocks=3,
+                 activation="relu", architecture_type="FC_net", debug=False):
         """
         Parameters
         ----------
 
         """
         super().__init__(name=name_tag)
-
-        if len(dims) > 1:
-            # We need to do layer stacking
-            # This is actually also a flag of the CouplingLayers class
+        self.debug = debug
 
         with tf.name_scope(f"RealNVP/{name_tag}") as scope:
-            self.flow_x = CouplingLayers(dims, "flow_x", n_blocks, activation,
-                                         architecture_type, n_flows, debug)
-            self.flow_y = CouplingLayers(dims, "flow_y", n_blocks, activation,
-                                         architecture_type, n_flows, debug)
+            self.flow_x = CouplingLayers(dims, "flow_x", filters, 0, n_scales,
+                                         n_blocks, activation,
+                                         architecture_type, debug)
+
+            self.flow_y = CouplingLayers(dims, "flow_y", filters, 0, n_scales,
+                                         n_blocks, activation,
+                                         architecture_type, debug)
             # TODO I have to adjust flow_y in such a way that it also uses the
             # context variable
-            dims = dims[:-1] + (2 * dims[-1], )
-            self.flow_z = CouplingLayers(dims, "flow_z", n_blocks, activation,
-                                         architecture_type, n_flows, debug)
 
-    def dequantize(self z):
+            dims = dims[:-1] + (2 * dims[-1], )
+            self.flow_z = CouplingLayers(dims, "flow_z", filters, 0, n_scales,
+                                         n_blocks, activation,
+                                         architecture_type, debug)
+
+    def dequantize(self, z):
+        """ Dequantisation of the input data.
+
+        Causes the data to not lie on exact integer values. Only use this
+        when the data has a finite discrete set of possible values.
+        For instance images where each pixel is in [0, 255]. The dequantisation
+        operation makes the data lie on the continuous interval [0, 256) which
+        prevents the model from collapsing its probability density to a set of
+        points instead of being a smooth function.
+
+        Parameters
+        ----------
+        z : tensor
+            A tensor of any shape that has discrete values. The data type can
+            be any type
+
+        Returns
+        -------
+        z : tensor
+            The new tensor of the same shape as the input.
+        """
+        z = tf.cast(z, dtype=tf.float64)
         return z + tf.random.uniform(z.shape, dtype=tf.float64)
 
     def logit_normalize(self, z, ldj, reverse=False, alpha=1e-5):
         """ Inverse sigmoid normalisation.
-        
+
         Parameters
         ----------
         z : tensor
@@ -66,22 +91,27 @@ class CausalRealNVP(Model):
             is very close to zero or one.
         """
 
+        maximal = tf.constant(256, dtype=tf.float64)
         if not reverse:
-            z /= 256
-            ldj -= tf.math.log(256) * tf.reduce_prod(z.shape[1:])
+            z /= maximal
+            ldj -= tf.math.log(maximal) * tf.cast(tf.reduce_prod(z.shape[1:]),
+                                                  tf.float64)
             z = z * (1 - alpha) + alpha * 0.5
-            ldj += tf.reduce_sum(-tf.math.log(z) - tf.math.log(1 - z), axis=1)
+            ldj += tf.reduce_sum(-tf.math.log(z) - tf.math.log(1 - z),
+                                 axis=tf.range(1, tf.rank(z)))
             # TODO shouldn't the axis of the sum here be all axes except the first?
             z = tf.math.log(z) - tf.math.log(1 - z)
 
         else:
             # TODO is this order really the inverse?
-            ldj -= tf.reduce_sum(-tf.math.log(z) - tf.math.log(1 - z), axis=1)
+            ldj -= tf.reduce_sum(-tf.math.log(z) - tf.math.log(1 - z),
+                                 axis=tf.range(1, tf.rank(z)))
             z = tf.math.sigmoid(z)
-            z *= 256
-            ldj += tf.math.log(256) * tf.reduce_prod(z.shape[1:])
+            z *= maximal
+            ldj += tf.math.log(maximal) * tf.cast(tf.reduce_prod(z.shape[1:]),
+                                                  tf.float64)
 
-        return z, logdet
+        return z, ldj
 
     @staticmethod
     def log_prior(z):
@@ -94,7 +124,8 @@ class CausalRealNVP(Model):
             Can be any shape
         """
 
-        norm_term = tf.math.log(1 / tf.math.sqrt(2 * tf.math.pi))
+        pi = tf.constant(math.pi, dtype=tf.float64)
+        norm_term = tf.math.log(1 / tf.math.sqrt(2 * pi))
         logp = norm_term - 0.5 * tf.math.square(z)
         return tf.reduce_sum(logp)
 
@@ -127,22 +158,66 @@ class CausalRealNVP(Model):
 
         Returns
         -------
-        z : tensor
-            The latent state corresponding to the input triplet.
         log_pxy : float
             The log likelihood of both x and y.
+        z : tensor
+            The latent state corresponding to the input triplet.
         """
 
         ldj = tf.zeros(x.shape[0], dtype=tf.float64)
 
-        x_input = self.dequantize(x)
-        y_input = self.dequantize(y)
+        x = self.dequantize(x)
+        y = self.dequantize(y)
+        x, ldj = self.logit_normalize(x, ldj)
+        y, ldj = self.logit_normalize(y, ldj)
 
-        # Logit normalize
-        # Flow x
-        # Flow y with context t
-        # Concat
-        # Flow z
+        x_intermediate, ldj = self.flow_x(x, ldj, step, training=training)
+        y_intermediate, ldj = self.flow_y(y, ldj, step, training=training)
+        # TODO Flow y with context t
 
-        # Log prior z
-        # Log pxy = log prior + ldj
+        z = tf.concat([x_intermediate, y_intermediate], axis=-1)
+        z, ldj = self.flow_z(z, ldj, step, training=training)
+
+        log_pz = self.log_prior(z)
+        log_pxy = log_pz + ldj
+
+        return log_pxy, z
+
+    def sample(self, n_samples):
+        raise NotImplementedError
+
+
+def test_model():
+    import tensorflow_datasets as tfds
+    ds = tfds.load('cifar10')
+
+    dims = (32, 32, 3)
+    name_tag = "test"
+    filters = 32
+    n_scales = 3
+    n_blocks = 4
+    activation = "relu"
+    architecture_type = "ResNet"
+    batch_size = 8
+
+    for data in ds['train'].batch(2 * batch_size).take(1):
+        images = data['image']
+        x = images[:batch_size]
+        y = images[batch_size:]
+    t = None
+
+    start_time = time.time()
+    model = CausalRealNVP(dims, name_tag, filters, n_scales, n_blocks,
+                          activation, architecture_type, debug=True)
+    middle_time = time.time()
+    log_pxy, z = model(x, t, y, 0, training=True)
+    end_time = time.time()
+
+    print(model.summary())
+    print(f"Time to init model: {middle_time - start_time}")
+    print(f"Time to do forward pass: {end_time - middle_time}")
+
+if __name__ == "__main__":
+    tf.keras.backend.set_floatx("float64")
+    test_model()
+    print("All assertions passed, test successful")
