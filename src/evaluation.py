@@ -9,8 +9,16 @@ def calc_stats(model, dataset, scaling_data, params):
     Function that calls all individual metrics that we wat to computes
     and returns a tuple of all metrics.
 
-        Args:
-            ypred1, ypred0: output of get_y0_y1, rescaled with original std and mean of y
+    Parameters
+    ----------
+    model : tf.keras.Model
+        The model that does the predictions
+
+    dataset : tf.data.Dataset
+
+    scaling_data : (float, float)
+
+    params : dict
     """
 
     nr_samples = 100
@@ -24,11 +32,6 @@ def calc_stats(model, dataset, scaling_data, params):
         ite0 = tf.gather_nd(ypred1, idx0) - tf.gather_nd(y, idx0)
         pred_ite += tf.scatter_nd(idx1, ite1, pred_ite.shape)
         pred_ite += tf.scatter_nd(idx0, ite0, pred_ite.shape)
-        """
-         Maybe the problem is that I take the mean twice. Once per batch and then over all batches
-         Usually that is not a problem but it might be a problem because I now take the root in
-         between the two averagings, while it should be done at the end.
-        """
         return tf.square(true_ite - pred_ite)
 
     def abs_ate(ypred1, ypred0, true_ite):
@@ -76,14 +79,20 @@ def calc_stats(model, dataset, scaling_data, params):
         y = y * y_std + y_mean
         y_cf = y_cf * y_std + y_mean
 
-        slice_indices = (i * features[0].shape[0], (i + 1) * features[0].shape[0])
-        ite_scores = ite_scores[slice_indices[0]:slice_indices[1]].assign(rmse_ite(ypred1, ypred0, y))
-        ate_scores = ate_scores[slice_indices[0]:slice_indices[1]].assign(abs_ate(ypred1, ypred0, true_ite))
-        pehe_scores = pehe_scores[slice_indices[0]:slice_indices[1]].assign(pehe(ypred1, ypred0, mu_1, mu_0))
-        y_error_val = y_error_val[slice_indices[0]:slice_indices[1]].assign(y_errors(ypred1, ypred0, y, y_cf))
+        slice_indices = (i * features[0].shape[0],
+                         (i + 1) * features[0].shape[0])
+        ite_scores = ite_scores[slice_indices[0]:slice_indices[1]].\
+            assign(rmse_ite(ypred1, ypred0, y))
+        ate_scores = ate_scores[slice_indices[0]:slice_indices[1]].\
+            assign(abs_ate(ypred1, ypred0, true_ite))
+        pehe_scores = pehe_scores[slice_indices[0]:slice_indices[1]].\
+            assign(pehe(ypred1, ypred0, mu_1, mu_0))
+        y_error_val = y_error_val[slice_indices[0]:slice_indices[1]].\
+            assign(y_errors(ypred1, ypred0, y, y_cf))
 
     ite = tf.sqrt(tf.reduce_mean(ite_scores))
-    ate = tf.abs(tf.reduce_mean(ate_scores[:, 0]) - tf.reduce_mean(ate_scores[:, 1]))
+    ate = tf.abs(tf.reduce_mean(ate_scores[:, 0]) -
+                 tf.reduce_mean(ate_scores[:, 1]))
     pehe = tf.sqrt(tf.reduce_mean(pehe_scores))
     y_rmse = tf.sqrt(tf.reduce_mean(y_error_val, axis=1))
 

@@ -12,6 +12,7 @@ from contextlib import nullcontext
 from dataset import IHDP_dataset, TWINS_dataset
 from evaluation import calc_stats
 from tf.config.experimental import set_virtual_device_configuration
+from tf.data.experimental import cardinality
 
 VALID_MODELS = ["cevae", "cenf"]
 VALID_DATASETS = ["IHDP", "TWINS"]
@@ -46,32 +47,38 @@ def parse_arguments():
         their default value.
     """
 
-    parser = argparse.ArgumentParser(description="Causal effect Normalizing Flow trainer")
+    parser = argparse.ArgumentParser(description="Causal effect Normalizing "
+                                                 "Flow trainer")
     parser.add_argument("--batch_size", type=int, default=32,
                         help="Batch size (default=32)")
     parser.add_argument("--beta", type=float, default=1.0,
-                        help="Beta parameter to balance rate vs distortion in loss."
-                        "Higher than one means more weight to rate, lower than one means"
-                        "more weight to distortion. (default=1.0)")
+                        help="Beta parameter to balance rate vs distortion in "
+                        "loss. Higher than one means more weight to rate, "
+                        "lower than one means more weight to distortion. "
+                        "(default=1.0)")
     parser.add_argument("--dataset", type=str, default="IHDP",
                         help="Dataset used (default: IHDP)")
     parser.add_argument("--debug", action="store_true", default=False,
-                        help="Turn on debugging mode. What it does now is turn off "
-                        "summary writer and print a lott of stuff.")
+                        help="Turn on debugging mode. What it does now is turn"
+                        " off summary writer and print a lott of stuff.")
     parser.add_argument("--epochs", type=int, default=100,
                         help="Number of training iterations (default: 100)")
     parser.add_argument("--experiment_name", type=str,
-                        help="Name of experiment used for results folder. Disabled in debug mode")
+                        help="Name of experiment used for results folder. "
+                        "Disabled in debug mode")
     parser.add_argument("--learning_rate", type=float, default=1e-4,
                         help="Learning rate of the optmiser (default: 1e-4)")
     parser.add_argument("--log_steps", type=int, default=10,
                         help="Save/print log every n steps (default: 10)")
     parser.add_argument("--mode", type=str, default="train",
-                        help="Switch between train and test mode (default: train)")
+                        help="Switch between train and test mode "
+                        "(default: train)")
     parser.add_argument("--model", type=str, default="cevae",
-                        help="The type of model used for predictions (default: cevae)")
+                        help="The type of model used for predictions "
+                        "(default: cevae)")
     parser.add_argument("--model_dir", type=str, default="/home/mgroot/logs/",
-                        help="The directory to save the model to (default: ~/logs/)")
+                        help="The directory to save the model to "
+                        "(default: ~/logs/)")
     parser.add_argument("--nr_flows", type=int, default=4,
                         help="Number of flows in the flow models (default: 4)")
     parser.add_argument("--separate_files", action="store_true", default=False,
@@ -175,15 +182,15 @@ def train(params, writer, train_iteration=0):
     scaling_data = metadata[0]
     category_sizes = metadata[1]
 
-    len_dataset = tf.data.experimental.cardinality(dataset)
+    len_dataset = cardinality(dataset)
     dataset = dataset.shuffle(len_dataset)
 
     model = CIWorker(params, category_sizes)
 
     optimizer = tf.keras.optimizers.Adam(learning_rate=params["learning_rate"])
-    len_epoch = tf.data.experimental.cardinality(dataset.batch(params["batch_size"]))
+    len_epoch = cardinality(dataset.batch(params["batch_size"]))
     global_train_step = train_iteration * params["epochs"] * \
-        tf.data.experimental.cardinality(dataset.batch(params["batch_size"]))
+        cardinality(dataset.batch(params["batch_size"]))
     global_log_step = train_iteration * params["epochs"]
 
     with writer.as_default() if writer is not None else nullcontext():
@@ -218,7 +225,11 @@ def test(params):
 
 
 def main(params):
-    """ Main execution. Creates logging and writer, and launches selected training. """
+    """ Main execution.
+
+    Creates logging and writer, and launches selected training.
+    """
+
     if params['dataset'] == "IHDP":
         params["x_bin_size"] = 19
         params["x_cat_size"] = 0 + 19
@@ -233,8 +244,11 @@ def main(params):
 
     timestamp = time.strftime("%Y:%m:%d/%X")
     if not params["debug"]:
-        logdir = (f"{params['model_dir']}{params['model']}/{params['dataset']}/"
-                  f"{params['learning_rate']}/{timestamp}/{params['experiment_name']}")
+        logdir = (f"{params['model_dir']}{params['model']}/"
+                  f"{params['dataset']}/"
+                  f"{params['learning_rate']}/"
+                  f"{timestamp}/"
+                  f"{params['experiment_name']}")
         writer = tf.summary.create_file_writer(logdir)
     else:
         writer = None
@@ -249,7 +263,8 @@ def main(params):
         if not params['debug']:
             with writer.as_default():
                 print_stats(total_stats.mean(0),
-                            params['epochs'] * repetitions // params['log_steps'] + 1)
+                            params['epochs'] * repetitions //
+                            params['log_steps'] + 1)
     else:
         train(params, writer)
 

@@ -173,13 +173,13 @@ class Encoder(Model):
             qz_mean = t * qz1[:, :self.z_size] + (1. - t) *\
                       qz0[:, :self.z_size]
             qz_std = t * softplus(qz1[:, self.z_size:]) + (1. - t) *\
-                     softplus(qz0[:, self.z_size:])
+                softplus(qz0[:, self.z_size:])
 
         else:
             qz_mean = qt_sample * qz1[:, :self.z_size] + (1. - qt_sample) *\
                       qz0[:, :self.z_size]
             qz_std = qt_sample * softplus(qz1[:, self.z_size:]) +\
-                     (1. - qt_sample) * softplus(qz0[:, self.z_size:])
+                (1. - qt_sample) * softplus(qz0[:, self.z_size:])
         return qt_prob, qy_mean, qz_mean, qz_std
 
 
