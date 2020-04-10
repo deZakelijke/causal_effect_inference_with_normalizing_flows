@@ -27,6 +27,7 @@ class CausalRealNVP(Model):
 
         """
         super().__init__(name=name_tag)
+        self.dims = dims
         self.debug = debug
 
         with tf.name_scope(f"RealNVP/{name_tag}") as scope:
@@ -69,7 +70,7 @@ class CausalRealNVP(Model):
         z = tf.cast(z, dtype=tf.float64)
         return z + tf.random.uniform(z.shape, dtype=tf.float64)
 
-    def logit_normalize(self, z, ldj, reverse=False, alpha=1e-5):
+    def logit_normalize(self, z, ldj, reverse=False, alpha=1e-6):
         """ Inverse sigmoid normalisation.
 
         Parameters
@@ -99,7 +100,6 @@ class CausalRealNVP(Model):
             z = z * (1 - alpha) + alpha * 0.5
             ldj += tf.reduce_sum(-tf.math.log(z) - tf.math.log(1 - z),
                                  axis=tf.range(1, tf.rank(z)))
-            # TODO shouldn't the axis of the sum here be all axes except the first?
             z = tf.math.log(z) - tf.math.log(1 - z)
 
         else:
@@ -164,6 +164,7 @@ class CausalRealNVP(Model):
             The latent state corresponding to the input triplet.
         """
 
+        # TODO name scope
         ldj = tf.zeros(x.shape[0], dtype=tf.float64)
 
         x = self.dequantize(x)
@@ -183,12 +184,28 @@ class CausalRealNVP(Model):
 
         return log_pxy, z
 
+    def _reverse_flow(self, z, ldj):
+        """ Reverse of flow"""
+
+        z, ldj = self.flow_z(z, ldj, None, reverse=True)
+        x, y = tf.split(z, 2, axis=-1)
+        y, ldj = self.flow_y(y, ldj, None, reverse=True)
+        x, ldj = self.flow_x(x, ldj, None, reverse=True)
+
+        y, ldj = self.logit_normalize(y, ldj, reverse=True)
+        x, ldj = self.logit_normalize(x, ldj, reverse=True)
+
+        return x, y, ldj
+
     def sample(self, n_samples):
-        raise NotImplementedError
+        shape = (n_samples, self.dims[0], self.dims[1], self.dims[2] * 2)
+        z = tf.random.normal(shape)
+        ldj = tf.zeros(n_samples, dtype=tf.float64)
+        x, y, ldj = self._reverse_flow(z, ldj, 0)
+        return x, y
 
 
 def test_model():
-    import tensorflow_datasets as tfds
     ds = tfds.load('cifar10')
 
     dims = (32, 32, 3)
@@ -206,6 +223,7 @@ def test_model():
         y = images[batch_size:]
     t = None
 
+    # TODO writ test for logit normalise
     start_time = time.time()
     model = CausalRealNVP(dims, name_tag, filters, n_scales, n_blocks,
                           activation, architecture_type, debug=True)
@@ -213,11 +231,20 @@ def test_model():
     log_pxy, z = model(x, t, y, 0, training=True)
     end_time = time.time()
 
+    x_recon, y_recon, _ = model._reverse_flow(z, log_pxy)
+    tf.debugging.assert_near(tf.cast(x, tf.float64), x_recon,
+                             atol=1.0 + 1e-5, rtol=1e-5,
+                             message="Reconstructing of x incorrect")
+    tf.debugging.assert_near(tf.cast(y, tf.float64), y_recon,
+                             atol=1.0 + 1e-5, rtol=1e-5,
+                             message="Reconstruction of y incorrect")
+
     print(model.summary())
     print(f"Time to init model: {middle_time - start_time}")
     print(f"Time to do forward pass: {end_time - middle_time}")
 
 if __name__ == "__main__":
+    import tensorflow_datasets as tfds
     tf.keras.backend.set_floatx("float64")
     test_model()
     print("All assertions passed, test successful")
