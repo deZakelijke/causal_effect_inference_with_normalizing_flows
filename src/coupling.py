@@ -330,7 +330,8 @@ def test_coupling_layers():
                               activation, "FC_net", True, context_dims,
                               debug=True)
     z, ldj_out = coupling(x, ldj, 0, training=True, t=t)
-    x_recon, ldj_recon = coupling(z, ldj_out, 0, reverse=True, training=True, t=t)
+    x_recon, ldj_recon = coupling(z, ldj_out, 0, reverse=True, training=True,
+                                  t=t)
     tf.debugging.assert_near(x, z, message="Coupling does not init close "
                                            "to identity.")
     tf.debugging.assert_near(x, x_recon, message="Inverse of coupling "

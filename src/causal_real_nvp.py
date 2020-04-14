@@ -19,8 +19,9 @@ class CausalRealNVP(Model):
     connects them.
     """
 
-    def __init__(self, dims, name_tag, filters, n_scales, n_blocks=3,
-                 activation="relu", architecture_type="FC_net", debug=False):
+    def __init__(self, dims, intervention_dims, name_tag, filters, n_scales,
+                 n_blocks=3, activation="relu", architecture_type="FC_net",
+                 debug=False):
         """
         Parameters
         ----------
@@ -33,18 +34,22 @@ class CausalRealNVP(Model):
         with tf.name_scope(f"RealNVP/{name_tag}") as scope:
             self.flow_x = CouplingLayers(dims, "flow_x", filters, 0, n_scales,
                                          n_blocks, activation,
-                                         architecture_type, debug)
+                                         architecture_type, debug=debug)
 
             self.flow_y = CouplingLayers(dims, "flow_y", filters, 0, n_scales,
                                          n_blocks, activation,
-                                         architecture_type, debug)
+                                         architecture_type, context=True,
+                                         context_dims=intervention_dims,
+                                         debug=debug)
             # TODO I have to adjust flow_y in such a way that it also uses the
             # context variable
-
-            dims = dims[:-1] + (2 * dims[-1], )
-            self.flow_z = CouplingLayers(dims, "flow_z", filters, 0, n_scales,
+            if architecture_type == "FC_net":
+                dims_z = dims * 2
+            else: 
+                dims_z = dims[:-1] + (2 * dims[-1], )
+            self.flow_z = CouplingLayers(dims_z, "flow_z", filters, 0, n_scales,
                                          n_blocks, activation,
-                                         architecture_type, debug)
+                                         architecture_type, debug=debug)
 
     def dequantize(self, z):
         """ Dequantisation of the input data.
@@ -173,7 +178,7 @@ class CausalRealNVP(Model):
         y, ldj = self.logit_normalize(y, ldj)
 
         x_intermediate, ldj = self.flow_x(x, ldj, step, training=training)
-        y_intermediate, ldj = self.flow_y(y, ldj, step, training=training)
+        y_intermediate, ldj = self.flow_y(y, ldj, step, training=training, t=t)
         # TODO Flow y with context t
 
         z = tf.concat([x_intermediate, y_intermediate], axis=-1)
@@ -184,12 +189,12 @@ class CausalRealNVP(Model):
 
         return log_pxy, z
 
-    def _reverse_flow(self, z, ldj):
+    def _reverse_flow(self, z, t, ldj):
         """ Reverse of flow"""
 
         z, ldj = self.flow_z(z, ldj, None, reverse=True)
         x, y = tf.split(z, 2, axis=-1)
-        y, ldj = self.flow_y(y, ldj, None, reverse=True)
+        y, ldj = self.flow_y(y, ldj, None, reverse=True, t=t)
         x, ldj = self.flow_x(x, ldj, None, reverse=True)
 
         y, ldj = self.logit_normalize(y, ldj, reverse=True)
@@ -208,30 +213,37 @@ class CausalRealNVP(Model):
 def test_model():
     ds = tfds.load('cifar10')
 
-    dims = (32, 32, 3)
+    # dims = (32, 32, 3)
+    dims = 100
+    intervention_dims = 20
     name_tag = "test"
     filters = 32
     n_scales = 3
     n_blocks = 4
     activation = "relu"
-    architecture_type = "ResNet"
+    # architecture_type = "ResNet"
+    architecture_type = "FC_net"
     batch_size = 8
 
-    for data in ds['train'].batch(2 * batch_size).take(1):
-        images = data['image']
-        x = images[:batch_size]
-        y = images[batch_size:]
-    t = None
+    # for data in ds['train'].batch(2 * batch_size).take(1):
+    #     images = data['image']
+    #     x = images[:batch_size]
+    #     y = images[batch_size:]
+
+    x = tf.ones((batch_size, dims), dtype=tf.float64)
+    y = tf.ones((batch_size, dims), dtype=tf.float64)
+    t = tf.ones((batch_size, intervention_dims), dtype=tf.float64)
 
     # TODO writ test for logit normalise
     start_time = time.time()
-    model = CausalRealNVP(dims, name_tag, filters, n_scales, n_blocks,
+    model = CausalRealNVP(dims, intervention_dims, name_tag, filters, n_scales,
+                          n_blocks,
                           activation, architecture_type, debug=True)
     middle_time = time.time()
     log_pxy, z = model(x, t, y, 0, training=True)
     end_time = time.time()
 
-    x_recon, y_recon, _ = model._reverse_flow(z, log_pxy)
+    x_recon, y_recon, _ = model._reverse_flow(z, t, log_pxy)
     tf.debugging.assert_near(tf.cast(x, tf.float64), x_recon,
                              atol=1.0 + 1e-5, rtol=1e-5,
                              message="Reconstructing of x incorrect")
