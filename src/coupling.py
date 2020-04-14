@@ -10,7 +10,7 @@ class CouplingLayers(Model):
 
     def __init__(self, dims, name_tag, filters, scale_idx, n_scales,
                  n_blocks=3, activation='relu', architecture_type="FC_net",
-                 debug=False):
+                 context=False, context_dims=0, debug=False):
         """
         Parameters
         ----------
@@ -23,26 +23,34 @@ class CouplingLayers(Model):
         """
 
         super().__init__(name=name_tag)
+        self.debug = debug
         self.name_tag = name_tag
-
+        self.context = context
         self.is_last_block = scale_idx == n_scales - 1
         self.no_squeeze = architecture_type == "FC_net"
+
+        if context and context_dims == 0:
+            raise ValueError("Conxtex dims can't be zero if context is True.")
 
         mask = self.get_checkerboard_mask(dims)
 
         self.in_couplings = [
             Coupling(dims, filters, "Coupling_layer_1", n_blocks,
-                     activation, mask, architecture_type, debug),
+                     activation, mask, architecture_type, context,
+                     context_dims, debug),
             Coupling(dims, filters, "Coupling_layer_2", n_blocks,
-                     activation, 1 - mask, architecture_type, debug),
+                     activation, 1 - mask, architecture_type, context,
+                     context_dims, debug),
             Coupling(dims, filters, "Coupling_layer_3", n_blocks,
-                     activation, mask, architecture_type, debug)
+                     activation, mask, architecture_type, context,
+                     context_dims, debug)
         ]
 
         if self.is_last_block:
             self.in_couplings.append(
                 Coupling(dims, filters, "Coupling_layer_4", n_blocks,
-                         activation, 1 - mask, architecture_type, debug)
+                         activation, 1 - mask, architecture_type, context,
+                         context_dims, debug)
             )
         else:
             if architecture_type == "ResNet":
@@ -52,11 +60,14 @@ class CouplingLayers(Model):
 
             self.out_couplings = [
                 Coupling(dims, filters, "Coupling_layer_4", n_blocks,
-                         activation, 1 - mask, architecture_type, debug),
+                         activation, 1 - mask, architecture_type, context,
+                         context_dims, debug),
                 Coupling(dims, filters, "Coupling_layer_5", n_blocks,
-                         activation, mask, architecture_type, debug),
+                         activation, mask, architecture_type, context,
+                         context_dims, debug),
                 Coupling(dims, filters, "Coupling_layer_6", n_blocks,
-                         activation, 1 - mask, architecture_type, debug)
+                         activation, 1 - mask, architecture_type, context,
+                         context_dims, debug)
             ]
 
             name_tag = "TODO_make_better_name"  # TODO
@@ -67,20 +78,22 @@ class CouplingLayers(Model):
             self.next_couplings = CouplingLayers(dims, name_tag, filters,
                                                  scale_idx + 1, n_scales,
                                                  n_blocks, activation,
-                                                 architecture_type, debug)
+                                                 architecture_type, context,
+                                                 context_dims, debug)
 
     @tf.function
-    def call(self, z, ldj, step, reverse=False, training=False):
+    def call(self, z, ldj, step, reverse=False, training=False, t=None):
         if not reverse:
             for coupling in self.in_couplings:
-                z, ldj = coupling(z, ldj, step, training=training)
+                z, ldj = coupling(z, ldj, step, training=training, t=t)
 
             if not self.is_last_block:
                 z = self.squeeze(z)
                 for coupling in self.out_couplings:
-                    z, ldj = coupling(z, ldj, step, training=training)
+                    z, ldj = coupling(z, ldj, step, training=training, t=t)
                 z, z_split = tf.split(z, 2, axis=-1)
-                z, ldj = self.next_couplings(z, ldj, step, training=training)
+                z, ldj = self.next_couplings(z, ldj, step, training=training,
+                                             t=t)
                 z = tf.concat([z, z_split], axis=-1)
                 z = self.squeeze(z, reverse=True)
 
@@ -89,16 +102,16 @@ class CouplingLayers(Model):
                 z = self.squeeze(z)
                 z, z_split = tf.split(z, 2, axis=-1)
                 z, ldj = self.next_couplings(z, ldj, step, reverse=True,
-                                             training=training)
+                                             training=training, t=t)
                 z = tf.concat([z, z_split], axis=-1)
                 for coupling in self.out_couplings:
                     z, ldj = coupling(z, ldj, step, reverse=True,
-                                      training=training)
+                                      training=training, t=t)
                 z = self.squeeze(z, reverse=True)
 
             for coupling in self.in_couplings:
                 z, ldj = coupling(z, ldj, step, reverse=True,
-                                  training=training)
+                                  training=training, t=t)
 
         return z, ldj
 
@@ -177,7 +190,8 @@ class Coupling(Model):
     """ Single coupling layer."""
 
     def __init__(self, in_dims, filters, name_tag, n_blocks, activation,
-                 mask, architecture_type="FC_net", debug=False):
+                 mask, architecture_type="FC_net", context=False,
+                 context_dims=0, debug=False):
         """
         Parameters
         ----------
@@ -204,14 +218,22 @@ class Coupling(Model):
             Mask used to make the split in the input variable.
         """
         super().__init__(name=name_tag)
+        self.debug = debug
         self.mask = mask
         self.name_tag = name_tag
+        self.context = context
+
+        if context and context_dims == 0:
+            raise ValueError("Conxtex dims can't be zero if context is True.")
 
         if architecture_type == "FC_net":
-            self.nn = FC_net(in_dims, 2 * in_dims, name_tag, n_blocks,
+            out_dims = in_dims * 2
+            in_dims += context_dims
+            self.nn = FC_net(in_dims, out_dims, name_tag, n_blocks,
                              filters, activation, debug)
         if architecture_type == "ResNet":
             out_dims = in_dims[:-1] + (2 * in_dims[-1], )
+            in_dims = in_dims[:-1] + (in_dims[-1] + context_dims, )
             self.nn = ResNet(in_dims, out_dims, name_tag, n_blocks,
                              activation, filters, debug)
 
@@ -220,10 +242,15 @@ class Coupling(Model):
                                         tf.zeros_like(weights[1])])
 
     @tf.function
-    def call(self, z, ldj, step, reverse=False, training=False):
+    def call(self, z, ldj, step, reverse=False, training=False, t=None):
         """ Evaluation of a single coupling layer."""
+
         with tf.name_scope(f"Coupling/{self.name_tag}") as scope:
-            network_forward = self.nn(z * self.mask, step, training=training)
+            if self.context:
+                network_in = tf.concat([z * self.mask, t], axis=-1)
+            else:
+                network_in = z * self.mask
+            network_forward = self.nn(network_in, step, training=training)
             log_scale, translation = tf.split(network_forward, 2, axis=-1)
 
             if not reverse:
@@ -294,14 +321,16 @@ def test_coupling_layers():
     n_scales = 2
     filters = 128
     dims = 100
+    context_dims = 20
 
     x = tf.ones((batch_size, dims), dtype=tf.float64)
+    t = tf.ones((batch_size, context_dims), dtype=tf.float64)
     ldj = tf.zeros((batch_size), dtype=tf.float64)
     coupling = CouplingLayers(dims, name_tag, filters, 0, n_scales, n_blocks,
-                              activation, architecture_type="FC_net",
+                              activation, "FC_net", True, context_dims,
                               debug=True)
-    z, ldj_out = coupling(x, ldj, 0, training=True)
-    x_recon, ldj_recon = coupling(z, ldj_out, 0, reverse=True, training=True)
+    z, ldj_out = coupling(x, ldj, 0, training=True, t=t)
+    x_recon, ldj_recon = coupling(z, ldj_out, 0, reverse=True, training=True, t=t)
     tf.debugging.assert_near(x, z, message="Coupling does not init close "
                                            "to identity.")
     tf.debugging.assert_near(x, x_recon, message="Inverse of coupling "
@@ -319,8 +348,8 @@ def test_coupling_layers():
     coupling = CouplingLayers(dims, name_tag, filters, 0, n_scales, n_blocks,
                               activation, architecture_type="ResNet",
                               debug=True)
-    z, ldj_out = coupling(x, ldj, training=True)
-    x_recon, ldj_recon = coupling(z, ldj_out, reverse=True, training=True)
+    z, ldj_out = coupling(x, ldj, 0, training=True)
+    x_recon, ldj_recon = coupling(z, ldj_out, 0, reverse=True, training=True)
     tf.debugging.assert_near(x, z, message="Coupling does not init close "
                                            "to identity.")
     tf.debugging.assert_near(x, x_recon, message="Inverse of coupling "
