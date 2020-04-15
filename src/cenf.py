@@ -22,10 +22,12 @@ class CENF(Model):
 
         """
         super().__init__()
+        self.debug = debug
+        self.category_sizes = category_sizes
 
         self.encode = Encoder(params, category_sizes, hidden_size)
         self.decode = Decoder(params, category_sizes, hidden_size)
-        self.z_flow = PlanarFlow(self.z_size, params["nr_flows"])
+        self.z_flow = PlanarFlow(params["z_size"], params["n_flows"])
 
     @tf.function
     def call(self, features, step, training=False):

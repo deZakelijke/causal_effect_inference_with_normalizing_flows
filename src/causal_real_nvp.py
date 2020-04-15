@@ -35,7 +35,7 @@ class CausalRealNVP(Model):
             self.flow_x = CouplingLayers(dims, "flow_x", filters, 0, n_scales,
                                          n_blocks, activation,
                                          architecture_type, debug=debug)
-
+            # TODO make y have its own shape. Check shape of t
             self.flow_y = CouplingLayers(dims, "flow_y", filters, 0, n_scales,
                                          n_blocks, activation,
                                          architecture_type, context=True,
@@ -45,10 +45,10 @@ class CausalRealNVP(Model):
             # context variable
             if architecture_type == "FC_net":
                 dims_z = dims * 2
-            else: 
+            else:
                 dims_z = dims[:-1] + (2 * dims[-1], )
-            self.flow_z = CouplingLayers(dims_z, "flow_z", filters, 0, n_scales,
-                                         n_blocks, activation,
+            self.flow_z = CouplingLayers(dims_z, "flow_z", filters, 0,
+                                         n_scales, n_blocks, activation,
                                          architecture_type, debug=debug)
 
     def dequantize(self, z):

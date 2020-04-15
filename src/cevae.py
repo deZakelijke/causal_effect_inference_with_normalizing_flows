@@ -24,6 +24,8 @@ class CEVAE(Model):
         both the mean and std of a Normal distribution at once.
         """
         super().__init__()
+        self.debug = debug
+        self.category_sizes = category_sizes
         self.encode = Encoder(params, category_sizes, hidden_size)
         self.decode = Decoder(params, category_sizes, hidden_size)
 

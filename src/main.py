@@ -11,10 +11,8 @@ from causal_inference_worker import CIWorker
 from contextlib import nullcontext
 from dataset import IHDP_dataset, TWINS_dataset
 from evaluation import calc_stats
-from tf.config.experimental import set_virtual_device_configuration
-from tf.data.experimental import cardinality
 
-VALID_MODELS = ["cevae", "cenf"]
+VALID_MODELS = ["cevae", "cenf", "crnvp"]
 VALID_DATASETS = ["IHDP", "TWINS"]
 DATASET_DISTRIBUTION_DICT = {"IHDP": {'x': ['M', 'N'], 't': 'B', 'y': 'N'},
                              "TWINS": {'x': ['M', 'N'], 't': 'B', 'y': 'B'}}
@@ -79,7 +77,7 @@ def parse_arguments():
     parser.add_argument("--model_dir", type=str, default="/home/mgroot/logs/",
                         help="The directory to save the model to "
                         "(default: ~/logs/)")
-    parser.add_argument("--nr_flows", type=int, default=4,
+    parser.add_argument("--n_flows", type=int, default=4,
                         help="Number of flows in the flow models (default: 4)")
     parser.add_argument("--separate_files", action="store_true", default=False,
                         help="Switch to training the model on each data file "
@@ -111,7 +109,7 @@ def parse_arguments():
         raise NotImplementedError("Only training mode is implemented")
 
     if args.model == "cevae":
-        args.nr_flows = 0
+        args.n_flows = 0
 
     for arg, value in vars(args).items():
         print(f"Argument: {arg:<16} {value:<5}")
@@ -176,6 +174,7 @@ def train(params, writer, train_iteration=0):
         Tuple of the statistics that were calculated after the last epoch.
     """
 
+    cardinality = tf.data.experimental.cardinality
     dataset, metadata = eval(f"{params['dataset']}_dataset")\
                             (params, separate_files=params['separate_files'],
                              file_index=train_iteration)
@@ -211,8 +210,8 @@ def train(params, writer, train_iteration=0):
                 print_stats(stats, l_step)
                 tf.summary.scalar("metrics/loss", loss_value, step=l_step)
 
-        print(f"Epoch: {epoch}, average loss: {(avg_loss / "
-              f"tf.dtypes.cast(len_epoch, tf.float64)):.4f}")
+        print(f"Epoch: {epoch}, average loss: "
+              f"{(avg_loss / tf.dtypes.cast(len_epoch, tf.float64)):.4f}")
         stats = calc_stats(model, dataset, scaling_data, params)
         l_step = (epoch + global_log_step + 1) // params['log_steps']
         print_stats(stats, l_step)
@@ -272,10 +271,13 @@ def main(params):
 if __name__ == "__main__":
     params = parse_arguments()
 
-    gpus = tf.config.experimental.list_physical_devices("GPU")
-    print(gpus)
-    if gpus:
-        for gpu in gpus:
-            set_virtual_device_configuration(gpu, [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=2048)])
+    # set_vdc = tf.config.experimental.set_virtual_device_configuration
+    # vdc = tf.config.experimental.VirtualDeviceConfiguration
+    # gpus = tf.config.experimental.list_physical_devices("GPU")
+    #
+    # print(gpus)
+    # if gpus:
+    #     for gpu in gpus:
+    #         set_vdc(gpu, [vdg(memory_limit=2048)])
 
     main(params)

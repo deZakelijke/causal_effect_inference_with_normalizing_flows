@@ -83,6 +83,8 @@ class CouplingLayers(Model):
 
     @tf.function
     def call(self, z, ldj, step, reverse=False, training=False, t=None):
+        if self.debug:
+            print(f"CouplingLayer: {self.name_tag}")
         if not reverse:
             for coupling in self.in_couplings:
                 z, ldj = coupling(z, ldj, step, training=training, t=t)
@@ -245,6 +247,8 @@ class Coupling(Model):
     def call(self, z, ldj, step, reverse=False, training=False, t=None):
         """ Evaluation of a single coupling layer."""
 
+        if self.debug:
+            print(f"Coupling: {self.name_tag}")
         with tf.name_scope(f"Coupling/{self.name_tag}") as scope:
             if self.context:
                 network_in = tf.concat([z * self.mask, t], axis=-1)

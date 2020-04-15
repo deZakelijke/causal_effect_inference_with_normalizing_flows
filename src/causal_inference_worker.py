@@ -5,12 +5,13 @@ import tensorflow as tf
 from tensorflow.keras import Model
 from cevae import CEVAE
 from cenf import CENF
+from causal_real_nvp import CausalRealNVP
 
 
 class CIWorker(Model):
     """ Base class for the causal inference models. """
 
-    def __init__(self, params, category_sizes, debug=False):
+    def __init__(self, params, category_sizes):
         super().__init__()
         self.x_cat_size = params["x_cat_size"]
         self.x_cont_size = params["x_cont_size"]
@@ -18,23 +19,42 @@ class CIWorker(Model):
         self.debug = params["debug"]
         self.dataset_distributions = params["dataset_distributions"]
         self.category_sizes = category_sizes
+        self.model_type = params["model"]
         # self.cumulative_sizes = np.cumsum(category_sizes)
 
-        if params['model'] == "cevae":
-            self.model = CEVAE(params, category_sizes, debug=debug)
-        elif params['model'] == "cenf":
-            self.model = CENF(params, category_sizes, debug=debug)
+        if self.model_type == "cevae":
+            self.model = CEVAE(params, category_sizes, debug=self.debug)
+        elif self.model_type == "cenf":
+            self.model = CENF(params, category_sizes, debug=self.debug)
+        elif self.model_type == "crnvp":
+            dims = params["x_cat_size"] * category_sizes +\
+                   params["x_cont_size"]
+            intervention_dims = 1
+            self.model = CausalRealNVP(dims, intervention_dims, "CRNVP",
+                                       256, params["n_flows"],
+                                       debug=self.debug)
 
+    @tf.function
     def call(self, features, step, training=False):
-        return self.model(features, step, training)
+        if self.model_type == "crnvp":
+            return self.model(features[0], features[1], features[2], step,
+                              training)
+        else:
+            return self.model(features, step, training)
+
+    def loss(self, features, output, step, params):
+        if self.model_type == "crnvp":
+            return -output[0]
+        else:
+            return self.model.loss(features, *output, step, params)
 
     def grad(self, features, step, params):
         with tf.GradientTape() as tape:
-            output = self.model(features, step, training=True)
-            loss = self.mode.loss(features, *output, step, params)
+            output = self(features, step, training=True)
+            loss = self.loss(features, output, step, params)
         if self.debug:
             print(f"Forward pass complete, step: {step}")
         return loss, tape.gradient(loss, self.trainable_variables)
 
     def do_intervention(self, x, nr_samples):
-        raise NotImplementedError
+        return self.model.do_intervention(x, nr_samples)

@@ -27,7 +27,7 @@ class PlanarFlow(Model):
         """
 
         super().__init__()
-        assert nr_flows >= 0 and type(nr_flows) == int,
+        assert nr_flows >= 0 and type(nr_flows) == int,\
         "Number of flows must be larger than 0"
         self.nr_flows = nr_flows
         self.flows = []
