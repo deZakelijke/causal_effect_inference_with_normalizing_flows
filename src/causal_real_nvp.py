@@ -19,34 +19,43 @@ class CausalRealNVP(Model):
     connects them.
     """
 
-    def __init__(self, dims, intervention_dims, name_tag, filters, n_scales,
-                 n_blocks=3, activation="relu", architecture_type="FC_net",
-                 debug=False):
+    def __init__(self, dims_x, dims_y, intervention_dims, name_tag, filters,
+                 n_scales, n_blocks=3, activation="relu",
+                 architecture_type="FC_net", debug=False):
         """
         Parameters
         ----------
 
         """
         super().__init__(name=name_tag)
-        self.dims = dims
+        self.dims_x = dims_x
+        self.dims_y = dims_y * 2
         self.debug = debug
+        if architecture_type == "FC_net":
+            dims_y *= 2
+            dims_z = dims_x + dims_y
+            self.dims_split = [dims_x, dims_y]
+        else:
+            dims_z = dims[:-1] + (dims_x[-1] + dims_y[-1], )
+            self.dims_split = [dims_x[-1], dims_y[-1]]
 
         with tf.name_scope(f"RealNVP/{name_tag}") as scope:
-            self.flow_x = CouplingLayers(dims, "flow_x", filters, 0, n_scales,
+            self.flow_x = CouplingLayers(dims_x, "flow_x", filters, 0, n_scales,
                                          n_blocks, activation,
                                          architecture_type, debug=debug)
             # TODO make y have its own shape. Check shape of t
-            self.flow_y = CouplingLayers(dims, "flow_y", filters, 0, n_scales,
+            # Also adapt the flow length to the dimensionality of y
+            # But what if y has an uneven number of dimensions or if it
+            # has just one dimension?
+            n_scales = 1
+            self.flow_y = CouplingLayers(dims_y, "flow_y", filters, 0, n_scales,
                                          n_blocks, activation,
                                          architecture_type, context=True,
                                          context_dims=intervention_dims,
                                          debug=debug)
             # TODO I have to adjust flow_y in such a way that it also uses the
             # context variable
-            if architecture_type == "FC_net":
-                dims_z = dims * 2
-            else:
-                dims_z = dims[:-1] + (2 * dims[-1], )
+            n_scales = 3
             self.flow_z = CouplingLayers(dims_z, "flow_z", filters, 0,
                                          n_scales, n_blocks, activation,
                                          architecture_type, debug=debug)
@@ -75,7 +84,8 @@ class CausalRealNVP(Model):
         z = tf.cast(z, dtype=tf.float64)
         return z + tf.random.uniform(z.shape, dtype=tf.float64)
 
-    def logit_normalize(self, z, ldj, reverse=False, alpha=1e-6):
+    @staticmethod
+    def logit_normalize(z, ldj, reverse=False, alpha=1e-6):
         """ Inverse sigmoid normalisation.
 
         Parameters
@@ -112,6 +122,7 @@ class CausalRealNVP(Model):
             ldj -= tf.reduce_sum(-tf.math.log(z) - tf.math.log(1 - z),
                                  axis=tf.range(1, tf.rank(z)))
             z = tf.math.sigmoid(z)
+            z = z / (1 - alpha) - alpha / (2 - 2 * alpha)
             z *= maximal
             ldj += tf.math.log(maximal) * tf.cast(tf.reduce_prod(z.shape[1:]),
                                                   tf.float64)
@@ -134,7 +145,21 @@ class CausalRealNVP(Model):
         logp = norm_term - 0.5 * tf.math.square(z)
         return tf.reduce_sum(logp)
 
-    @tf.function
+    @staticmethod
+    def project(z, reverse=False):
+        """ Projects z from 1D to 2D or the other way around."""
+        if not reverse:
+            sign = tf.math.sign(z)
+            z_square = tf.math.square(z)
+            z = tf.math.sqrt(0.5 * z_square) * sign
+            z = tf.concat([z, z], axis=-1)
+        else:
+            sign = tf.math.sign(z[:, 0])
+            z_square = tf.math.square(z)
+            z = tf.math.sqrt(tf.reduce_sum(z_square, axis=-1, keepdims=True))
+            z *= sign
+        return z
+
     def call(self, x, t, y, step, training=False):
         """ Infers the latent confounder and the log-likelihood of the input.
 
@@ -178,6 +203,7 @@ class CausalRealNVP(Model):
         y, ldj = self.logit_normalize(y, ldj)
 
         x_intermediate, ldj = self.flow_x(x, ldj, step, training=training)
+        y = self.project(y)
         y_intermediate, ldj = self.flow_y(y, ldj, step, training=training, t=t)
         # TODO Flow y with context t
 
@@ -193,8 +219,9 @@ class CausalRealNVP(Model):
         """ Reverse of flow"""
 
         z, ldj = self.flow_z(z, ldj, None, reverse=True)
-        x, y = tf.split(z, 2, axis=-1)
+        x, y = tf.split(z, self.dims_split, axis=-1)
         y, ldj = self.flow_y(y, ldj, None, reverse=True, t=t)
+        y = self.project(y, reverse=True)
         x, ldj = self.flow_x(x, ldj, None, reverse=True)
 
         y, ldj = self.logit_normalize(y, ldj, reverse=True)
@@ -214,11 +241,12 @@ def test_model():
     ds = tfds.load('cifar10')
 
     # dims = (32, 32, 3)
-    dims = 100
+    dims_x = 102
+    dims_y = 1
     intervention_dims = 20
     name_tag = "test"
     filters = 32
-    n_scales = 3
+    n_scales = 2
     n_blocks = 4
     activation = "relu"
     # architecture_type = "ResNet"
@@ -230,14 +258,14 @@ def test_model():
     #     x = images[:batch_size]
     #     y = images[batch_size:]
 
-    x = tf.ones((batch_size, dims), dtype=tf.float64)
-    y = tf.ones((batch_size, dims), dtype=tf.float64)
+    x = tf.ones((batch_size, dims_x), dtype=tf.float64)
+    y = tf.ones((batch_size, dims_y), dtype=tf.float64)
     t = tf.ones((batch_size, intervention_dims), dtype=tf.float64)
 
     # TODO writ test for logit normalise
     start_time = time.time()
-    model = CausalRealNVP(dims, intervention_dims, name_tag, filters, n_scales,
-                          n_blocks,
+    model = CausalRealNVP(dims_x, dims_y, intervention_dims, name_tag, filters,
+                          n_scales, n_blocks,
                           activation, architecture_type, debug=True)
     middle_time = time.time()
     log_pxy, z = model(x, t, y, 0, training=True)

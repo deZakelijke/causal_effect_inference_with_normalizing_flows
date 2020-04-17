@@ -271,13 +271,12 @@ def main(params):
 if __name__ == "__main__":
     params = parse_arguments()
 
-    # set_vdc = tf.config.experimental.set_virtual_device_configuration
-    # vdc = tf.config.experimental.VirtualDeviceConfiguration
-    # gpus = tf.config.experimental.list_physical_devices("GPU")
-    #
-    # print(gpus)
-    # if gpus:
-    #     for gpu in gpus:
-    #         set_vdc(gpu, [vdg(memory_limit=2048)])
+    set_vdc = tf.config.experimental.set_virtual_device_configuration
+    vdc = tf.config.experimental.VirtualDeviceConfiguration
+    gpus = tf.config.experimental.list_physical_devices("GPU")
+
+    if gpus:
+        for gpu in gpus:
+            set_vdc(gpu, [vdc(memory_limit=2048)])
 
     main(params)
