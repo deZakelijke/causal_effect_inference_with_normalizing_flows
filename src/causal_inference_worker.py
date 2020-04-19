@@ -27,24 +27,26 @@ class CIWorker(Model):
         elif self.model_type == "cenf":
             self.model = CENF(params, category_sizes, debug=self.debug)
         elif self.model_type == "crnvp":
-            dims = params["x_cat_size"] * category_sizes +\
-                   params["x_cont_size"]
+            dims_x = params["x_cat_size"] * category_sizes +\
+                     params["x_cont_size"]
             intervention_dims = 1
-            self.model = CausalRealNVP(dims, intervention_dims, "CRNVP",
+            self.model = CausalRealNVP(dims_x, 1, intervention_dims, "CRNVP",
                                        256, params["n_flows"],
                                        debug=self.debug)
 
-    @tf.function
+    # @tf.function
     def call(self, features, step, training=False):
         if self.model_type == "crnvp":
-            return self.model(features[0], features[1], features[2], step,
-                              training)
+            x = tf.concat([features[0], features[1]], axis=-1)
+            t = features[2]
+            y = features[3]
+            return self.model(x, t, y, step, training)
         else:
             return self.model(features, step, training)
 
     def loss(self, features, output, step, params):
         if self.model_type == "crnvp":
-            return -output[0]
+            return -tf.reduce_mean(output[0])
         else:
             return self.model.loss(features, *output, step, params)
 

@@ -55,7 +55,7 @@ class CausalRealNVP(Model):
                                          debug=debug)
             # TODO I have to adjust flow_y in such a way that it also uses the
             # context variable
-            n_scales = 3
+            n_scales = 2
             self.flow_z = CouplingLayers(dims_z, "flow_z", filters, 0,
                                          n_scales, n_blocks, activation,
                                          architecture_type, debug=debug)
@@ -157,9 +157,10 @@ class CausalRealNVP(Model):
             sign = tf.math.sign(z[:, 0])
             z_square = tf.math.square(z)
             z = tf.math.sqrt(tf.reduce_sum(z_square, axis=-1, keepdims=True))
-            z *= sign
+            z = z * tf.expand_dims(sign, axis=1)
         return z
 
+    # @tf.function
     def call(self, x, t, y, step, training=False):
         """ Infers the latent confounder and the log-likelihood of the input.
 
@@ -197,10 +198,10 @@ class CausalRealNVP(Model):
         # TODO name scope
         ldj = tf.zeros(x.shape[0], dtype=tf.float64)
 
-        x = self.dequantize(x)
-        y = self.dequantize(y)
-        x, ldj = self.logit_normalize(x, ldj)
-        y, ldj = self.logit_normalize(y, ldj)
+        # x = self.dequantize(x)
+        # y = self.dequantize(y)
+        # x, ldj = self.logit_normalize(x, ldj)
+        # y, ldj = self.logit_normalize(y, ldj)
 
         x_intermediate, ldj = self.flow_x(x, ldj, step, training=training)
         y = self.project(y)
@@ -224,8 +225,8 @@ class CausalRealNVP(Model):
         y = self.project(y, reverse=True)
         x, ldj = self.flow_x(x, ldj, None, reverse=True)
 
-        y, ldj = self.logit_normalize(y, ldj, reverse=True)
-        x, ldj = self.logit_normalize(x, ldj, reverse=True)
+        # y, ldj = self.logit_normalize(y, ldj, reverse=True)
+        # x, ldj = self.logit_normalize(x, ldj, reverse=True)
 
         return x, y, ldj
 
@@ -236,6 +237,29 @@ class CausalRealNVP(Model):
         x, y, ldj = self._reverse_flow(z, ldj, 0)
         return x, y
 
+    def do_intervention(self, x, nr_samples):
+        """ Do an intervention for t=0 and t=1. """
+        y_values = [0., 1.]
+        t_values = [0., 1.]
+        z_values = []
+        for y in y_values:
+            y = tf.constant(y, shape=(1, 1), dtype=tf.float64)
+            y = tf.tile(y, (x.shape[0], 1))
+            for t in t_values:
+                t = tf.constant(t, shape=(1, 1), dtype=tf.float64)
+                t = tf.tile(t, (x.shape[0], 1))
+                log_pxy, z = self(x, t, y, None)
+                z_values.append(z)
+        z = tf.reduce_mean(z_values, axis=0)
+        t = tf.tile(tf.constant(0., shape=(1, 1), dtype=tf.float64), 
+                    (z.shape[0], 1))
+        _, y_0, _ = self._reverse_flow(z, t, log_pxy)
+
+        t = tf.tile(tf.constant(1., shape=(1, 1), dtype=tf.float64), 
+                    (z.shape[0], 1))
+        _, y_1, _ = self._reverse_flow(z, t, log_pxy)
+
+        return y_0, y_1
 
 def test_model():
     ds = tfds.load('cifar10')

@@ -106,12 +106,12 @@ class CouplingLayers(Model):
                 z, ldj = self.next_couplings(z, ldj, step, reverse=True,
                                              training=training, t=t)
                 z = tf.concat([z, z_split], axis=-1)
-                for coupling in self.out_couplings:
+                for coupling in reversed(self.out_couplings):
                     z, ldj = coupling(z, ldj, step, reverse=True,
                                       training=training, t=t)
                 z = self.squeeze(z, reverse=True)
 
-            for coupling in self.in_couplings:
+            for coupling in reversed(self.in_couplings):
                 z, ldj = coupling(z, ldj, step, reverse=True,
                                   training=training, t=t)
 
