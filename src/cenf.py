@@ -85,7 +85,7 @@ class CENF(Model):
                               tf.reduce_mean(distortion_y), step=l_step)
             tf.summary.scalar("partial_loss/rate_z",
                               tf.reduce_mean(rate), step=l_step)
-            tf.summary.scalar("partial_loss/ldj_z",
+            tf.summary.scalar("partial_loss/ldj",
                               tf.reduce_mean(-ldj_z), step=l_step)
             tf.summary.scalar("partial_loss/variational_t",
                               tf.reduce_mean(variational_t), step=l_step)

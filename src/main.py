@@ -77,8 +77,8 @@ def parse_arguments():
     parser.add_argument("--model_dir", type=str, default="/home/mgroot/logs/",
                         help="The directory to save the model to "
                         "(default: ~/logs/)")
-    parser.add_argument("--n_flows", type=int, default=4,
-                        help="Number of flows in the flow models (default: 4)")
+    parser.add_argument("--n_flows", type=int, default=2,
+                        help="Number of flows in the flow models (default: 2)")
     parser.add_argument("--separate_files", action="store_true", default=False,
                         help="Switch to training the model on each data file "
                         "separately instead of everything at once")
@@ -90,8 +90,8 @@ def parse_arguments():
         args.experiment_name = ""
         args.log_steps = 1
     else:
-        os.environ["TF_CPP_MIN_LOG_LEVEL"] = "1"
-        logging.getLogger("tensorflow").setLevel(logging.WARNING)
+        os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+        logging.getLogger("tensorflow").setLevel(logging.ERROR)
         if args.experiment_name is None:
             raise ValueError("Experiment name is required if debug mode is "
                              "disabled")
@@ -199,6 +199,7 @@ def train(params, writer, train_iteration=0):
             avg_loss = 0
             step_start = global_train_step + epoch * len_epoch
             for step, features in dataset.batch(params["batch_size"]).enumerate(step_start):
+                step = tf.constant(step)
                 loss_value, grads = model.grad(features, step, params)
                 avg_loss += loss_value
                 optimizer.apply_gradients(zip(grads, model.trainable_variables))

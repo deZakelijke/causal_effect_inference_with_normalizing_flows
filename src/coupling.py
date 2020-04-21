@@ -33,24 +33,25 @@ class CouplingLayers(Model):
             raise ValueError("Conxtex dims can't be zero if context is True.")
 
         mask = self.get_checkerboard_mask(dims)
+        coupling_index = scale_idx * 6
 
         self.in_couplings = [
-            Coupling(dims, filters, "Coupling_layer_1", n_blocks,
-                     activation, mask, architecture_type, context,
+            Coupling(dims, filters, f"Coupling_layer_{coupling_index + 1}",
+                     n_blocks, activation, mask, architecture_type, context,
                      context_dims, debug),
-            Coupling(dims, filters, "Coupling_layer_2", n_blocks,
-                     activation, 1 - mask, architecture_type, context,
-                     context_dims, debug),
-            Coupling(dims, filters, "Coupling_layer_3", n_blocks,
-                     activation, mask, architecture_type, context,
+            Coupling(dims, filters, f"Coupling_layer_{coupling_index + 2}",
+                     n_blocks, activation, 1 - mask, architecture_type,
+                     context, context_dims, debug),
+            Coupling(dims, filters, f"Coupling_layer_{coupling_index + 3}",
+                     n_blocks, activation, mask, architecture_type, context,
                      context_dims, debug)
         ]
 
         if self.is_last_block:
             self.in_couplings.append(
-                Coupling(dims, filters, "Coupling_layer_4", n_blocks,
-                         activation, 1 - mask, architecture_type, context,
-                         context_dims, debug)
+                Coupling(dims, filters, f"Coupling_layer_{coupling_index + 4}",
+                         n_blocks, activation, 1 - mask, architecture_type,
+                         context, context_dims, debug)
             )
         else:
             if architecture_type == "ResNet":
@@ -59,15 +60,15 @@ class CouplingLayers(Model):
                 mask = self.get_channel_mask(dims)
 
             self.out_couplings = [
-                Coupling(dims, filters, "Coupling_layer_4", n_blocks,
-                         activation, 1 - mask, architecture_type, context,
-                         context_dims, debug),
-                Coupling(dims, filters, "Coupling_layer_5", n_blocks,
-                         activation, mask, architecture_type, context,
-                         context_dims, debug),
-                Coupling(dims, filters, "Coupling_layer_6", n_blocks,
-                         activation, 1 - mask, architecture_type, context,
-                         context_dims, debug)
+                Coupling(dims, filters, f"Coupling_layer_{coupling_index + 4}",
+                         n_blocks, activation, 1 - mask, architecture_type,
+                         context, context_dims, debug),
+                Coupling(dims, filters, f"Coupling_layer_{coupling_index + 5}",
+                         n_blocks, activation, mask, architecture_type,
+                         context, context_dims, debug),
+                Coupling(dims, filters, f"Coupling_layer_{coupling_index + 6}",
+                         n_blocks, activation, 1 - mask, architecture_type,
+                         context, context_dims, debug)
             ]
 
             name_tag = "TODO_make_better_name"  # TODO
@@ -256,6 +257,7 @@ class Coupling(Model):
                 network_in = z * self.mask
             network_forward = self.nn(network_in, step, training=training)
             log_scale, translation = tf.split(network_forward, 2, axis=-1)
+            log_scale = tf.math.tanh(log_scale)
 
             if not reverse:
                 scale = tf.math.exp(log_scale)

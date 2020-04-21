@@ -34,7 +34,7 @@ class CIWorker(Model):
                                        256, params["n_flows"],
                                        debug=self.debug)
 
-    # @tf.function
+    @tf.function
     def call(self, features, step, training=False):
         if self.model_type == "crnvp":
             x = tf.concat([features[0], features[1]], axis=-1)
@@ -44,16 +44,10 @@ class CIWorker(Model):
         else:
             return self.model(features, step, training)
 
-    def loss(self, features, output, step, params):
-        if self.model_type == "crnvp":
-            return -tf.reduce_mean(output[0])
-        else:
-            return self.model.loss(features, *output, step, params)
-
     def grad(self, features, step, params):
         with tf.GradientTape() as tape:
             output = self(features, step, training=True)
-            loss = self.loss(features, output, step, params)
+            loss = self.model.loss(features, *output, step, params)
         if self.debug:
             print(f"Forward pass complete, step: {step}")
         return loss, tape.gradient(loss, self.trainable_variables)

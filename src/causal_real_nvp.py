@@ -40,16 +40,16 @@ class CausalRealNVP(Model):
             self.dims_split = [dims_x[-1], dims_y[-1]]
 
         with tf.name_scope(f"RealNVP/{name_tag}") as scope:
-            self.flow_x = CouplingLayers(dims_x, "flow_x", filters, 0, n_scales,
-                                         n_blocks, activation,
+            self.flow_x = CouplingLayers(dims_x, "flow_x", filters, 0,
+                                         n_scales, n_blocks, activation,
                                          architecture_type, debug=debug)
             # TODO make y have its own shape. Check shape of t
             # Also adapt the flow length to the dimensionality of y
             # But what if y has an uneven number of dimensions or if it
             # has just one dimension?
             n_scales = 1
-            self.flow_y = CouplingLayers(dims_y, "flow_y", filters, 0, n_scales,
-                                         n_blocks, activation,
+            self.flow_y = CouplingLayers(dims_y, "flow_y", filters, 0,
+                                         n_scales, n_blocks, activation,
                                          architecture_type, context=True,
                                          context_dims=intervention_dims,
                                          debug=debug)
@@ -131,7 +131,9 @@ class CausalRealNVP(Model):
 
     @staticmethod
     def log_prior(z):
-        """ The prior log probability of a standard Gaussian: N(z|mu=0, sig=1)
+        """ The negative prior log probability of a standard Gaussian
+
+        N(z|mu=0, Sig=1)
 
         Parameters
         ----------
@@ -141,9 +143,9 @@ class CausalRealNVP(Model):
         """
 
         pi = tf.constant(math.pi, dtype=tf.float64)
-        norm_term = tf.math.log(1 / tf.math.sqrt(2 * pi))
-        logp = norm_term - 0.5 * tf.math.square(z)
-        return tf.reduce_sum(logp)
+        norm_term = tf.math.log(2 * pi)
+        log_p = (norm_term + tf.math.square(z)) * 0.5
+        return tf.reduce_sum(log_p, axis=tf.range(1, tf.rank(z)))
 
     @staticmethod
     def project(z, reverse=False):
@@ -160,7 +162,7 @@ class CausalRealNVP(Model):
             z = z * tf.expand_dims(sign, axis=1)
         return z
 
-    # @tf.function
+    @tf.function
     def call(self, x, t, y, step, training=False):
         """ Infers the latent confounder and the log-likelihood of the input.
 
@@ -212,10 +214,26 @@ class CausalRealNVP(Model):
         z, ldj = self.flow_z(z, ldj, step, training=training)
 
         log_pz = self.log_prior(z)
-        log_pxy = log_pz + ldj
+        neg_log_pxy = log_pz + ldj
+        log_2 = tf.math.log(tf.constant(2., dtype=tf.float64))
+        bpd = neg_log_pxy / (tf.size(z[0], out_type=tf.float64) * log_2)
+        return bpd, ldj, z
 
-        return log_pxy, z
+    @tf.function
+    def loss(self, features, bpd, ldj, z, step, params):
+        """ Loss function of the model. """
+        if self.debug:
+            print("Calculating loss")
 
+        if step is not None and step % (params['log_steps'] * 5) == 0:
+            l_step = step // (params['log_steps'] * 5)
+            tf.summary.scalar("partial_loss/ldj",
+                              tf.reduce_mean(ldj), step=l_step)
+
+        loss = tf.reduce_mean(bpd)
+        return loss
+
+    @tf.function
     def _reverse_flow(self, z, t, ldj):
         """ Reverse of flow"""
 
@@ -239,7 +257,7 @@ class CausalRealNVP(Model):
 
     def do_intervention(self, x, nr_samples):
         """ Do an intervention for t=0 and t=1. """
-        y_values = [0., 1.]
+        y_values = [-1., 0., 1.]
         t_values = [0., 1.]
         z_values = []
         for y in y_values:
@@ -248,18 +266,19 @@ class CausalRealNVP(Model):
             for t in t_values:
                 t = tf.constant(t, shape=(1, 1), dtype=tf.float64)
                 t = tf.tile(t, (x.shape[0], 1))
-                log_pxy, z = self(x, t, y, None)
+                bpd, ldj, z = self(x, t, y, None)
                 z_values.append(z)
         z = tf.reduce_mean(z_values, axis=0)
-        t = tf.tile(tf.constant(0., shape=(1, 1), dtype=tf.float64), 
+        t = tf.tile(tf.constant(0., shape=(1, 1), dtype=tf.float64),
                     (z.shape[0], 1))
-        _, y_0, _ = self._reverse_flow(z, t, log_pxy)
+        _, y_0, _ = self._reverse_flow(z, t, bpd)
 
-        t = tf.tile(tf.constant(1., shape=(1, 1), dtype=tf.float64), 
+        t = tf.tile(tf.constant(1., shape=(1, 1), dtype=tf.float64),
                     (z.shape[0], 1))
-        _, y_1, _ = self._reverse_flow(z, t, log_pxy)
+        _, y_1, _ = self._reverse_flow(z, t, bpd)
 
         return y_0, y_1
+
 
 def test_model():
     ds = tfds.load('cifar10')
@@ -292,10 +311,10 @@ def test_model():
                           n_scales, n_blocks,
                           activation, architecture_type, debug=True)
     middle_time = time.time()
-    log_pxy, z = model(x, t, y, 0, training=True)
+    bpd, ldj, z = model(x, t, y, 0, training=True)
     end_time = time.time()
 
-    x_recon, y_recon, _ = model._reverse_flow(z, t, log_pxy)
+    x_recon, y_recon, _ = model._reverse_flow(z, t, bpd)
     tf.debugging.assert_near(tf.cast(x, tf.float64), x_recon,
                              atol=1.0 + 1e-5, rtol=1e-5,
                              message="Reconstructing of x incorrect")
