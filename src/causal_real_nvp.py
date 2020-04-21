@@ -131,7 +131,7 @@ class CausalRealNVP(Model):
 
     @staticmethod
     def log_prior(z):
-        """ The negative prior log probability of a standard Gaussian
+        """ The prior log probability of a standard Gaussian
 
         N(z|mu=0, Sig=1)
 
@@ -144,7 +144,7 @@ class CausalRealNVP(Model):
 
         pi = tf.constant(math.pi, dtype=tf.float64)
         norm_term = tf.math.log(2 * pi)
-        log_p = (norm_term + tf.math.square(z)) * 0.5
+        log_p = -(norm_term + tf.math.square(z)) * 0.5
         return tf.reduce_sum(log_p, axis=tf.range(1, tf.rank(z)))
 
     @staticmethod
@@ -200,8 +200,8 @@ class CausalRealNVP(Model):
         # TODO name scope
         ldj = tf.zeros(x.shape[0], dtype=tf.float64)
 
-        # x = self.dequantize(x)
-        # y = self.dequantize(y)
+        x = self.dequantize(x)
+        y = self.dequantize(y)
         # x, ldj = self.logit_normalize(x, ldj)
         # y, ldj = self.logit_normalize(y, ldj)
 
@@ -212,11 +212,10 @@ class CausalRealNVP(Model):
 
         z = tf.concat([x_intermediate, y_intermediate], axis=-1)
         z, ldj = self.flow_z(z, ldj, step, training=training)
-
         log_pz = self.log_prior(z)
-        neg_log_pxy = log_pz + ldj
+        log_pxy = log_pz + ldj
         log_2 = tf.math.log(tf.constant(2., dtype=tf.float64))
-        bpd = neg_log_pxy / (tf.size(z[0], out_type=tf.float64) * log_2)
+        bpd = -log_pxy / (tf.size(z[0], out_type=tf.float64) * log_2)
         return bpd, ldj, z
 
     @tf.function
