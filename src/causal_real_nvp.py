@@ -60,7 +60,7 @@ class CausalRealNVP(Model):
                                          n_scales, n_blocks, activation,
                                          architecture_type, debug=debug)
 
-    def dequantize(self, z):
+    def dequantize(self, z, factor=1.0):
         """ Dequantisation of the input data.
 
         Causes the data to not lie on exact integer values. Only use this
@@ -82,7 +82,9 @@ class CausalRealNVP(Model):
             The new tensor of the same shape as the input.
         """
         z = tf.cast(z, dtype=tf.float64)
-        return z + tf.random.uniform(z.shape, dtype=tf.float64)
+        noise = tf.random.uniform(z.shape, dtype=tf.float64) * factor - 0.5 *\
+            factor
+        return z + noise
 
     @staticmethod
     def logit_normalize(z, ldj, reverse=False, alpha=1e-6):
@@ -200,8 +202,8 @@ class CausalRealNVP(Model):
         # TODO name scope
         ldj = tf.zeros(x.shape[0], dtype=tf.float64)
 
-        x = self.dequantize(x)
-        y = self.dequantize(y)
+        x = self.dequantize(x)  # TODO figure out if/when we want to dequantize
+        y = self.dequantize(y, factor=1.0)
         # x, ldj = self.logit_normalize(x, ldj)
         # y, ldj = self.logit_normalize(y, ldj)
 
@@ -256,7 +258,8 @@ class CausalRealNVP(Model):
 
     def do_intervention(self, x, nr_samples):
         """ Do an intervention for t=0 and t=1. """
-        y_values = [-1., 0., 1.]
+        # TODO parallelise this
+        y_values = [-1.5, -0.75, 0., 0.75, 1.5]
         t_values = [0., 1.]
         z_values = []
         for y in y_values:

@@ -2,6 +2,7 @@ import sys
 import tensorflow as tf
 import numpy as np
 import pandas as pd
+from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder
 from scipy.special import expit
 from tensorflow import math
@@ -19,7 +20,7 @@ def IHDP_dataset(params, path_data="datasets/IHDP/csv/", separate_files=False,
 
     path_data : str
         Path to the folder that contains the csv files with data
- 
+
     separate_files : bool
         Flag to determine if the files should all create a separate Dataset
         object or if they should become one large dataset.
@@ -57,41 +58,46 @@ def IHDP_dataset(params, path_data="datasets/IHDP/csv/", separate_files=False,
     if separate_files:
         assert file_index is not None, "No file index given"
         assert file_index < nr_files, "File index invalid"
-        data = np.loadtxt(f"{path_data}{file_prefix}{file_index + 1}.csv", delimiter=',', dtype=np.float64)
-        for line in data:
-            t.append(line[0])       # Treatment true/false
-            y.append(line[1])       # Outcome
-            y_cf.append(line[2])    # Counterfactual outcome
-            mu_0.append(line[3])    # Outcome of the experiment if the dataset had been created with
-            mu_1.append(line[4])    # a randomised double lbind trial
-            x = line[5:]            # Proxy features
-            x[13] -= 1              # Value is in [1, 2] instead of [0, 1]
-            x_bin.append(x[binfeats])
-            x_cont.append(x[contfeats])
+        data = np.loadtxt(f"{path_data}{file_prefix}{file_index + 1}.csv",
+                          delimiter=',', dtype=np.float64)
+        t = data[:, 0]
+        y = data[:, 1]
+        y_cf = data[:, 2]
+        mu_0 = data[:, 3]
+        mu_1 = data[:, 4]
+        x = data[:, 5:]
+        x[:, 13] -= 1
+        x_bin = x[:, binfeats]
+        x_cont = x[:, contfeats]
     else:
         for i in range(1, nr_files + 1):
-            data = np.loadtxt(f"{path_data}{file_prefix}{i}.csv", delimiter=',', dtype=np.float64)
-            for line in data:
-                t.append(line[0])
-                y.append(line[1])
-                y_cf.append(line[2])
-                mu_0.append(line[3])
-                mu_1.append(line[4])
-                x = line[5:]
-                x[13] -= 1
-                x_bin.append(x[binfeats])
-                x_cont.append(x[contfeats])
+            data = np.loadtxt(f"{path_data}{file_prefix}{i}.csv",
+                              delimiter=',', dtype=np.float64)
+            t = data[:, 0]
+            y = data[:, 1]
+            y_cf = data[:, 2]
+            mu_0 = data[:, 3]
+            mu_1 = data[:, 4]
+            x = data[:, 5:]
+            x[:, 13] -= 1
+            x_bin = x[:, binfeats]
+            x_cont = x[:, contfeats]
 
+    idx_tr, idx_te = train_test_split(np.arange(x.shape[0]), test_size=0.1,
+                                      random_state=1)
     x_cont = np.array(x_cont)
     x_bin = np.array(x_bin, dtype=int)
-    x_bin = tf.one_hot(x_bin, 2, axis=-1, dtype=tf.float64)
-    x_bin = tf.reshape(x_bin, (len(x_bin), len(binfeats) * 2))
+    # x_bin = tf.one_hot(x_bin, 2, axis=-1, dtype=tf.float64)
+    # x_bin = tf.reshape(x_bin, (len(x_bin), len(binfeats) * 2))
+    enc = OneHotEncoder(categories='auto', sparse=False)
+    x_bin = enc.fit(x_bin).transform(x_bin)
 
     t = np.expand_dims(np.array(t), axis=1)
     y = np.expand_dims(np.array(y), axis=1)
     y_cf = np.expand_dims(np.array(y_cf), axis=1)
 
-    y_mean, y_std = np.mean(tf.concat([y, y_cf], 1)), np.std(tf.concat([y, y_cf], 1))
+    y_mean = np.mean(tf.concat([y, y_cf], 1))
+    y_std = np.std(tf.concat([y, y_cf], 1))
     y = (y - y_mean) / y_std
     y_cf = (y_cf - y_mean) / y_std
 
@@ -101,16 +107,26 @@ def IHDP_dataset(params, path_data="datasets/IHDP/csv/", separate_files=False,
 
     metadata = (scaling_data, 2)
 
-    return tf.data.Dataset.from_tensor_slices(((x_bin,
-                                                x_cont,
-                                                t,
-                                                y,
-                                                y_cf,
-                                                mu_0,
-                                                mu_1))), metadata
+    train_set = tf.data.Dataset.from_tensor_slices(((x_bin[idx_tr],
+                                                     x_cont[idx_tr],
+                                                     t[idx_tr],
+                                                     y[idx_tr],
+                                                     y_cf[idx_tr],
+                                                     mu_0[idx_tr],
+                                                     mu_1[idx_tr])))
+    test_set = tf.data.Dataset.from_tensor_slices(((x_bin[idx_te],
+                                                    x_cont[idx_te],
+                                                    t[idx_te],
+                                                    y[idx_te],
+                                                    y_cf[idx_te],
+                                                    mu_0[idx_te],
+                                                    mu_1[idx_te])))
+
+    return train_set, test_set,  metadata
 
 
-def TWINS_dataset(params, path_data="datasets/TWINS/", do_preprocessing=True, separate_files=None, file_index=None):
+def TWINS_dataset(params, path_data="datasets/TWINS/", do_preprocessing=True,
+                  separate_files=None, file_index=None):
     """Tensorflow Dataset generator for the TWINS dataset.
 
     Parameters
@@ -168,7 +184,8 @@ def TWINS_dataset(params, path_data="datasets/TWINS/", do_preprocessing=True, se
     w_o = np.random.normal(loc=0, scale=0.1, size=(len(cat_keys), 1))
     w_h = np.random.normal(loc=5, scale=0.1)
 
-    x = pd.read_csv(f"{path_data}twin_pairs_X_3years_samesex.csv", sep=',', dtype=np.float64)
+    x = pd.read_csv(f"{path_data}twin_pairs_X_3years_samesex.csv", sep=',',
+                    dtype=np.float64)
     x = x.loc[indices]
     x = x.interpolate(method='pad', axis=0).fillna(method='backfill', axis=0)
     z = x[z_key].to_numpy(int)
@@ -176,50 +193,68 @@ def TWINS_dataset(params, path_data="datasets/TWINS/", do_preprocessing=True, se
     x_w = x @ w_o
     z_w = np.expand_dims((z / 10 - 0.1) * w_h, axis=1)
     t = np.squeeze(np.random.binomial(1, expit(x_w + z_w)))
+    z = np.expand_dims(z, axis=1)
 
-    proxy = tf.one_hot(z, 10, axis=-1, dtype=tf.float64)
-    proxy = tf.concat([proxy, proxy, proxy], axis=1)
-    noise = tf.random.uniform(proxy.shape, minval=0, maxval=1)
-    noise = math.less(noise, flip_prob)
-    noisy_proxy = tf.zeros_like(proxy)
-    noisy_proxy += tf.scatter_nd(tf.where(noise), tf.boolean_mask(1 - proxy, noise), (len(z), 30))
-    noise = math.logical_not(noise)
-    noisy_proxy += tf.scatter_nd(tf.where(noise), tf.boolean_mask(proxy, noise), (len(z), 30))
+    enc = OneHotEncoder(categories='auto', sparse=False)
+    proxy = enc.fit(z).transform(z)
+    proxy = np.concatenate([proxy, proxy, proxy], axis=1).astype(int)
+    noise = np.random.uniform(size=proxy.shape)
+    noise = noise < flip_prob
+    noisy_proxy = np.zeros(proxy.shape)
+    noisy_proxy[noise] = np.logical_not(proxy[noise])
+    noisy_proxy[np.logical_not(noise)] = proxy[np.logical_not(noise)]
 
     x_cat = noisy_proxy
-    x_cont = tf.zeros((len(x_cat), 0), dtype=tf.float64)
-    y = tf.cast(tf.expand_dims(data_y[indices, t], axis=1), tf.float64)
-    y_cf = tf.cast(tf.expand_dims(data_y[indices, 1-t], axis=1), tf.float64)
-    t = tf.cast(tf.expand_dims(t, axis=1), tf.float64)
-    mu_1 = tf.cast(tf.expand_dims(data_y[indices, 1], axis=1), tf.float64)
-    mu_0 = tf.cast(tf.expand_dims(data_y[indices, 0], axis=1), tf.float64)
+    x_cont = np.zeros((len(x_cat), 0))
+    y = np.expand_dims(data_y[indices, t], axis=1)
+    y_cf = np.expand_dims(data_y[indices, 1-t], axis=1)
+    t = np.expand_dims(t, axis=1)
+    mu_1 = np.expand_dims(data_y[indices, 1], axis=1)
+    mu_0 = np.expand_dims(data_y[indices, 0], axis=1)
 
+    idx_tr, idx_te = train_test_split(np.arange(x_cat.shape[0]), test_size=0.1,
+                                      random_state=1)
+    train_set = tf.data.Dataset.from_tensor_slices(((x_cat[idx_tr],
+                                                     x_cont[idx_tr],
+                                                     t[idx_tr],
+                                                     y[idx_tr],
+                                                     y_cf[idx_tr],
+                                                     mu_1[idx_tr],
+                                                     mu_0[idx_tr])))
+    test_set = tf.data.Dataset.from_tensor_slices(((x_cat[idx_te],
+                                                    x_cont[idx_te],
+                                                    t[idx_te],
+                                                    y[idx_te],
+                                                    y_cf[idx_te],
+                                                    mu_1[idx_te],
+                                                    mu_0[idx_te])))
     scaling_data = (0, 1)
     nr_unique_values = 10
     metadata = (scaling_data, nr_unique_values)
 
-    return tf.data.Dataset.from_tensor_slices(((x_cat, x_cont,
-                                                t, y, y_cf,
-                                                mu_1, mu_0))), metadata
+    return train_set, test_set, metadata
 
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
     params = {}
-    data, metadata = IHDP_dataset(params)
+    train_data, test_data, metadata = IHDP_dataset(params, separate_files=True,
+                                                   file_index=0)
     nr_unique_values = metadata[1]
+    print(metadata)
 
-    for _, data_sample in data.batch(5).enumerate():
+    for _, data_sample in train_data.batch(5).enumerate():
         for data in data_sample:
             print(data)
         break
 
     print()
-    data, metadata = TWINS_dataset(params, do_preprocessing=True)
+    train_data, test_data, metadata = TWINS_dataset(params,
+                                                    do_preprocessing=True)
     nr_unique_values = metadata[1]
 
-    for _, data_sample in data.batch(5).enumerate():
+    for _, data_sample in train_data.batch(5).enumerate():
         for data in data_sample:
             print(data)
         break

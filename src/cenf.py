@@ -39,12 +39,14 @@ class CENF(Model):
 
         encoder_params = self.encode(x, t, y, step, training=training)
         _, _, qz_mean, qz_std = encoder_params
-        qz = tfd.Independent(tfd.Normal(loc=qz_mean, scale=qz_std),
-                             reinterpreted_batch_ndims=1,
-                             name="qz")
-        qz_sample = qz.sample()
+        # qz = tfd.Independent(tfd.Normal(loc=qz_mean, scale=qz_std),
+        #                      reinterpreted_batch_ndims=1,
+        #                      name="qz")
+        # qz_sample = qz.sample()
+        qz = tf.random.normal(qz_mean.shape, dtype=tf.float64)
+        qz = qz * qz_std + qz_mean
 
-        qz_k, ldj = self.z_flow(qz_sample, step, training=training)
+        qz_k, ldj = self.z_flow(qz, step, training=training)
 
         decoder_params = self.decode(qz_k, t, step, training=training)
         return encoder_params, qz_k, ldj, decoder_params
@@ -99,12 +101,14 @@ class CENF(Model):
 
     def do_intervention(self, x, nr_samples):
         *_, qz_mean, qz_std = self.encode(x, None, None, None, training=False)
-        qz = tfd.Independent(tfd.Normal(loc=qz_mean, scale=qz_std),
-                             reinterpreted_batch_ndims=1,
-                             name="qz")
-        qz_sample = qz.sample(nr_samples)
+        # qz = tfd.Independent(tfd.Normal(loc=qz_mean, scale=qz_std),
+        #                      reinterpreted_batch_ndims=1,
+        #                      name="qz")
+        # qz_sample = qz.sample(nr_samples)
+        qz = tf.random.normal((nr_samples, *qz_mean.shape), dtype=tf.float64)
+        qz = qz * qz_std + qz_mean
 
-        qz_k, ldj = self.z_flow(qz_sample, None, training=False)
+        qz_k, ldj = self.z_flow(qz, None, training=False)
 
         mu_y0, mu_y1 = self.decode.do_intervention(qz_k, nr_samples)
         return mu_y0, mu_y1

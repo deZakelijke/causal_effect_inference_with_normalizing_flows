@@ -120,7 +120,7 @@ def parse_arguments():
     return vars(args)
 
 
-def print_stats(stats, index):
+def print_stats(stats, index, training=False):
     """ Prints the statistics and puts them in Tensorboard.
 
     Prints the tuple of statistics in a readable format and passes them to the
@@ -133,17 +133,28 @@ def print_stats(stats, index):
     index : int
         Index used for the graph in tensorboard. Each next call of print_stats
         should have the consecutive index.
+    training : bool
+        Flag to swithc between training and testing  logs. Uses different
+        tags in tensorflow.
     """
 
-    print(f"Average ite: {stats[0]:.4f}, abs ate: {stats[1]:.4f}, "
-          f"pehe: {stats[2]:.4f}, y_error factual: {stats[3][0]:.4f}, "
-          f"y_error counterfactual {stats[3][1]:.4f}")
+    if training:
+        prefix = "train"
+    else:
+        prefix = "test"
 
-    tf.summary.scalar("metrics/ite", stats[0], step=index)
-    tf.summary.scalar("metrics/ate", stats[1], step=index)
-    tf.summary.scalar("metrics/pehe", stats[2], step=index)
-    tf.summary.scalar("metrics/y_factual", stats[3][0], step=index)
-    tf.summary.scalar("metrics/y_counterfactual", stats[3][1], step=index)
+    print(f"Dataset: {prefix}\nAverage ite: {stats[0]:.4f}, "
+          f"abs ate: {stats[1]:.4f}, "
+          f"pehe: {stats[2]:.4f},\n"
+          f"y_error factual: {stats[3][0]:.4f}, "
+          f"y_error counterfactual {stats[3][1]:.4f}\n")
+
+    tf.summary.scalar(f"metrics/{prefix}/ite", stats[0], step=index)
+    tf.summary.scalar(f"metrics/{prefix}/ate", stats[1], step=index)
+    tf.summary.scalar(f"metrics/{prefix}/pehe", stats[2], step=index)
+    tf.summary.scalar(f"metrics/{prefix}/y_factual", stats[3][0], step=index)
+    tf.summary.scalar(f"metrics/{prefix}/y_counterfactual", stats[3][1],
+                      step=index)
 
 
 def train(params, writer, train_iteration=0):
@@ -175,22 +186,24 @@ def train(params, writer, train_iteration=0):
     """
 
     cardinality = tf.data.experimental.cardinality
-    dataset, metadata = eval(f"{params['dataset']}_dataset")\
-                            (params, separate_files=params['separate_files'],
-                             file_index=train_iteration)
+    data = eval(f"{params['dataset']}_dataset")
+    train_dataset, test_dataset, metadata = data(params,
+                                                 separate_files=params['separate_files'],
+                                                 file_index=train_iteration)
     scaling_data = metadata[0]
     category_sizes = metadata[1]
 
-    len_dataset = cardinality(dataset)
-    dataset = dataset.shuffle(len_dataset)
+    len_dataset = cardinality(train_dataset)
+    train_dataset = train_dataset.shuffle(len_dataset)
+    len_dataset = cardinality(test_dataset)
+    test_dataset = test_dataset.shuffle(len_dataset)
 
     model = CIWorker(params, category_sizes)
 
     optimizer = tf.keras.optimizers.Adam(learning_rate=params["learning_rate"])
-    len_epoch = cardinality(dataset.batch(params["batch_size"]))
-    global_train_step = train_iteration * params["epochs"] * \
-        cardinality(dataset.batch(params["batch_size"]))
+    len_epoch = cardinality(train_dataset.batch(params["batch_size"]))
     global_log_step = train_iteration * params["epochs"]
+    global_train_step = global_log_step * len_epoch
 
     with writer.as_default() if writer is not None else nullcontext():
         for epoch in range(params["epochs"]):
@@ -198,26 +211,33 @@ def train(params, writer, train_iteration=0):
                 print(f"Epoch: {epoch}")
             avg_loss = 0
             step_start = global_train_step + epoch * len_epoch
-            for step, features in dataset.batch(params["batch_size"]).enumerate(step_start):
+            for step, features in train_dataset.batch(params["batch_size"]).enumerate(step_start):
                 step = tf.constant(step)
                 loss_value, grads = model.grad(features, step, params)
                 avg_loss += loss_value
-                optimizer.apply_gradients(zip(grads, model.trainable_variables))
+                optimizer.apply_gradients(zip(grads,
+                                              model.trainable_variables))
             if epoch % params["log_steps"] == 0:
-                print(f"Epoch: {epoch}, average loss: "
+                print(f"Epoch: {epoch}, average training loss: "
                       f"{(avg_loss / tf.dtypes.cast(len_epoch, tf.float64)):.4f}")
-                stats = calc_stats(model, dataset, scaling_data, params)
                 l_step = (epoch + global_log_step) // params['log_steps']
-                print_stats(stats, l_step)
-                tf.summary.scalar("metrics/loss", loss_value, step=l_step)
+                tf.summary.scalar("metrics/train/loss", loss_value,
+                                  step=l_step)
+                stats = calc_stats(model, train_dataset, scaling_data, params)
+                print_stats(stats, l_step, training=True)
+                stats = calc_stats(model, test_dataset, scaling_data, params)
+                print_stats(stats, l_step, training=False)
 
         print(f"Epoch: {epoch}, average loss: "
               f"{(avg_loss / tf.dtypes.cast(len_epoch, tf.float64)):.4f}")
-        stats = calc_stats(model, dataset, scaling_data, params)
         l_step = (epoch + global_log_step + 1) // params['log_steps']
-        print_stats(stats, l_step)
-        tf.summary.scalar("metrics/loss", loss_value, step=l_step)
-        return stats
+        tf.summary.scalar("metrics/train/loss", loss_value, step=l_step)
+        stats_train = calc_stats(model, train_dataset, scaling_data, params)
+        print_stats(stats_train, l_step, training=True)
+        stats_test = calc_stats(model, test_dataset, scaling_data, params)
+        print_stats(stats_test, l_step, training=False)
+
+        return stats_train, stats_test
 
 
 def test(params):
@@ -254,17 +274,24 @@ def main(params):
         writer = None
 
     if params["separate_files"]:
-        total_stats = []
+        total_stats_train = []
+        total_stats_test = []
         for i in range(repetitions):
-            stats = train(params, writer, i)
-            total_stats.append(stats)
-        total_stats = np.array(total_stats)
+            stats_train, stats_test = train(params, writer, i)
+            total_stats_train.append(stats_train)
+            total_stats_test.append(stats_test)
+        total_stats_train = np.array(total_stats_train)
+        total_stats_test = np.array(total_stats_test)
         print("Final average results")
         if not params['debug']:
             with writer.as_default():
-                print_stats(total_stats.mean(0),
+                print_stats(total_stats_train.mean(0),
                             params['epochs'] * repetitions //
-                            params['log_steps'] + 1)
+                            params['log_steps'] + 1, training=True)
+                print_stats(total_stats_test.mean(0),
+                            params['epochs'] * repetitions //
+                            params['log_steps'] + 1, training=False)
+
     else:
         train(params, writer)
 
