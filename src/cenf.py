@@ -7,7 +7,6 @@ from tensorflow.keras.activations import softplus
 from tensorflow_probability import distributions as tfd
 
 from cevae import Encoder, Decoder
-from dataset import IHDP_dataset
 from evaluation import calc_stats
 from fc_net import FC_net
 from planar_flow import PlanarFlow

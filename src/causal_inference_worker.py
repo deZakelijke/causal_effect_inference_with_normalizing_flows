@@ -27,11 +27,19 @@ class CIWorker(Model):
         elif self.model_type == "cenf":
             self.model = CENF(params, category_sizes, debug=self.debug)
         elif self.model_type == "crnvp":
-            dims_x = params["x_cat_size"] * category_sizes +\
-                     params["x_cont_size"]
             intervention_dims = 1
-            self.model = CausalRealNVP(dims_x, 1, intervention_dims, "CRNVP",
-                                       256, params["n_flows"],
+            if params['dataset'] == "SHAPES":
+                dims_x = params["x_cont_size"]
+                dims_y = params["x_cont_size"]
+                architecture_type = "ResNet"
+            else:
+                dims_x = params["x_cat_size"] * category_sizes +\
+                         params["x_cont_size"]
+                dims_y = 1
+                architecture_type = "FC_net"
+            self.model = CausalRealNVP(dims_x, dims_y, intervention_dims,
+                                       "CRNVP", 32, params["n_flows"],
+                                       architecture_type=architecture_type,
                                        debug=self.debug)
 
     @tf.function

@@ -9,13 +9,14 @@ import time
 
 from causal_inference_worker import CIWorker
 from contextlib import nullcontext
-from dataset import IHDP_dataset, TWINS_dataset
+from dataset import IHDP, TWINS, SHAPES
 from evaluation import calc_stats
 
 VALID_MODELS = ["cevae", "cenf", "crnvp"]
-VALID_DATASETS = ["IHDP", "TWINS"]
+VALID_DATASETS = ["IHDP", "TWINS", "SHAPES"]
 DATASET_DISTRIBUTION_DICT = {"IHDP": {'x': ['M', 'N'], 't': 'B', 'y': 'N'},
-                             "TWINS": {'x': ['M', 'N'], 't': 'B', 'y': 'B'}}
+                             "TWINS": {'x': ['M', 'N'], 't': 'B', 'y': 'B'},
+                             "SHAPES": {'x': ['M', 'N'], 't': 'M', 'y': 'N'}}
 
 
 tf.keras.backend.set_floatx('float64')
@@ -186,7 +187,7 @@ def train(params, writer, train_iteration=0):
     """
 
     cardinality = tf.data.experimental.cardinality
-    data = eval(f"{params['dataset']}_dataset")
+    data = eval(f"{params['dataset']}")
     train_dataset, test_dataset, metadata = data(params,
                                                  separate_files=params['separate_files'],
                                                  file_index=train_iteration)
@@ -258,6 +259,10 @@ def main(params):
         params["x_bin_size"] = 0
         params["x_cat_size"] = 3
         params["x_cont_size"] = 0
+    if params['dataset'] == 'SHAPES':
+        params["x_bin_size"] = 0
+        params["x_cat_size"] = 0
+        params["x_cont_size"] = (50, 50, 3)
 
     params["z_size"] = 16
     repetitions = 10
@@ -305,6 +310,6 @@ if __name__ == "__main__":
 
     if gpus:
         for gpu in gpus:
-            set_vdc(gpu, [vdc(memory_limit=2048)])
+            set_vdc(gpu, [vdc(memory_limit=4096)])
 
     main(params)

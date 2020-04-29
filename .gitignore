@@ -1,6 +1,9 @@
 # Other stuff
 notes.txt
 
+# Folder with all datasets
+datasets/
+
 # Test code for quick tests
 test/
 

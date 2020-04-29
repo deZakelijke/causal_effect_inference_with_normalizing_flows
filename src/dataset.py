@@ -1,14 +1,16 @@
+import h5py
 import sys
 import tensorflow as tf
 import numpy as np
 import pandas as pd
+
+from collections import defaultdict
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder
 from scipy.special import expit
-from tensorflow import math
 
 
-def IHDP_dataset(params, path_data="datasets/IHDP/csv/", separate_files=False,
+def IHDP(params, path_data="datasets/IHDP/csv/", separate_files=False,
                  file_index=None):
     """ Tensorflow Dataset generator for the IHDP dataset.
 
@@ -125,7 +127,7 @@ def IHDP_dataset(params, path_data="datasets/IHDP/csv/", separate_files=False,
     return train_set, test_set,  metadata
 
 
-def TWINS_dataset(params, path_data="datasets/TWINS/", do_preprocessing=True,
+def TWINS(params, path_data="datasets/TWINS/", do_preprocessing=True,
                   separate_files=None, file_index=None):
     """Tensorflow Dataset generator for the TWINS dataset.
 
@@ -235,11 +237,76 @@ def TWINS_dataset(params, path_data="datasets/TWINS/", do_preprocessing=True,
     return train_set, test_set, metadata
 
 
-if __name__ == "__main__":
-    import matplotlib.pyplot as plt
+def SHAPES(params, path_data="datasets/SHAPES/", separate_files=None,
+           file_index=None):
+    """ Loader for she shapes dataset.
 
+    This dataset is used as a sanity check for the model. It doesn't have
+    any (latent) confounding and the mapping from z to x is the identity
+    map without any noise. That means that the 'counterfactual' outcome is
+    the outcome when no action was taken, so just the original image.
+    """
+    train_name = "shapes_train.h5"
+    test_name = "shapes_test.h5"
+
+    train_array_dict = load_list_dict_h5py(path_data + train_name)
+    # test_array_dict = 
+    x_cont = np.rollaxis(train_array_dict['obs'], 1, 4)
+    x_cat = np.zeros((len(x_cont), 0, 0, 0))
+    t = np.expand_dims(train_array_dict['action'], 1)
+    y = np.rollaxis(train_array_dict['next_obs'], 1, 4)
+    y_cf = np.rollaxis(train_array_dict['obs'], 1, 4)
+    mu_1 = np.zeros((len(x_cont), 0, 0, 0))
+    mu_0 = np.zeros((len(x_cont), 0, 0, 0))
+    train_set = tf.data.Dataset.from_tensor_slices(((x_cat,
+                                                     x_cont,
+                                                     t,
+                                                     y,
+                                                     y_cf,
+                                                     mu_1,
+                                                     mu_0)))
+
+    test_array_dict = load_list_dict_h5py(path_data + train_name)
+    x_cont = np.rollaxis(train_array_dict['obs'], 1, 4)
+    x_cat = np.zeros((len(x_cont), 0))
+    t = np.expand_dims(train_array_dict['action'], 1)
+    y = np.rollaxis(train_array_dict['next_obs'], 1, 4)
+    y_cf = np.rollaxis(train_array_dict['obs'], 1, 4)
+    mu_1 = np.zeros((len(x_cont), 0))
+    mu_0 = np.zeros((len(x_cont), 0))
+
+    test_set = tf.data.Dataset.from_tensor_slices(((x_cat,
+                                                    x_cont,
+                                                    t,
+                                                    y,
+                                                    y_cf,
+                                                    mu_1,
+                                                    mu_0)))
+
+    scaling_data = (0, 1)
+    nr_unique_values = 1
+    metadata = (scaling_data, nr_unique_values)
+
+    return train_set, test_set, metadata
+
+
+def load_list_dict_h5py(fname):
+    """Restore list of dictionaries containing numpy arrays from h5py file."""
+    array_dict = defaultdict(list)
+    with h5py.File(fname, 'r') as hf:
+        for i, grp in enumerate(hf.keys()):
+            for key in hf[grp].keys():
+                array_dict[key].append(hf[grp][key][:])
+    for key, val in array_dict.items():
+        val = np.array(val)
+        val = np.reshape(val, (val.shape[0] * val.shape[1], *val.shape[2:]))
+        array_dict[key] = val
+    return array_dict
+
+
+def test_IHDP():
     params = {}
-    train_data, test_data, metadata = IHDP_dataset(params, separate_files=True,
+    train_data, test_data, metadata = IHDP(params, separate_files=True,
                                                    file_index=0)
     nr_unique_values = metadata[1]
     print(metadata)
@@ -249,12 +316,34 @@ if __name__ == "__main__":
             print(data)
         break
 
-    print()
-    train_data, test_data, metadata = TWINS_dataset(params,
+
+def test_TWINS():
+    params = {}
+    train_data, test_data, metadata = TWINS(params,
                                                     do_preprocessing=True)
     nr_unique_values = metadata[1]
 
     for _, data_sample in train_data.batch(5).enumerate():
         for data in data_sample:
-            print(data)
+            for var in data:
+                print(var.shape)
+            # print(data)
         break
+
+
+def test_SHAPES():
+    params = {}
+    train_data, test_data, metadata = SHAPES(params)
+    for _, data_sample in train_data.batch(5).enumerate():
+        for data in data_sample:
+            for var in data:
+                print(var.shape)
+        break
+
+   
+if __name__ == "__main__":
+    import matplotlib.pyplot as plt
+    test_SHAPES()
+    print()
+    test_TWINS()
+
