@@ -8,7 +8,6 @@ from tensorflow_probability import distributions as tfd
 
 from cevae import Encoder, Decoder
 from evaluation import calc_stats
-from fc_net import FC_net
 from planar_flow import PlanarFlow
 from utils import get_log_prob, get_analytical_KL_divergence
 

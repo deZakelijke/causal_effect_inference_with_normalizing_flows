@@ -7,6 +7,7 @@ from tensorflow import nn
 from tensorflow_probability import distributions as tfd
 
 from fc_net import FC_net
+from res_net import ResNet
 from utils import get_log_prob, get_analytical_KL_divergence
 
 
@@ -49,13 +50,8 @@ class CEVAE(Model):
 
         encoder_params = self.encode(x, t, y, step, training=training)
         _, _, qz_mean, qz_std = encoder_params
-        # qz = tfd.Independent(tfd.Normal(loc=qz_mean, scale=qz_std),
-        #                      reinterpreted_batch_ndims=1,
-        #                      name="qz")
-        #
         qz = tf.random.normal(qz_mean.shape, dtype=tf.float64)
         qz = qz * qz_std + qz_mean
-        # TODO reparameterise
 
         decoder_params = self.decode(qz, t, step, training=training)
         return encoder_params, decoder_params
@@ -127,24 +123,32 @@ class Encoder(Model):
         super().__init__()
         self.x_cat_size = params["x_cat_size"]
         self.x_cont_size = params["x_cont_size"]
-        x_size = self.x_cat_size * category_sizes + self.x_cont_size
+
+        if params['dataset'] == "SHAPES":
+            x_size = self.x_cont_size
+            architecture_type = "ResNet"
+        else:
+            x_size = self.x_cat_size * category_sizes + self.x_cont_size
+            architecture_type = "FC_net"
+        network = eval(architecture_type)
+
         self.z_size = params["z_size"]
         self.debug = params["debug"]
 
-        self.qt_logits = FC_net(x_size, 1, "qt", nr_hidden=1,
-                                hidden_size=hidden_size, debug=self.debug)
-        self.hqy = FC_net(x_size, hidden_size, "hqy",
-                          hidden_size=hidden_size, debug=self.debug)
-        self.mu_qy_t0 = FC_net(hidden_size, 1, "mu_qy_t0",
-                               hidden_size=hidden_size, debug=self.debug)
-        self.mu_qy_t1 = FC_net(hidden_size, 1, "mu_qy_t1",
-                               hidden_size=hidden_size, debug=self.debug)
-        self.hqz = FC_net(x_size + 1, hidden_size, "hqz",
-                          hidden_size=hidden_size, debug=self.debug)
-        self.qz_t0 = FC_net(hidden_size, self.z_size * 2, "qz_t0",
-                            hidden_size=hidden_size, debug=self.debug)
-        self.qz_t1 = FC_net(hidden_size, self.z_size * 2, "qz_t1",
-                            hidden_size=hidden_size, debug=self.debug)
+        self.qt_logits = network(x_size, 1, "qt", 1,
+                                 hidden_size, debug=self.debug)
+        self.hqy = network(x_size, hidden_size, "hqy",
+                           hidden_size, debug=self.debug)
+        self.mu_qy_t0 = network(hidden_size, 1, "mu_qy_t0",
+                                hidden_size, debug=self.debug)
+        self.mu_qy_t1 = network(hidden_size, 1, "mu_qy_t1",
+                                hidden_size, debug=self.debug)
+        self.hqz = network(x_size + 1, hidden_size, "hqz",
+                           hidden_size, debug=self.debug)
+        self.qz_t0 = network(hidden_size, self.z_size * 2, "qz_t0",
+                             hidden_size, debug=self.debug)
+        self.qz_t1 = network(hidden_size, self.z_size * 2, "qz_t1",
+                             hidden_size, debug=self.debug)
 
     @tf.function
     def call(self, x, t, y, step, training=False):
@@ -199,24 +203,30 @@ class Decoder(Model):
         self.x_cat_size = params["x_cat_size"]
         self.category_sizes = category_sizes
         self.x_cont_size = params["x_cont_size"]
-        # x_size = self.x_cat_size + self.x_cont_size
+
+        if params['dataset'] == "SHAPES":
+            architecture_type = "ResNet"
+        else:
+            architecture_type = "FC_net"
+        network = eval(architecture_type)
+
         self.z_size = params["z_size"]
         self.debug = params["debug"]
 
-        self.hx = FC_net(self.z_size, hidden_size, "hx",
-                         hidden_size=hidden_size, debug=self.debug)
-        self.x_cont_logits = FC_net(hidden_size,
-                                    self.x_cont_size * 2, "x_cont",
+        self.hx = network(self.z_size, hidden_size, "hx",
+                          hidden_size=hidden_size, debug=self.debug)
+        self.x_cont_logits = network(hidden_size,
+                                     self.x_cont_size * 2, "x_cont",
+                                     hidden_size=hidden_size, debug=self.debug)
+        self.x_cat_logits = network(hidden_size,
+                                    self.x_cat_size * category_sizes, "x_cat",
                                     hidden_size=hidden_size, debug=self.debug)
-        self.x_cat_logits = FC_net(hidden_size,
-                                   self.x_cat_size * category_sizes, "x_cat",
-                                   hidden_size=hidden_size, debug=self.debug)
-        self.t_logits = FC_net(self.z_size, 1, "t", nr_hidden=1,
+        self.t_logits = network(self.z_size, 1, "t", nr_hidden=1,
+                                hidden_size=hidden_size, debug=self.debug)
+        self.mu_y_t0 = network(self.z_size, 1, "mu_y_t0",
                                hidden_size=hidden_size, debug=self.debug)
-        self.mu_y_t0 = FC_net(self.z_size, 1, "mu_y_t0",
-                              hidden_size=hidden_size, debug=self.debug)
-        self.mu_y_t1 = FC_net(self.z_size, 1, "mu_y_t1",
-                              hidden_size=hidden_size, debug=self.debug)
+        self.mu_y_t1 = network(self.z_size, 1, "mu_y_t1",
+                               hidden_size=hidden_size, debug=self.debug)
 
     @tf.function
     def call(self, z, t, step, training=False):

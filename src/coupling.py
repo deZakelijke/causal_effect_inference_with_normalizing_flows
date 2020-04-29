@@ -238,7 +238,7 @@ class Coupling(Model):
             out_dims = in_dims[:-1] + (2 * in_dims[-1], )
             in_dims = in_dims[:-1] + (in_dims[-1] + context_dims, )
             self.nn = ResNet(in_dims, out_dims, name_tag, n_blocks,
-                             activation, filters, debug)
+                             filters, activation, debug)
 
         weights = self.nn.layers[-1].weights
         self.nn.layers[-1].set_weights([tf.zeros_like(weights[0]),

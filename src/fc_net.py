@@ -6,7 +6,8 @@ class FC_net(Model):
     """ Simple fully connected net with not activation after the last layer."""
 
     def __init__(self, in_dims, out_dims, name_tag, nr_hidden=2,
-                 hidden_size=256, activation='elu', debug=False):
+                 hidden_size=256, activation='elu', squeeze=False,
+                 squeeze_dims=None, debug=False):
         """
         Parameters
         ----------

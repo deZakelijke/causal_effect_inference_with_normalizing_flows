@@ -36,7 +36,7 @@ class CausalRealNVP(Model):
             dims_z = dims_x + dims_y
             self.dims_split = [dims_x, dims_y]
         else:
-            dims_z = dims[:-1] + (dims_x[-1] + dims_y[-1], )
+            dims_z = dims_x[:-1] + (dims_x[-1] + dims_y[-1], )
             self.dims_split = [dims_x[-1], dims_y[-1]]
 
         with tf.name_scope(f"RealNVP/{name_tag}") as scope:

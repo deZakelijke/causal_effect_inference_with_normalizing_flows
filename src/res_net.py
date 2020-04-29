@@ -1,13 +1,14 @@
 import tensorflow as tf
 from tensorflow.keras import Model, activations
-from tensorflow.keras.layers import BatchNormalization, Conv2D
+from tensorflow.keras.layers import BatchNormalization, Conv2D, Dense
 
 
 class ResNet(Model):
     """Residual Convolutional Neural Network."""
 
     def __init__(self, in_dims, out_dims, name_tag, nr_res_blocks=3,
-                 activation='elu', filters=32, debug=False):
+                 filters=32, activation='elu', squeeze=False,
+                 squeeze_dims=None, debug=False):
         """
         Parameters
         ----------
@@ -31,6 +32,13 @@ class ResNet(Model):
         filters : int
             Number of filters to use in the residual blocks.
 
+        squeeze : bool
+            Flag to add a final fully connected layer to the network that
+            changes the output shape.
+
+        squeeze_dims : int
+            Size of the output after the squeeze layer.
+
         debug : bool
             Flag to enable debug mode. Currently unused.
         """
@@ -40,6 +48,7 @@ class ResNet(Model):
         self.debug = debug
         self.name_tag = name_tag
         self.activation = eval(f"activations.{activation}")
+        self.squeeze = squeeze
         assert name_tag != "", "Name tag can't be an empty stirng"
         channels_in = in_dims[2]
         channels_out = out_dims[2]
@@ -77,11 +86,21 @@ class ResNet(Model):
                                          fused=False, name="BN_in")
         self.bn_out.build((None, *image_size, filters))
 
-        self.conv_out = Conv2D(channels_out, kernel_size=(1, 1),
-                               padding="same", data_format="channels_last",
-                               activation=None, use_bias=True,
-                               dtype=tf.float64, name="Conv_out")
-        self.conv_out.build((None, *image_size, filters))
+        conv_out = Conv2D(channels_out, kernel_size=(1, 1), padding="same",
+                          data_format="channels_last", activation=None,
+                          use_bias=True, dtype=tf.float64, name="Conv_out")
+        conv_out.build((None, *image_size, filters))
+        self.out_layers = Sequential()
+        self.out_layers.add(conv_out)
+
+        if squeeze:
+            fc_out = Dense(tf.prod_reduce(image_size) * filters,
+                           activation=None, dtype="tf.float64",
+                           name="dense_out")
+            fc_out.build((None, squeeze_dims))
+            self.out_layers.add(self.activation)
+            self.out_layers.add(Flatten())
+            self.out_layers.add(fc_out)
 
     @tf.function
     def call(self, x, step, training=False):
@@ -98,7 +117,7 @@ class ResNet(Model):
 
             x = self.bn_out(x_skip)
             x = self.activation(x)
-            x = self.conv_out(x)
+            x = self.out_layers(x)
 
             if training and step is not None:
                 self.log_weights(step)
@@ -132,8 +151,8 @@ class ResNet(Model):
         tf.summary.histogram(f"{name}/gamma", weights[0], step=step)
         tf.summary.histogram(f"{name}/beta", weights[1], step=step)
 
-        name = self.conv_out.name
-        weights = self.conv_out.weights
+        name = self.out_layers[0].name
+        weights = self.out_layers[0].weights
         tf.summary.histogram(f"{name}/kernel", weights[0], step=step)
         tf.summary.histogram(f"{name}/bias", weights[1], step=step)
 
