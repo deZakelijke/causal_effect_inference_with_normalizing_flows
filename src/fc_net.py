@@ -37,6 +37,9 @@ class FC_net(Model):
             "Must have at leas one hidden layer"
         assert name_tag != "", "Name tag can't be an empty stirng"
 
+        if squeeze:
+            out_dims = squeeze_dims
+
         with tf.name_scope(f"FC/{self.name_tag}") as scope:
             new_layer = layers.Dense(hidden_size, activation=activation,
                                      dtype="float64", name="dense_0")

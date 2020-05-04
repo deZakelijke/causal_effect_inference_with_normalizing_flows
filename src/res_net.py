@@ -1,6 +1,7 @@
 import tensorflow as tf
-from tensorflow.keras import Model, activations
-from tensorflow.keras.layers import BatchNormalization, Conv2D, Dense
+from tensorflow.keras import Model, activations, Sequential
+from tensorflow.keras.layers import Activation, BatchNormalization
+from tensorflow.keras.layers import Conv2D, Dense, Flatten
 
 
 class ResNet(Model):
@@ -47,7 +48,7 @@ class ResNet(Model):
 
         self.debug = debug
         self.name_tag = name_tag
-        self.activation = eval(f"activations.{activation}")
+        self.activation = Activation(activation)
         self.squeeze = squeeze
         assert name_tag != "", "Name tag can't be an empty stirng"
         channels_in = in_dims[2]
@@ -94,10 +95,9 @@ class ResNet(Model):
         self.out_layers.add(conv_out)
 
         if squeeze:
-            fc_out = Dense(tf.prod_reduce(image_size) * filters,
-                           activation=None, dtype="tf.float64",
+            fc_out = Dense(squeeze_dims, activation=None, dtype=tf.float64,
                            name="dense_out")
-            fc_out.build((None, squeeze_dims))
+            fc_out.build((None, tf.reduce_prod(image_size) * channels_out))
             self.out_layers.add(self.activation)
             self.out_layers.add(Flatten())
             self.out_layers.add(fc_out)
@@ -112,7 +112,7 @@ class ResNet(Model):
             x_skip = self.conv_skip(x)
 
             for block, skip in zip(self.res_blocks, self.skips):
-                x = block(x)
+                x = block(x, step, training=training)
                 x_skip += skip(x)
 
             x = self.bn_out(x_skip)
@@ -151,8 +151,8 @@ class ResNet(Model):
         tf.summary.histogram(f"{name}/gamma", weights[0], step=step)
         tf.summary.histogram(f"{name}/beta", weights[1], step=step)
 
-        name = self.out_layers[0].name
-        weights = self.out_layers[0].weights
+        name = self.out_layers.layers[0].name
+        weights = self.out_layers.layers[0].weights
         tf.summary.histogram(f"{name}/kernel", weights[0], step=step)
         tf.summary.histogram(f"{name}/bias", weights[1], step=step)
 
@@ -212,7 +212,7 @@ class ResidualConvBlock(Model):
 
         self.nn_layers = [BN_1, Conv_1, BN_2, Conv_2, BN_3, Conv_3]
 
-    @tf.function
+    # @tf.function
     def call(self, x, step, training=False):
         with tf.name_scope(f"ResBlock/{self.name_tag}") as scope:
             h = x
@@ -261,14 +261,25 @@ def test_residual_network():
     residual_blocks = 3
     x = tf.zeros((2, 10, 20, 8), dtype=tf.float64)
 
-    model = ResNet(in_dims, out_dims, name_tag, residual_blocks, activation,
-                   filters)
+    model = ResNet(in_dims, out_dims, name_tag, residual_blocks, filters,
+                   activation, squeeze=True, squeeze_dims=1, debug=True)
     out = model(x, 0, training=True)
-    tf.debugging.assert_equal(out.shape, (2, *out_dims),
+    tf.debugging.assert_equal(out.shape, (2, 1),
                               "Shape mismatch in resnet")
     print(model.summary())
 
 if __name__ == "__main__":
+    set_vdc = tf.config.experimental.set_virtual_device_configuration
+    vdc = tf.config.experimental.VirtualDeviceConfiguration
+    gpus = tf.config.experimental.list_physical_devices("GPU")
+
+    if gpus:
+        for gpu in gpus:
+            # set_vdc(gpu, [vdc(memory_limit=4096)])
+            tf.config.experimental.set_memory_growth(gpu, True)
+            logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+            print(len(gpus), "Physical GPUs, ", len(logical_gpus), "Logical GPUs")
+
     tf.keras.backend.set_floatx('float64')
     test_residual_block()
     test_residual_network()
