@@ -72,6 +72,7 @@ class CEVAE(Model):
                                    self.category_sizes))
 
         y_type = params['dataset_distributions']['y']
+
         distortion_x = -get_log_prob(x_cat, 'M', probs=x_cat_prob) \
                        - get_log_prob(x_cont, 'N', mean=x_cont_mean,
                                       std=x_cont_std)
@@ -263,6 +264,7 @@ class Decoder(Model):
 
         x_cont_h = self.x_cont_logits(hidden_x, step, training=training)
         x_cont_mean, x_cont_std = tf.split(x_cont_h, 2, axis=-1)
+        x_cont_std = softplus(x_cont_std)
 
         t_prob = tf.sigmoid(self.t_logits(z, step, training=training))
 
