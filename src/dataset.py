@@ -18,7 +18,8 @@ def IHDP(params, path_data="datasets/IHDP/csv/", separate_files=False,
     ----------
     params : dict
         Dictionary that contains all hyperparameters of the program. Use
-        the function parse_arguments() in main.py to generate it.
+        the function parse_arguments() in main.py to generate it. This is
+        also where all shape information of all variables will be stored
 
     path_data : str
         Path to the folder that contains the csv files with data
@@ -42,6 +43,11 @@ def IHDP(params, path_data="datasets/IHDP/csv/", separate_files=False,
         original version. The third number is the number of classes for each
         categorical variable.
     """
+    params["x_bin_size"] = 19
+    params["x_cat_size"] = 0 + 19
+    params["x_cont_size"] = 6
+    params["y_size"] = 1
+    params["z_size"] = 16
 
     binfeats = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
     contfeats = [i for i in range(25) if i not in binfeats]
@@ -158,6 +164,12 @@ def TWINS(params, path_data="datasets/TWINS/", do_preprocessing=True,
 
     """
 
+    params["x_bin_size"] = 0
+    params["x_cat_size"] = 3
+    params["x_cont_size"] = 0
+    params["y_size"] = 1
+    params["z_size"] = 16
+
     flip_prob = 0.3
     data_t = np.loadtxt(f"{path_data}twin_pairs_T_3years_samesex.csv",
                         delimiter=',', dtype=np.float64, skiprows=1)[:, 1:]
@@ -210,7 +222,7 @@ def TWINS(params, path_data="datasets/TWINS/", do_preprocessing=True,
     x_cont = np.zeros((len(x_cat), 0))
     y = np.expand_dims(data_y[indices, t], axis=1)
     y_cf = np.expand_dims(data_y[indices, 1-t], axis=1)
-    t = np.expand_dims(t, axis=1)
+    t = np.expand_dims(t, axis=1).astype(float)
     mu_1 = np.expand_dims(data_y[indices, 1], axis=1)
     mu_0 = np.expand_dims(data_y[indices, 0], axis=1)
 
@@ -246,14 +258,22 @@ def SHAPES(params, path_data="datasets/SHAPES/", separate_files=None,
     map without any noise. That means that the 'counterfactual' outcome is
     the outcome when no action was taken, so just the original image.
     """
+
+    params["x_bin_size"] = (0, 0, 0)
+    params["x_cat_size"] = (50, 50, 0)
+    params["x_cont_size"] = (50, 50, 3)
+    params["y_size"] = (50, 50, 3)
+    params["z_size"] = (50, 50, 3)
+
     train_name = "shapes_train.h5"
     test_name = "shapes_test.h5"
 
     train_array_dict = load_list_dict_h5py(path_data + train_name)
     # test_array_dict = 
     x_cont = np.rollaxis(train_array_dict['obs'], 1, 4)
-    x_cat = np.zeros((len(x_cont), 0, 0, 0))
-    t = np.expand_dims(train_array_dict['action'], 1)
+    x_cat = np.zeros((len(x_cont), 0, 50, 3))
+    t = np.reshape(train_array_dict['action'],
+                   (len(train_array_dict['action']), 1, 1, 1)).astype(float)
     y = np.rollaxis(train_array_dict['next_obs'], 1, 4)
     y_cf = np.rollaxis(train_array_dict['obs'], 1, 4)
     mu_1 = np.zeros((len(x_cont), 0, 0, 0))
@@ -268,12 +288,13 @@ def SHAPES(params, path_data="datasets/SHAPES/", separate_files=None,
 
     test_array_dict = load_list_dict_h5py(path_data + train_name)
     x_cont = np.rollaxis(train_array_dict['obs'], 1, 4)
-    x_cat = np.zeros((len(x_cont), 0))
-    t = np.expand_dims(train_array_dict['action'], 1)
+    x_cat = np.zeros((len(x_cont), 0, 50, 3))
+    t = np.reshape(train_array_dict['action'],
+                   (len(train_array_dict['action']), 1, 1, 1)).astype(float)
     y = np.rollaxis(train_array_dict['next_obs'], 1, 4)
     y_cf = np.rollaxis(train_array_dict['obs'], 1, 4)
-    mu_1 = np.zeros((len(x_cont), 0))
-    mu_0 = np.zeros((len(x_cont), 0))
+    mu_1 = np.zeros((len(x_cont), 0, 0, 0))
+    mu_0 = np.zeros((len(x_cont), 0, 0, 0))
 
     test_set = tf.data.Dataset.from_tensor_slices(((x_cat,
                                                     x_cont,

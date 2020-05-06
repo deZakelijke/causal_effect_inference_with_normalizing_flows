@@ -251,20 +251,6 @@ def main(params):
     Creates logging and writer, and launches selected training.
     """
 
-    if params['dataset'] == "IHDP":
-        params["x_bin_size"] = 19
-        params["x_cat_size"] = 0 + 19
-        params["x_cont_size"] = 6
-    if params['dataset'] == "TWINS":
-        params["x_bin_size"] = 0
-        params["x_cat_size"] = 3
-        params["x_cont_size"] = 0
-    if params['dataset'] == 'SHAPES':
-        params["x_bin_size"] = 0
-        params["x_cat_size"] = 0
-        params["x_cont_size"] = (50, 50, 3)
-
-    params["z_size"] = 16
     repetitions = 10
 
     timestamp = time.strftime("%Y:%m:%d/%X")

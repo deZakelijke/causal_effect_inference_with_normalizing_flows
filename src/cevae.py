@@ -10,6 +10,8 @@ from fc_net import FC_net
 from res_net import ResNet
 from utils import get_log_prob, get_analytical_KL_divergence
 
+# TODO al die shapes bullshit
+# Add extra output to make t one-hot encoded
 
 class CEVAE(Model):
 
@@ -122,32 +124,41 @@ class Encoder(Model):
     def __init__(self, params, category_sizes, hidden_size):
         super().__init__()
         self.x_cat_size = params["x_cat_size"]
-        self.x_cont_size = params["x_cont_size"]
+        x_cont_size = params["x_cont_size"]
+        z_size = params["z_size"]
+        y_size = params["y_size"]
+        self.debug = params["debug"]
 
         if params['dataset'] == "SHAPES":
-            x_size = self.x_cont_size
+            x_size = x_cont_size
+            intermediate_size = x_size
+            z_in_size = x_size[:-1] + (x_size[-1] + y_size[-1], )
+            z_out_size = z_size[:-1] + (z_size[-1] * 2, )
             architecture_type = "ResNet"
         else:
-            x_size = self.x_cat_size * category_sizes + self.x_cont_size
+            x_size = self.x_cat_size * category_sizes + x_cont_size
+            intermediate_size = hidden_size
+            z_in_size = x_size + y_size
+            z_out_size = z_size * 2
             architecture_type = "FC_net"
         network = eval(architecture_type)
 
-        self.z_size = params["z_size"]
-        self.debug = params["debug"]
+        self.qt_logits = network(x_size, x_size, "qt", 1,
+                                 hidden_size, squeeze=True, squeeze_dims=1,
+                                 debug=self.debug)
+        self.hqy = network(x_size, intermediate_size, "hqy", 2,
+                           hidden_size, debug=self.debug)
 
-        self.qt_logits = network(x_size, 1, "qt", 1,
-                                 hidden_size, debug=self.debug)
-        self.hqy = network(x_size, hidden_size, "hqy",
-                           hidden_size, debug=self.debug)
-        self.mu_qy_t0 = network(hidden_size, 1, "mu_qy_t0",
+        self.mu_qy_t0 = network(intermediate_size, y_size, "mu_qy_t0", 2,
                                 hidden_size, debug=self.debug)
-        self.mu_qy_t1 = network(hidden_size, 1, "mu_qy_t1",
+        self.mu_qy_t1 = network(intermediate_size, y_size, "mu_qy_t1", 2,
                                 hidden_size, debug=self.debug)
-        self.hqz = network(x_size + 1, hidden_size, "hqz",
+
+        self.hqz = network(z_in_size, intermediate_size, "hqz", 2,
                            hidden_size, debug=self.debug)
-        self.qz_t0 = network(hidden_size, self.z_size * 2, "qz_t0",
+        self.qz_t0 = network(intermediate_size, z_out_size, "qz_t0", 2,
                              hidden_size, debug=self.debug)
-        self.qz_t1 = network(hidden_size, self.z_size * 2, "qz_t1",
+        self.qz_t1 = network(intermediate_size, z_out_size, "qz_t1", 2,
                              hidden_size, debug=self.debug)
 
     @tf.function
@@ -174,25 +185,27 @@ class Encoder(Model):
                              name="qy")
 
         if training:
-            xy = tf.concat([x, y], 1)
+            xy = tf.concat([x, y], -1)
         else:
-            xy = tf.concat([x, qy.sample()], 1)
+            xy = tf.concat([x, qy.sample()], -1)
 
         hidden_z = self.hqz(xy, step, training=training)
         qz0 = self.qz_t0(hidden_z, step, training=training)
         qz1 = self.qz_t1(hidden_z, step, training=training)
+        qz0_mean, qz0_std = tf.split(qz0, 2, axis=-1)
+        qz1_mean, qz1_std = tf.split(qz1, 2, axis=-1)
 
         if training:
-            qz_mean = t * qz1[:, :self.z_size] + (1. - t) *\
-                      qz0[:, :self.z_size]
-            qz_std = t * softplus(qz1[:, self.z_size:]) + (1. - t) *\
-                softplus(qz0[:, self.z_size:])
+            qz_mean = t * qz1_mean + (1. - t) *\
+                      qz0_mean
+            qz_std = t * softplus(qz1_std) + (1. - t) *\
+                softplus(qz0_std)
 
         else:
-            qz_mean = qt_sample * qz1[:, :self.z_size] + (1. - qt_sample) *\
-                      qz0[:, :self.z_size]
-            qz_std = qt_sample * softplus(qz1[:, self.z_size:]) +\
-                (1. - qt_sample) * softplus(qz0[:, self.z_size:])
+            qz_mean = qt_sample * qz1_mean + (1. - qt_sample) *\
+                      qz0_mean
+            qz_std = qt_sample * softplus(qz1_std) +\
+                (1. - qt_sample) * softplus(qz0_std)
         return qt_prob, qy_mean, qz_mean, qz_std
 
 
@@ -202,31 +215,38 @@ class Decoder(Model):
         super().__init__()
         self.x_cat_size = params["x_cat_size"]
         self.category_sizes = category_sizes
-        self.x_cont_size = params["x_cont_size"]
+        x_cat_shape = self.x_cat_size * category_sizes
+        x_cont_size = params["x_cont_size"]
 
         if params['dataset'] == "SHAPES":
+            intermediate_size = x_cont_size
+            x_cont_in = x_cont_size[:-1] + (x_cont_size[-1] * 2, )
             architecture_type = "ResNet"
         else:
+            intermediate_size = hidden_size
+            x_cont_in = x_cont_size * 2
             architecture_type = "FC_net"
+            self.x_cat_size = (self.x_cat_size, )
         network = eval(architecture_type)
 
         self.z_size = params["z_size"]
         self.debug = params["debug"]
+        y_size = params["y_size"]
 
-        self.hx = network(self.z_size, hidden_size, "hx",
-                          hidden_size=hidden_size, debug=self.debug)
-        self.x_cont_logits = network(hidden_size,
-                                     self.x_cont_size * 2, "x_cont",
-                                     hidden_size=hidden_size, debug=self.debug)
-        self.x_cat_logits = network(hidden_size,
-                                    self.x_cat_size * category_sizes, "x_cat",
-                                    hidden_size=hidden_size, debug=self.debug)
-        self.t_logits = network(self.z_size, 1, "t", nr_hidden=1,
-                                hidden_size=hidden_size, debug=self.debug)
-        self.mu_y_t0 = network(self.z_size, 1, "mu_y_t0",
-                               hidden_size=hidden_size, debug=self.debug)
-        self.mu_y_t1 = network(self.z_size, 1, "mu_y_t1",
-                               hidden_size=hidden_size, debug=self.debug)
+        self.hx = network(self.z_size, intermediate_size, "hx", 2,
+                          hidden_size, debug=self.debug)
+        self.x_cont_logits = network(intermediate_size,
+                                     x_cont_in, "x_cont", 2,
+                                     hidden_size, debug=self.debug)
+        self.x_cat_logits = network(intermediate_size, x_cat_shape, "x_cat",
+                                    2, hidden_size, debug=self.debug)
+        self.t_logits = network(self.z_size, self.z_size, "t", 1,
+                                hidden_size, squeeze=True,
+                                squeeze_dims=1, debug=self.debug)
+        self.mu_y_t0 = network(self.z_size, y_size, "mu_y_t0", 2,
+                               hidden_size, debug=self.debug)
+        self.mu_y_t1 = network(self.z_size, y_size, "mu_y_t1", 2,
+                               hidden_size, debug=self.debug)
 
     @tf.function
     def call(self, z, t, step, training=False):
@@ -235,14 +255,14 @@ class Decoder(Model):
         hidden_x = self.hx(z, step, training=training)
         x_cat_logits = self.x_cat_logits(hidden_x, step, training=training)
         x_cat_prob = nn.softmax(tf.reshape(x_cat_logits,
-                                           (len(x_cat_logits), self.x_cat_size,
+                                           (len(x_cat_logits), *self.x_cat_size,
                                             self.category_sizes)))
-        x_cat_prob = tf.reshape(x_cat_prob, (len(x_cat_prob), self.x_cat_size *
+        x_cat_prob = tf.reshape(x_cat_prob, (len(x_cat_prob),
+                                             self.x_cat_size[-1] *
                                              self.category_sizes))
 
         x_cont_h = self.x_cont_logits(hidden_x, step, training=training)
-        x_cont_mean = x_cont_h[:, :self.x_cont_size]
-        x_cont_std = softplus(x_cont_h[:, self.x_cont_size:])
+        x_cont_mean, x_cont_std = tf.split(x_cont_h, 2, axis=-1)
 
         t_prob = tf.sigmoid(self.t_logits(z, step, training=training))
 
