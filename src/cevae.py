@@ -48,7 +48,7 @@ class CEVAE(Model):
         if self.debug:
             print("Starting forward pass")
         x_cat, x_cont, t, y, y_cf, mu_0, mu_1 = features
-        x = tf.concat([x_cat, x_cont], 1)
+        x = tf.concat([x_cat, x_cont], -1)
 
         encoder_params = self.encode(x, t, y, step, training=training)
         _, _, qz_mean, qz_std = encoder_params
@@ -65,7 +65,7 @@ class CEVAE(Model):
         x_cat, x_cont, t, y, y_cf, mu_0, mu_1 = features
         qt_prob, qy_mean, qz_mean, qz_std = encoder_params
         x_cat_prob, x_cont_mean, x_cont_std, t_prob, y_mean = decoder_params
-        l, f = x_cat.shape
+        l, *_, f = x_cat.shape
         x_cat_prob = tf.reshape(x_cat_prob, (l, f//self.category_sizes,
                                              self.category_sizes))
         x_cat = tf.reshape(x_cat, (l, f//self.category_sizes,

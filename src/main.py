@@ -65,6 +65,9 @@ def parse_arguments():
     parser.add_argument("--experiment_name", type=str,
                         help="Name of experiment used for results folder. "
                         "Disabled in debug mode")
+    parser.add_argument("--hidden_size", type=int, default=200,
+                        help="Number of nodes in hidden fully connected layers"
+                        " or number of filters in convolutional layers")
     parser.add_argument("--learning_rate", type=float, default=1e-4,
                         help="Learning rate of the optmiser (default: 1e-4)")
     parser.add_argument("--log_steps", type=int, default=10,
@@ -298,7 +301,7 @@ if __name__ == "__main__":
         for gpu in gpus:
             # set_vdc(gpu, [vdc(memory_limit=4096)])
             tf.config.experimental.set_memory_growth(gpu, True)
-            logical_gpus = tf.config.experimental.list_logical_devices('GPU')
-            print(len(gpus), "Physical GPUs, ", len(logical_gpus), "Logical GPUs")
+            #logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+            #print(len(gpus), "Physical GPUs, ", len(logical_gpus), "Logical GPUs")
 
     main(params)

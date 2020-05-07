@@ -23,9 +23,13 @@ class CIWorker(Model):
         # self.cumulative_sizes = np.cumsum(category_sizes)
 
         if self.model_type == "cevae":
-            self.model = CEVAE(params, category_sizes, debug=self.debug)
+            self.model = CEVAE(params, category_sizes,
+            hidden_size=params["hidden_size"],
+            debug=self.debug)
         elif self.model_type == "cenf":
-            self.model = CENF(params, category_sizes, debug=self.debug)
+            self.model = CENF(params, category_sizes,
+            hidden_size=params["hidden_size"],
+            debug=self.debug)
         elif self.model_type == "crnvp":
             intervention_dims = 1
             if params['dataset'] == "SHAPES":
@@ -38,7 +42,8 @@ class CIWorker(Model):
                 dims_y = 1
                 architecture_type = "FC_net"
             self.model = CausalRealNVP(dims_x, dims_y, intervention_dims,
-                                       "CRNVP", 32, params["n_flows"],
+                                       "CRNVP", params['hidden_size'],
+                                       params["n_flows"],
                                        architecture_type=architecture_type,
                                        debug=self.debug)
 

@@ -23,7 +23,7 @@ def get_log_prob(data, dist, mean=None, std=None, probs=None, name=None):
                                   "Categorical (M) have been implemeted")
 
     distribution = tfd.Independent(distribution,
-                                   reinterpreted_batch_ndims=1,
+                                   reinterpreted_batch_ndims=None,
                                    name=name)
     return distribution.log_prob(data)
 
@@ -34,5 +34,5 @@ def get_analytical_KL_divergence(mean, std):
         by mean and std, and an isotropic unit Gaussian.
     """
     KL = -0.5 * tf.reduce_sum(1 + tf.math.log(std ** 2) - mean ** 2 -
-                              std ** 2, axis=1)
+                              std ** 2, axis=tf.range(1, tf.rank(mean)))
     return KL

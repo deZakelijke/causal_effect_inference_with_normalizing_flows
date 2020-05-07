@@ -270,12 +270,12 @@ def SHAPES(params, path_data="datasets/SHAPES/", separate_files=None,
 
     train_array_dict = load_list_dict_h5py(path_data + train_name)
     # test_array_dict = 
-    x_cont = np.rollaxis(train_array_dict['obs'], 1, 4)
-    x_cat = np.zeros((len(x_cont), 0, 50, 3))
+    x_cont = np.rollaxis(train_array_dict['obs'], 1, 4).astype(float)
+    x_cat = np.zeros((len(x_cont), 50, 50, 0))
     t = np.reshape(train_array_dict['action'],
                    (len(train_array_dict['action']), 1, 1, 1)).astype(float)
-    y = np.rollaxis(train_array_dict['next_obs'], 1, 4)
-    y_cf = np.rollaxis(train_array_dict['obs'], 1, 4)
+    y = np.rollaxis(train_array_dict['next_obs'], 1, 4).astype(float)
+    y_cf = np.rollaxis(train_array_dict['obs'], 1, 4).astype(float)
     mu_1 = np.zeros((len(x_cont), 0, 0, 0))
     mu_0 = np.zeros((len(x_cont), 0, 0, 0))
     train_set = tf.data.Dataset.from_tensor_slices(((x_cat,
@@ -287,12 +287,12 @@ def SHAPES(params, path_data="datasets/SHAPES/", separate_files=None,
                                                      mu_0)))
 
     test_array_dict = load_list_dict_h5py(path_data + train_name)
-    x_cont = np.rollaxis(train_array_dict['obs'], 1, 4)
-    x_cat = np.zeros((len(x_cont), 0, 50, 3))
+    x_cont = np.rollaxis(train_array_dict['obs'], 1, 4).astype(float)
+    x_cat = np.zeros((len(x_cont), 50, 50, 0))
     t = np.reshape(train_array_dict['action'],
                    (len(train_array_dict['action']), 1, 1, 1)).astype(float)
-    y = np.rollaxis(train_array_dict['next_obs'], 1, 4)
-    y_cf = np.rollaxis(train_array_dict['obs'], 1, 4)
+    y = np.rollaxis(train_array_dict['next_obs'], 1, 4).astype(float)
+    y_cf = np.rollaxis(train_array_dict['obs'], 1, 4).astype(float)
     mu_1 = np.zeros((len(x_cont), 0, 0, 0))
     mu_0 = np.zeros((len(x_cont), 0, 0, 0))
 
