@@ -5,9 +5,9 @@ from tensorflow.keras import layers, Model
 class FC_net(Model):
     """ Simple fully connected net with not activation after the last layer."""
 
-    def __init__(self, in_dims, out_dims, name_tag, nr_hidden=2,
-                 hidden_size=256, activation='elu', squeeze=False,
-                 squeeze_dims=None, debug=False):
+    def __init__(self, in_dims=256, out_dims=256, name_tag="fc_net",
+                 nr_layers=2, feature_maps=256, activation='elu',
+                 squeeze=False, squeeze_dims=None, debug=False):
         """
         Parameters
         ----------
@@ -18,9 +18,9 @@ class FC_net(Model):
         name_tag : str
             A tag used to identify the model in tensorboard. Should be unique
             for all instances of the class.
-        nr_hidden : int
+        nr_layers : int
             The number of hidden layers.
-        hidden_size : int
+        feature_maps : int
             The number of nodes in the hidden layers.
         activation : str
             Activation function after every layer.
@@ -33,7 +33,7 @@ class FC_net(Model):
         self.debug = debug
         self.name_tag = name_tag
 
-        assert nr_hidden >= 1 and type(nr_hidden) == int,\
+        assert nr_layers >= 1 and type(nr_hidden) == int,\
             "Must have at leas one hidden layer"
         assert name_tag != "", "Name tag can't be an empty stirng"
 
@@ -41,22 +41,22 @@ class FC_net(Model):
             out_dims = squeeze_dims
 
         with tf.name_scope(f"FC/{self.name_tag}") as scope:
-            new_layer = layers.Dense(hidden_size, activation=activation,
+            new_layer = layers.Dense(feature_maps, activation=activation,
                                      dtype="float64", name="dense_0")
             new_layer.build((None, in_dims))
             nn_layers = [new_layer]
 
             i = 0
-            for i in range(nr_hidden - 1):
-                new_layer = layers.Dense(hidden_size, activation=activation,
+            for i in range(nr_layers - 1):
+                new_layer = layers.Dense(feature_maps, activation=activation,
                                          dtype="float64",
                                          name=f"dense_{i + 1}")
-                new_layer.build((None, hidden_size))
+                new_layer.build((None, feature_maps))
                 nn_layers.append(new_layer)
 
             new_layer = layers.Dense(out_dims, activation=None,
                                      dtype="float64", name=f"dense_{i + 2}")
-            new_layer.build((None, hidden_size))
+            new_layer.build((None, feature_maps))
             nn_layers.append(new_layer)
 
             self.nn_layers = nn_layers

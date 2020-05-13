@@ -7,9 +7,10 @@ from tensorflow.keras.layers import Conv2D, Dense, Flatten
 class ResNet(Model):
     """Residual Convolutional Neural Network."""
 
-    def __init__(self, in_dims, out_dims, name_tag, nr_res_blocks=3,
-                 filters=32, activation='elu', squeeze=False,
-                 squeeze_dims=None, debug=False):
+    def __init__(self, in_dims=(16, 16, 3), out_dims=(16, 16, 3),
+                 name_tag="res_net", nr_layers=3, feature_maps=32,
+                 activation='elu', squeeze=False, squeeze_dims=None,
+                 debug=False):
         """
         Parameters
         ----------
@@ -23,15 +24,15 @@ class ResNet(Model):
             A tag used to identify the model in tensorboard. Should be unique
             for all instances of the class.
 
-        nr_res_blocks : int
+        nr_layers : int
             The number of residual blocks in the middle of the networks.
-            Each residual block has filter number of filters.
+            Each residual block has filter number of feature_maps.
 
         activation : str
             Activation function after every layer.
 
-        filters : int
-            Number of filters to use in the residual blocks.
+        feature_maps : int
+            Number of feature_maps to use in the residual blocks.
 
         squeeze : bool
             Flag to add a final fully connected layer to the network that
@@ -54,43 +55,43 @@ class ResNet(Model):
         channels_in = in_dims[2]
         channels_out = out_dims[2]
         image_size = (in_dims[0], in_dims[1])
-        intermediate_dim = (None, *image_size, filters)
+        intermediate_dim = (None, *image_size, feature_maps)
 
         self.bn_in = BatchNormalization(axis=3, dtype=tf.float64,
                                         fused=False, name="BN_in")
         self.bn_in.build((None, *image_size, channels_in))
 
-        self.conv_in = Conv2D(filters, kernel_size=(3, 3), padding="same",
+        self.conv_in = Conv2D(feature_maps, kernel_size=(3, 3), padding="same",
                               data_format="channels_last", activation=None,
                               use_bias=True, dtype=tf.float64, name="Conv_in")
         self.conv_in.build((None, *image_size, channels_in * 2))
 
-        self.conv_skip = Conv2D(filters, kernel_size=(1, 1), padding="same",
+        self.conv_skip = Conv2D(feature_maps, kernel_size=(1, 1), padding="same",
                                 data_format="channels_last", activation=None,
                                 use_bias=True, dtype=tf.float64,
                                 name="Conv_skip_0")
-        self.conv_skip.build((None, *image_size, filters))
+        self.conv_skip.build((None, *image_size, feature_maps))
 
         self.res_blocks = [ResidualConvBlock(intermediate_dim, f"i",
-                                             activation, filters)
-                           for i in range(nr_res_blocks)]
+                                             activation, feature_maps)
+                           for i in range(nr_layers)]
 
-        self.skips = [Conv2D(filters, kernel_size=(3, 3), padding="same",
+        self.skips = [Conv2D(feature_maps, kernel_size=(3, 3), padding="same",
                              data_format="channels_last",
                              activation=None, use_bias=True,
                              dtype=tf.float64, name=f"Conv_skip_{i + 1}")
-                      for i in range(nr_res_blocks)]
+                      for i in range(nr_layers)]
         for skip in self.skips:
-            skip.build((None, *image_size, filters))
+            skip.build((None, *image_size, feature_maps))
 
         self.bn_out = BatchNormalization(axis=3, dtype=tf.float64,
                                          fused=False, name="BN_in")
-        self.bn_out.build((None, *image_size, filters))
+        self.bn_out.build((None, *image_size, feature_maps))
 
         conv_out = Conv2D(channels_out, kernel_size=(1, 1), padding="same",
                           data_format="channels_last", activation=None,
                           use_bias=True, dtype=tf.float64, name="Conv_out")
-        conv_out.build((None, *image_size, filters))
+        conv_out.build((None, *image_size, feature_maps))
         self.out_layers = Sequential()
         self.out_layers.add(conv_out)
 
@@ -164,7 +165,7 @@ class ResidualConvBlock(Model):
     a skip connection.
     """
 
-    def __init__(self, dims, name_tag, activation, filters):
+    def __init__(self, dims, name_tag, activation, feature_maps):
         """
         Parameters
         ----------
@@ -178,8 +179,8 @@ class ResidualConvBlock(Model):
         activation : str
             Activation function used after batch normalisation.
 
-        filters : int
-            Number of filters in the convolutional block.
+        feature_maps : int
+            Number of feature_maps in the convolutional block.
         """
 
         super().__init__(dtype=tf.float64)
@@ -189,7 +190,7 @@ class ResidualConvBlock(Model):
         BN_1 = BatchNormalization(axis=3, dtype=tf.float64, fused=False,
                                   name="BN_1")
         BN_1.build(dims)
-        Conv_1 = Conv2D(filters, kernel_size=(1, 1), padding="same",
+        Conv_1 = Conv2D(feature_maps, kernel_size=(1, 1), padding="same",
                         data_format="channels_last", activation=None,
                         use_bias=False, dtype=tf.float64, name="Conv_1")
         Conv_1.build(dims)
@@ -197,7 +198,7 @@ class ResidualConvBlock(Model):
         BN_2 = BatchNormalization(axis=3, dtype=tf.float64, fused=False,
                                   name="BN_2")
         BN_2.build(dims)
-        Conv_2 = Conv2D(filters, kernel_size=(3, 3), padding='same',
+        Conv_2 = Conv2D(feature_maps, kernel_size=(3, 3), padding='same',
                         data_format="channels_last", activation=None,
                         use_bias=False, dtype=tf.float64, name="Conv_2")
         Conv_2.build(dims)
@@ -205,7 +206,7 @@ class ResidualConvBlock(Model):
         BN_3 = BatchNormalization(axis=3, dtype=tf.float64, fused=False,
                                   name="BN_3")
         BN_3.build(dims)
-        Conv_3 = Conv2D(filters, kernel_size=(1, 1), padding="same",
+        Conv_3 = Conv2D(feature_maps, kernel_size=(1, 1), padding="same",
                         data_format="channels_last", activation=None,
                         use_bias=True, dtype=tf.float64, name="Conv_3")
         Conv_3.build(dims)
@@ -241,10 +242,10 @@ def test_residual_block():
     dims = (None, 10, 20, 32)
     name_tag = "test"
     activation = "relu"
-    filters = 32
+    feature_maps = 32
     x = tf.zeros((2, 10, 20, 32), dtype=tf.float64)
 
-    block = ResidualConvBlock(dims, name_tag, activation, filters)
+    block = ResidualConvBlock(dims, name_tag, activation, feature_maps)
     out = block(x, 0, training=True)
     tf.debugging.assert_equal(out.shape, x.shape,
                               "shape mismatch in res block")
@@ -257,11 +258,11 @@ def test_residual_network():
     out_dims = (10, 20, 16)
     name_tag = "test"
     activation = "relu"
-    filters = 32
+    feature_maps = 32
     residual_blocks = 3
     x = tf.zeros((2, 10, 20, 8), dtype=tf.float64)
 
-    model = ResNet(in_dims, out_dims, name_tag, residual_blocks, filters,
+    model = ResNet(in_dims, out_dims, name_tag, residual_blocks, feature_maps,
                    activation, squeeze=True, squeeze_dims=1, debug=True)
     out = model(x, 0, training=True)
     tf.debugging.assert_equal(out.shape, (2, 1),
