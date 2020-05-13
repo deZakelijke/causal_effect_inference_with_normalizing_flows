@@ -66,7 +66,8 @@ class ResNet(Model):
                               use_bias=True, dtype=tf.float64, name="Conv_in")
         self.conv_in.build((None, *image_size, channels_in * 2))
 
-        self.conv_skip = Conv2D(feature_maps, kernel_size=(1, 1), padding="same",
+        self.conv_skip = Conv2D(feature_maps, kernel_size=(1, 1),
+                                padding="same",
                                 data_format="channels_last", activation=None,
                                 use_bias=True, dtype=tf.float64,
                                 name="Conv_skip_0")
@@ -269,6 +270,7 @@ def test_residual_network():
                               "Shape mismatch in resnet")
     print(model.summary())
 
+
 if __name__ == "__main__":
     set_vdc = tf.config.experimental.set_virtual_device_configuration
     vdc = tf.config.experimental.VirtualDeviceConfiguration
@@ -279,7 +281,8 @@ if __name__ == "__main__":
             # set_vdc(gpu, [vdc(memory_limit=4096)])
             tf.config.experimental.set_memory_growth(gpu, True)
             logical_gpus = tf.config.experimental.list_logical_devices('GPU')
-            print(len(gpus), "Physical GPUs, ", len(logical_gpus), "Logical GPUs")
+            print(len(gpus), "Physical GPUs, ", len(logical_gpus),
+                  "Logical GPUs")
 
     tf.keras.backend.set_floatx('float64')
     test_residual_block()
