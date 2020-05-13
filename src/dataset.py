@@ -95,12 +95,11 @@ def IHDP(params, path_data="datasets/IHDP/csv/", separate_files=False,
                                       random_state=1)
     x_cont = np.array(x_cont)
     x_bin = np.array(x_bin, dtype=int)
-    # x_bin = tf.one_hot(x_bin, 2, axis=-1, dtype=tf.float64)
-    # x_bin = tf.reshape(x_bin, (len(x_bin), len(binfeats) * 2))
     enc = OneHotEncoder(categories='auto', sparse=False)
     x_bin = enc.fit(x_bin).transform(x_bin)
 
     t = np.expand_dims(np.array(t), axis=1)
+    t = enc.fit(t).transform(t)
     y = np.expand_dims(np.array(y), axis=1)
     y_cf = np.expand_dims(np.array(y_cf), axis=1)
 
@@ -113,7 +112,8 @@ def IHDP(params, path_data="datasets/IHDP/csv/", separate_files=False,
     mu_1 = np.expand_dims(np.array(mu_1), axis=1)
     scaling_data = (y_mean, y_std)
 
-    metadata = (scaling_data, 2)
+    nr_unique_values = (2, 2)
+    metadata = (scaling_data, nr_unique_values)
 
     train_set = tf.data.Dataset.from_tensor_slices(((x_bin[idx_tr],
                                                      x_cont[idx_tr],
@@ -223,6 +223,9 @@ def TWINS(params, path_data="datasets/TWINS/", do_preprocessing=True,
     y = np.expand_dims(data_y[indices, t], axis=1)
     y_cf = np.expand_dims(data_y[indices, 1-t], axis=1)
     t = np.expand_dims(t, axis=1).astype(float)
+    enc = OneHotEncoder(categories='auto', sparse=False)
+    t = enc.fit(t).transform(t)
+
     mu_1 = np.expand_dims(data_y[indices, 1], axis=1)
     mu_0 = np.expand_dims(data_y[indices, 0], axis=1)
 
@@ -243,7 +246,7 @@ def TWINS(params, path_data="datasets/TWINS/", do_preprocessing=True,
                                                     mu_1[idx_te],
                                                     mu_0[idx_te])))
     scaling_data = (0, 1)
-    nr_unique_values = 10
+    nr_unique_values = (10, 2)
     metadata = (scaling_data, nr_unique_values)
 
     return train_set, test_set, metadata
@@ -272,12 +275,19 @@ def SHAPES(params, path_data="datasets/SHAPES/", separate_files=None,
     # test_array_dict = 
     x_cont = np.rollaxis(train_array_dict['obs'], 1, 4).astype(float)
     x_cat = np.zeros((len(x_cont), 50, 50, 0))
-    t = np.reshape(train_array_dict['action'],
-                   (len(train_array_dict['action']), 1, 1, 1)).astype(float)
+    # t = np.reshape(train_array_dict['action'],
+    #                (len(train_array_dict['action']), 1, 1, 1)).astype(float)
+
+    # x_bin = np.array(x_bin, dtype=int)
+    t = train_array_dict['action']
+    enc = OneHotEncoder(categories='auto', sparse=False)
+    # x_bin = enc.fit(x_bin).transform(x_bin)
+    t = enc.fit(t).transform(t)
+    # Reshape t?
     y = np.rollaxis(train_array_dict['next_obs'], 1, 4).astype(float)
     y_cf = np.rollaxis(train_array_dict['obs'], 1, 4).astype(float)
-    mu_1 = np.zeros((len(x_cont), 0, 0, 0))
-    mu_0 = np.zeros((len(x_cont), 0, 0, 0))
+    mu_1 = np.zeros((len(x_cont), 1, 1, 1))
+    mu_0 = np.zeros((len(x_cont), 1, 1, 1))
     train_set = tf.data.Dataset.from_tensor_slices(((x_cat,
                                                      x_cont,
                                                      t,
@@ -305,7 +315,7 @@ def SHAPES(params, path_data="datasets/SHAPES/", separate_files=None,
                                                     mu_0)))
 
     scaling_data = (0, 1)
-    nr_unique_values = 1
+    nr_unique_values = (0, 16)
     metadata = (scaling_data, nr_unique_values)
 
     return train_set, test_set, metadata

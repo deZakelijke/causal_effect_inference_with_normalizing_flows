@@ -218,6 +218,7 @@ def train(params, writer, train_iteration=0):
             for step, features in train_dataset.batch(params["batch_size"]).enumerate(step_start):
                 step = tf.constant(step)
                 loss_value, grads = model.grad(features, step, params)
+                print(loss_value)
                 avg_loss += loss_value
                 optimizer.apply_gradients(zip(grads,
                                               model.trainable_variables))
@@ -301,7 +302,9 @@ if __name__ == "__main__":
         for gpu in gpus:
             # set_vdc(gpu, [vdc(memory_limit=4096)])
             tf.config.experimental.set_memory_growth(gpu, True)
-            #logical_gpus = tf.config.experimental.list_logical_devices('GPU')
-            #print(len(gpus), "Physical GPUs, ", len(logical_gpus), "Logical GPUs")
-
-    main(params)
+            logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+            print(len(gpus), "Physical GPUs, ", len(logical_gpus), "Logical GPUs")
+        with tf.device('device:GPU:0'):
+            main(params)
+    else:
+        main(params)

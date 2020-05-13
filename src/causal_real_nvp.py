@@ -19,14 +19,15 @@ class CausalRealNVP(Model):
     connects them.
     """
 
-    def __init__(self, dims_x, dims_y, intervention_dims, name_tag, filters,
-                 n_scales, n_blocks=3, activation="relu",
+    def __init__(self, dims_x=30, dims_y=1, dims_t=2, name_tag="no_name", filters=32,
+                 n_scales=2, n_blocks=3, activation="relu",
                  architecture_type="FC_net", debug=False):
         """
         Parameters
         ----------
 
         """
+
         super().__init__(name=name_tag)
         self.dims_x = dims_x
         self.dims_y = dims_y * 2
@@ -51,7 +52,7 @@ class CausalRealNVP(Model):
             self.flow_y = CouplingLayers(dims_y, "flow_y", filters, 0,
                                          n_scales, n_blocks, activation,
                                          architecture_type, context=True,
-                                         context_dims=intervention_dims,
+                                         context_dims=dims_t,
                                          debug=debug)
             # TODO I have to adjust flow_y in such a way that it also uses the
             # context variable
@@ -288,7 +289,7 @@ def test_model():
     # dims = (32, 32, 3)
     dims_x = 102
     dims_y = 1
-    intervention_dims = 20
+    dims_t = 20
     name_tag = "test"
     filters = 32
     n_scales = 2
@@ -305,11 +306,11 @@ def test_model():
 
     x = tf.ones((batch_size, dims_x), dtype=tf.float64)
     y = tf.ones((batch_size, dims_y), dtype=tf.float64)
-    t = tf.ones((batch_size, intervention_dims), dtype=tf.float64)
+    t = tf.ones((batch_size, dims_t), dtype=tf.float64)
 
     # TODO writ test for logit normalise
     start_time = time.time()
-    model = CausalRealNVP(dims_x, dims_y, intervention_dims, name_tag, filters,
+    model = CausalRealNVP(dims_x, dims_y, dims_t, name_tag, filters,
                           n_scales, n_blocks,
                           activation, architecture_type, debug=True)
     middle_time = time.time()

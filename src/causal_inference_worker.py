@@ -47,7 +47,7 @@ class CIWorker(Model):
                                        architecture_type=architecture_type,
                                        debug=self.debug)
 
-    @tf.function
+    # @tf.function
     def call(self, features, step, training=False):
         if self.model_type == "crnvp":
             x = tf.concat([features[0], features[1]], axis=-1)

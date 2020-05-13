@@ -39,7 +39,7 @@ def calc_stats(model, dataset, scaling_data, params):
          This would average out different effects if the treatment would
          work differently on different on different parts of the population.
         """
-        return tf.concat([ypred1 - ypred0, true_ite], 1)
+        return tf.concat([ypred1 - ypred0, true_ite], -1)
 
     def pehe(ypred1, ypred0, mu_1, mu_0):
         return tf.square((mu_1 - mu_0) - (ypred1 - ypred0))
@@ -49,7 +49,7 @@ def calc_stats(model, dataset, scaling_data, params):
         ypred_cf = t * ypred0 + (1 - t) * ypred1
         se_factual = tf.square(ypred - y)
         se_cfactual = tf.square(ypred_cf - y_cf)
-        return tf.concat([se_factual, se_cfactual], 1)
+        return tf.concat([se_factual, se_cfactual], -1)
 
     """
     def y_errors_pcf(ypred, ypred_cf, y, y_cf):
@@ -72,7 +72,7 @@ def calc_stats(model, dataset, scaling_data, params):
         x_bin, x_cont, t, y, y_cf, mu_0, mu_1 = features
         true_ite = mu_1 - mu_0
 
-        x = tf.concat([x_bin, x_cont], 1)
+        x = tf.concat([x_bin, x_cont], -1)
         ypred0, ypred1 = model.do_intervention(x, nr_samples)
         y_mean, y_std = scaling_data[0], scaling_data[1]
         ypred0, ypred1 = ypred0 * y_std + y_mean, ypred1 * y_std + y_mean
