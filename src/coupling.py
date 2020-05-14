@@ -8,8 +8,8 @@ from tensorflow.keras import Model
 class CouplingLayers(Model):
     """ Implementation of the coupling layers of the RealNVP."""
 
-    def __init__(self, dims, name_tag, filters, scale_idx, n_scales,
-                 n_blocks=3, activation='relu', architecture_type="FC_net",
+    def __init__(self, dims, name_tag, feature_maps, scale_idx, n_scales,
+                 n_layers=3, activation='relu', architecture_type="FC_net",
                  context=False, context_dims=0, debug=False):
         """
         Parameters
@@ -36,38 +36,38 @@ class CouplingLayers(Model):
         coupling_index = scale_idx * 6
 
         self.in_couplings = [
-            Coupling(dims, filters, f"Coupling_layer_{coupling_index + 1}",
-                     n_blocks, activation, mask, architecture_type, context,
+            Coupling(dims, feature_maps, f"Coupling_layer_{coupling_index + 1}",
+                     n_layers, activation, mask, architecture_type, context,
                      context_dims, debug),
-            Coupling(dims, filters, f"Coupling_layer_{coupling_index + 2}",
-                     n_blocks, activation, 1 - mask, architecture_type,
+            Coupling(dims, feature_maps, f"Coupling_layer_{coupling_index + 2}",
+                     n_layers, activation, 1 - mask, architecture_type,
                      context, context_dims, debug),
-            Coupling(dims, filters, f"Coupling_layer_{coupling_index + 3}",
-                     n_blocks, activation, mask, architecture_type, context,
+            Coupling(dims, feature_maps, f"Coupling_layer_{coupling_index + 3}",
+                     n_layers, activation, mask, architecture_type, context,
                      context_dims, debug)
         ]
 
         if self.is_last_block:
             self.in_couplings.append(
-                Coupling(dims, filters, f"Coupling_layer_{coupling_index + 4}",
-                         n_blocks, activation, 1 - mask, architecture_type,
+                Coupling(dims, feature_maps, f"Coupling_layer_{coupling_index + 4}",
+                         n_layers, activation, 1 - mask, architecture_type,
                          context, context_dims, debug)
             )
         else:
             if architecture_type == "ResNet":
-                filters *= 2
+                feature_maps *= 2
                 dims = (dims[0] // 2, dims[1] // 2, 4 * dims[-1])
                 mask = self.get_channel_mask(dims)
 
             self.out_couplings = [
-                Coupling(dims, filters, f"Coupling_layer_{coupling_index + 4}",
-                         n_blocks, activation, 1 - mask, architecture_type,
+                Coupling(dims, feature_maps, f"Coupling_layer_{coupling_index + 4}",
+                         n_layers, activation, 1 - mask, architecture_type,
                          context, context_dims, debug),
-                Coupling(dims, filters, f"Coupling_layer_{coupling_index + 5}",
-                         n_blocks, activation, mask, architecture_type,
+                Coupling(dims, feature_maps, f"Coupling_layer_{coupling_index + 5}",
+                         n_layers, activation, mask, architecture_type,
                          context, context_dims, debug),
-                Coupling(dims, filters, f"Coupling_layer_{coupling_index + 6}",
-                         n_blocks, activation, 1 - mask, architecture_type,
+                Coupling(dims, feature_maps, f"Coupling_layer_{coupling_index + 6}",
+                         n_layers, activation, 1 - mask, architecture_type,
                          context, context_dims, debug)
             ]
 
@@ -76,9 +76,9 @@ class CouplingLayers(Model):
                 dims = dims[:-1] + (dims[-1] // 2, )
             else:
                 dims = dims // 2
-            self.next_couplings = CouplingLayers(dims, name_tag, filters,
+            self.next_couplings = CouplingLayers(dims, name_tag, feature_maps,
                                                  scale_idx + 1, n_scales,
-                                                 n_blocks, activation,
+                                                 n_layers, activation,
                                                  architecture_type, context,
                                                  context_dims, debug)
 
@@ -192,7 +192,7 @@ class CouplingLayers(Model):
 class Coupling(Model):
     """ Single coupling layer."""
 
-    def __init__(self, in_dims, filters, name_tag, n_blocks, activation,
+    def __init__(self, in_dims, feature_maps, name_tag, n_layers, activation,
                  mask, architecture_type="FC_net", context=False,
                  context_dims=0, debug=False):
         """
@@ -201,8 +201,8 @@ class Coupling(Model):
         in_dims : (int, int, int)
             The input dimensions of the coupling layers
 
-        filters : int
-            The number of filters used when using ResNet as architecture type.
+        feature_maps : int
+            The number of feature_maps used when using ResNet as architecture type.
             If the architecture type = Fc_net, this variable is used to pass
             the number of hidden nodes in each hidden layer.
 
@@ -210,7 +210,7 @@ class Coupling(Model):
             The name of this coupling layer. Used when printing the model and
             for logging the weights in tensorboard.
 
-        n_blocks : int
+        n_layers : int
             Either the number of blocks in ResNet atchitectures or the number
             of hidden layers in FC_net architectures.
 
@@ -232,13 +232,13 @@ class Coupling(Model):
         if architecture_type == "FC_net":
             out_dims = in_dims * 2
             in_dims += context_dims
-            self.nn = FC_net(in_dims, out_dims, name_tag, n_blocks,
-                             filters, activation, debug)
+            self.nn = FC_net(in_dims, out_dims, name_tag, n_layers,
+                             feature_maps, activation, debug)
         if architecture_type == "ResNet":
             out_dims = in_dims[:-1] + (2 * in_dims[-1], )
             in_dims = in_dims[:-1] + (in_dims[-1] + context_dims, )
-            self.nn = ResNet(in_dims, out_dims, name_tag, n_blocks,
-                             filters, activation, debug)
+            self.nn = ResNet(in_dims, out_dims, name_tag, n_layers,
+                             feature_maps, activation, debug)
 
         weights = self.nn.layers[-1].weights
         self.nn.layers[-1].set_weights([tf.zeros_like(weights[0]),
@@ -278,16 +278,16 @@ def test_coupling():
     """ Unit test for single coupling layer."""
     batch_size = 8
     name_tag = "test"
-    n_blocks = 4
+    n_layers = 4
     activation = "relu"
-    filters = 128
+    feature_maps = 128
     dims = 100
 
     x = tf.ones((batch_size, dims), dtype=tf.float64)
     ldj = tf.zeros((batch_size), dtype=tf.float64)
 
     mask = CouplingLayers.get_checkerboard_mask(dims)
-    coupling = Coupling(dims, filters, name_tag, n_blocks, activation,
+    coupling = Coupling(dims, feature_maps, name_tag, n_layers, activation,
                         mask, architecture_type="FC_net", debug=True)
     z, ldj_out = coupling(x, ldj, training=True)
     x_recon, ldj_recon = coupling(z, ldj_out, reverse=True, training=True)
@@ -299,14 +299,14 @@ def test_coupling():
                                                      "incorrect")
     print(coupling.summary())
 
-    filters = 32
+    feature_maps = 32
     dims = (15, 15, 4)
 
     x = tf.ones((batch_size, *dims), dtype=tf.float64)
     ldj = tf.zeros((batch_size), dtype=tf.float64)
 
     mask = CouplingLayers.get_channel_mask(dims)
-    coupling = Coupling(dims, filters, name_tag, n_blocks, activation,
+    coupling = Coupling(dims, feature_maps, name_tag, n_layers, activation,
                         mask, architecture_type="ResNet", debug=True)
     z, ldj_out = coupling(x, ldj, 0, training=True)
     x_recon, ldj_recon = coupling(z, ldj_out, 0, reverse=True, training=True)
@@ -322,17 +322,17 @@ def test_coupling():
 def test_coupling_layers():
     batch_size = 4
     name_tag = "test_coupling_layers_fc_net"
-    n_blocks = 3
+    n_layers = 3
     activation = "relu"
     n_scales = 2
-    filters = 128
+    feature_maps = 128
     dims = 100
     context_dims = 20
 
     x = tf.ones((batch_size, dims), dtype=tf.float64)
     t = tf.ones((batch_size, context_dims), dtype=tf.float64)
     ldj = tf.zeros((batch_size), dtype=tf.float64)
-    coupling = CouplingLayers(dims, name_tag, filters, 0, n_scales, n_blocks,
+    coupling = CouplingLayers(dims, name_tag, feature_maps, 0, n_scales, n_layers,
                               activation, "FC_net", True, context_dims,
                               debug=True)
     z, ldj_out = coupling(x, ldj, 0, training=True, t=t)
@@ -347,12 +347,12 @@ def test_coupling_layers():
     print(coupling.summary())
 
     name_tag = "test_coupling_layers_resnet"
-    filters = 32
+    feature_maps = 32
     dims = (32, 32, 4)
 
     x = tf.ones((batch_size, *dims), dtype=tf.float64)
     ldj = tf.zeros((batch_size), dtype=tf.float64)
-    coupling = CouplingLayers(dims, name_tag, filters, 0, n_scales, n_blocks,
+    coupling = CouplingLayers(dims, name_tag, feature_maps, 0, n_scales, n_layers,
                               activation, architecture_type="ResNet",
                               debug=True)
     z, ldj_out = coupling(x, ldj, 0, training=True)

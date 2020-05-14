@@ -7,17 +7,16 @@ import sys
 import tensorflow as tf
 import time
 
-from causal_inference_worker import CIWorker
+# from causal_inference_worker import CIWorker
+from causal_real_nvp import CRNVP
+from cenf import CENF
+from cevae import CEVAE
 from contextlib import nullcontext
 from dataset import IHDP, TWINS, SHAPES
 from evaluation import calc_stats
 
-VALID_MODELS = ["cevae", "cenf", "crnvp"]
+VALID_MODELS = ["CEVAE", "CENF", "CRNVP"]
 VALID_DATASETS = ["IHDP", "TWINS", "SHAPES"]
-DATASET_DISTRIBUTION_DICT = {"IHDP": {'x': ['M', 'N'], 't': 'B', 'y': 'N'},
-                             "TWINS": {'x': ['M', 'N'], 't': 'B', 'y': 'B'},
-                             "SHAPES": {'x': ['M', 'N'], 't': 'M', 'y': 'N'}}
-
 
 tf.keras.backend.set_floatx('float64')
 
@@ -56,7 +55,9 @@ def parse_arguments():
                         "lower than one means more weight to distortion. "
                         "(default=1.0)")
     parser.add_argument("--dataset", type=str, default="IHDP",
-                        help="Dataset used (default: IHDP)")
+                        help="Dataset used. "
+                        f"Available datasets are: {VALID_DATASETS} "
+                        "(default: IHDP)")
     parser.add_argument("--debug", action="store_true", default=False,
                         help="Turn on debugging mode. What it does now is turn"
                         " off summary writer and print a lott of stuff.")
@@ -65,7 +66,7 @@ def parse_arguments():
     parser.add_argument("--experiment_name", type=str,
                         help="Name of experiment used for results folder. "
                         "Disabled in debug mode")
-    parser.add_argument("--hidden_size", type=int, default=200,
+    parser.add_argument("--feature_maps", type=int, default=200,
                         help="Number of nodes in hidden fully connected layers"
                         " or number of filters in convolutional layers")
     parser.add_argument("--learning_rate", type=float, default=1e-4,
@@ -75,9 +76,10 @@ def parse_arguments():
     parser.add_argument("--mode", type=str, default="train",
                         help="Switch between train and test mode "
                         "(default: train)")
-    parser.add_argument("--model", type=str, default="cevae",
-                        help="The type of model used for predictions "
-                        "(default: cevae)")
+    parser.add_argument("--model", type=str, default="CEVAE",
+                        help="The type of model used for predictions. "
+                        f"Available models are: {VALID_MODELS} "
+                        "(default: CEVAE)")
     parser.add_argument("--model_dir", type=str, default="/home/mgroot/logs/",
                         help="The directory to save the model to "
                         "(default: ~/logs/)")
@@ -118,8 +120,6 @@ def parse_arguments():
     for arg, value in vars(args).items():
         print(f"Argument: {arg:<16} {value:<5}")
     print()
-
-    args.dataset_distributions = DATASET_DISTRIBUTION_DICT[args.dataset]
 
     return vars(args)
 
@@ -190,19 +190,18 @@ def train(params, writer, train_iteration=0):
     """
 
     cardinality = tf.data.experimental.cardinality
-    data = eval(f"{params['dataset']}")
-    train_dataset, test_dataset, metadata = data(params,
-                                                 separate_files=params['separate_files'],
-                                                 file_index=train_iteration)
-    scaling_data = metadata[0]
-    category_sizes = metadata[1]
+    data = eval(params['dataset'])
+    train_dataset, test_dataset = data(params,
+                                       separate_files=params['separate_files'],
+                                       file_index=train_iteration)
+    scaling_data = params['scaling_data']
 
     len_dataset = cardinality(train_dataset)
     train_dataset = train_dataset.shuffle(len_dataset)
     len_dataset = cardinality(test_dataset)
     test_dataset = test_dataset.shuffle(len_dataset)
 
-    model = CIWorker(params, category_sizes)
+    model = eval(params['model'])(**params)
 
     optimizer = tf.keras.optimizers.Adam(learning_rate=params["learning_rate"])
     len_epoch = cardinality(train_dataset.batch(params["batch_size"]))
@@ -217,8 +216,7 @@ def train(params, writer, train_iteration=0):
             step_start = global_train_step + epoch * len_epoch
             for step, features in train_dataset.batch(params["batch_size"]).enumerate(step_start):
                 step = tf.constant(step)
-                loss_value, grads = model.grad(features, step, params)
-                print(loss_value)
+                loss_value, grads = model.grad(features, step)
                 avg_loss += loss_value
                 optimizer.apply_gradients(zip(grads,
                                               model.trainable_variables))

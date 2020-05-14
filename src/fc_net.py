@@ -6,7 +6,7 @@ class FC_net(Model):
     """ Simple fully connected net with not activation after the last layer."""
 
     def __init__(self, in_dims=256, out_dims=256, name_tag="fc_net",
-                 nr_layers=2, feature_maps=256, activation='elu',
+                 n_layers=2, feature_maps=256, activation='elu',
                  squeeze=False, squeeze_dims=None, debug=False):
         """
         Parameters
@@ -18,7 +18,7 @@ class FC_net(Model):
         name_tag : str
             A tag used to identify the model in tensorboard. Should be unique
             for all instances of the class.
-        nr_layers : int
+        n_layers : int
             The number of hidden layers.
         feature_maps : int
             The number of nodes in the hidden layers.
@@ -33,7 +33,7 @@ class FC_net(Model):
         self.debug = debug
         self.name_tag = name_tag
 
-        assert nr_layers >= 1 and type(nr_hidden) == int,\
+        assert n_layers >= 1 and type(feature_maps) == int,\
             "Must have at leas one hidden layer"
         assert name_tag != "", "Name tag can't be an empty stirng"
 
@@ -47,7 +47,7 @@ class FC_net(Model):
             nn_layers = [new_layer]
 
             i = 0
-            for i in range(nr_layers - 1):
+            for i in range(n_layers - 1):
                 new_layer = layers.Dense(feature_maps, activation=activation,
                                          dtype="float64",
                                          name=f"dense_{i + 1}")

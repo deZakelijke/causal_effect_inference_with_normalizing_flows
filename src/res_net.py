@@ -8,7 +8,7 @@ class ResNet(Model):
     """Residual Convolutional Neural Network."""
 
     def __init__(self, in_dims=(16, 16, 3), out_dims=(16, 16, 3),
-                 name_tag="res_net", nr_layers=3, feature_maps=32,
+                 name_tag="res_net", n_layers=3, feature_maps=32,
                  activation='elu', squeeze=False, squeeze_dims=None,
                  debug=False):
         """
@@ -24,7 +24,7 @@ class ResNet(Model):
             A tag used to identify the model in tensorboard. Should be unique
             for all instances of the class.
 
-        nr_layers : int
+        n_layers : int
             The number of residual blocks in the middle of the networks.
             Each residual block has filter number of feature_maps.
 
@@ -75,13 +75,13 @@ class ResNet(Model):
 
         self.res_blocks = [ResidualConvBlock(intermediate_dim, f"i",
                                              activation, feature_maps)
-                           for i in range(nr_layers)]
+                           for i in range(n_layers)]
 
         self.skips = [Conv2D(feature_maps, kernel_size=(3, 3), padding="same",
                              data_format="channels_last",
                              activation=None, use_bias=True,
                              dtype=tf.float64, name=f"Conv_skip_{i + 1}")
-                      for i in range(nr_layers)]
+                      for i in range(n_layers)]
         for skip in self.skips:
             skip.build((None, *image_size, feature_maps))
 

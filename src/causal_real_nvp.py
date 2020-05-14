@@ -6,7 +6,7 @@ from coupling import CouplingLayers
 from tensorflow.keras import Model
 
 
-class CausalRealNVP(Model):
+class CRNVP(Model):
     """ Adaptation of the RealNVP for causal inference.
 
     This class is an adaption of the RealNVP model for causal inference.
@@ -19,9 +19,21 @@ class CausalRealNVP(Model):
     connects them.
     """
 
-    def __init__(self, dims_x=30, dims_y=1, dims_t=2, name_tag="no_name", filters=32,
-                 n_scales=2, n_blocks=3, activation="relu",
-                 architecture_type="FC_net", debug=False):
+    def __init__(
+        self,
+        x_cont_dims=(50, 50, 3),
+        t_dims=16,
+        y_dims=(50, 50, 3),
+        z_dims=(50, 50, 6),
+        name_tag="no_name",
+        feature_maps=32,
+        n_scales=2,
+        n_layers=3,
+        activation="relu",
+        architecture_type="FC_net",
+        debug=False,
+        **_
+    ):
         """
         Parameters
         ----------
@@ -29,36 +41,35 @@ class CausalRealNVP(Model):
         """
 
         super().__init__(name=name_tag)
-        self.dims_x = dims_x
-        self.dims_y = dims_y * 2
+        self.x_dims = x_cont_dims
         self.debug = debug
         if architecture_type == "FC_net":
-            dims_y *= 2
-            dims_z = dims_x + dims_y
-            self.dims_split = [dims_x, dims_y]
+            y_dims *= 2
+            z_dims = x_dims + y_dims
+            self.dims_split = [x_dims, y_dims]
         else:
-            dims_z = dims_x[:-1] + (dims_x[-1] + dims_y[-1], )
-            self.dims_split = [dims_x[-1], dims_y[-1]]
+            z_dims = x_dims[:-1] + (x_dims[-1] + y_dims[-1], )
+            self.dims_split = [x_dims[-1], y_dims[-1]]
 
         with tf.name_scope(f"RealNVP/{name_tag}") as scope:
-            self.flow_x = CouplingLayers(dims_x, "flow_x", filters, 0,
-                                         n_scales, n_blocks, activation,
+            self.flow_x = CouplingLayers(x_dims, "flow_x", feature_maps, 0,
+                                         n_scales, n_layers, activation,
                                          architecture_type, debug=debug)
             # TODO make y have its own shape. Check shape of t
             # Also adapt the flow length to the dimensionality of y
             # But what if y has an uneven number of dimensions or if it
             # has just one dimension?
             n_scales = 1
-            self.flow_y = CouplingLayers(dims_y, "flow_y", filters, 0,
-                                         n_scales, n_blocks, activation,
+            self.flow_y = CouplingLayers(y_dims, "flow_y", feature_maps, 0,
+                                         n_scales, n_layers, activation,
                                          architecture_type, context=True,
-                                         context_dims=dims_t,
+                                         context_dims=t_dims,
                                          debug=debug)
             # TODO I have to adjust flow_y in such a way that it also uses the
             # context variable
             n_scales = 2
-            self.flow_z = CouplingLayers(dims_z, "flow_z", filters, 0,
-                                         n_scales, n_blocks, activation,
+            self.flow_z = CouplingLayers(z_dims, "flow_z", feature_maps, 0,
+                                         n_scales, n_layers, activation,
                                          architecture_type, debug=debug)
 
     def dequantize(self, z, factor=1.0):
@@ -287,13 +298,13 @@ def test_model():
     ds = tfds.load('cifar10')
 
     # dims = (32, 32, 3)
-    dims_x = 102
-    dims_y = 1
-    dims_t = 20
+    x_dims = 102
+    y_dims = 1
+    t_dims = 20
     name_tag = "test"
-    filters = 32
+    feature_maps = 32
     n_scales = 2
-    n_blocks = 4
+    n_layers = 4
     activation = "relu"
     # architecture_type = "ResNet"
     architecture_type = "FC_net"
@@ -304,14 +315,14 @@ def test_model():
     #     x = images[:batch_size]
     #     y = images[batch_size:]
 
-    x = tf.ones((batch_size, dims_x), dtype=tf.float64)
-    y = tf.ones((batch_size, dims_y), dtype=tf.float64)
-    t = tf.ones((batch_size, dims_t), dtype=tf.float64)
+    x = tf.ones((batch_size, x_dims), dtype=tf.float64)
+    y = tf.ones((batch_size, y_dims), dtype=tf.float64)
+    t = tf.ones((batch_size, t_dims), dtype=tf.float64)
 
     # TODO writ test for logit normalise
     start_time = time.time()
-    model = CausalRealNVP(dims_x, dims_y, dims_t, name_tag, filters,
-                          n_scales, n_blocks,
+    model = CRNVP(x_dims, y_dims, t_dims, name_tag, feature_maps,
+                          n_scales, n_layers,
                           activation, architecture_type, debug=True)
     middle_time = time.time()
     bpd, ldj, z = model(x, t, y, 0, training=True)

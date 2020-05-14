@@ -47,7 +47,9 @@ def calc_stats(model, dataset, scaling_data, params):
     def y_errors(ypred0, ypred1, y, y_cf):
         ypred = (1 - t) * ypred0 + t * ypred1
         ypred_cf = t * ypred0 + (1 - t) * ypred1
+        print(ypred_cf.shape)
         se_factual = tf.square(ypred - y)
+        print(se_factual.shape) 
         se_cfactual = tf.square(ypred_cf - y_cf)
         return tf.concat([se_factual, se_cfactual], -1)
 
@@ -70,10 +72,13 @@ def calc_stats(model, dataset, scaling_data, params):
 
     for i, features in dataset.batch(params["batch_size"]).enumerate(0):
         x_bin, x_cont, t, y, y_cf, mu_0, mu_1 = features
+        t = t[:, 0]
         true_ite = mu_1 - mu_0
 
         x = tf.concat([x_bin, x_cont], -1)
         ypred0, ypred1 = model.do_intervention(x, nr_samples)
+        # ypred0 = tf.expand_dims(ypred0, -1)
+        # ypred1 = tf.expand_dims(ypred1, -1)
         y_mean, y_std = scaling_data[0], scaling_data[1]
         ypred0, ypred1 = ypred0 * y_std + y_mean, ypred1 * y_std + y_mean
         y = y * y_std + y_mean

@@ -13,34 +13,60 @@ from utils import get_log_prob, get_analytical_KL_divergence
 
 
 class CENF(Model):
+    """ Causal Effect Normalising Flow
 
-    def __init__(self, params, category_sizes, hidden_size=200, debug=False):
-        """ Causal Effect Normalising Flow
+    """
 
+    def __init__(
+        self,
+        x_cat_dims=10,
+        x_cont_dims=10,
+        t_dims=2,
+        y_dims=1,
+        z_dims=32,
+        category_sizes=2,
+        y_type='N',
+        name_tag="no_name",
+        feature_maps=256,
+        architecture_type="FC_net",
+        debug=False,
+        **_
+    ):
+        """
+        Parameters
+        ----------
 
         """
         super().__init__()
         self.debug = debug
         self.category_sizes = category_sizes
+        self.y_type = y_type
 
-        self.encode = Encoder(params, category_sizes, hidden_size)
-        self.decode = Decoder(params, category_sizes, hidden_size)
-        self.z_flow = PlanarFlow(params["z_size"], params["n_flows"])
+        if architecture_type == "ResNet":
+            self.x_cat_dims = x_cat_dims
+            x_dims = x_cont_dims[:-1] + (x_cont_dims[-1] + x_cat_dims[-1] *
+                                         category_sizes, )
+        else:
+            self.x_cat_dims = (x_cat_dims, )
+            x_dims = x_cont_dims + x_cat_dims * category_sizes
+
+        self.encode = Encoder(x_dims, t_dims, y_dims, z_dims, "Encoder",
+                              feature_maps, architecture_type, debug)
+        self.decode = Decoder(x_cat_dims, x_cont_dims, t_dims, y_dims, z_dims,
+                              category_sizes, "Decoder", feature_maps,
+                              architecture_type, debug)
+        self.z_flow = PlanarFlow(z_dims, n_flows)
 
     @tf.function
-    def call(self, features, step, training=False):
+    def call(self, x, t, y, step, training=False):
         if self.debug:
             print("Starting forward pass CENF")
 
-        x_cat, x_cont, t, y, y_cf, mu_0, mu_1 = features
-        x = tf.concat([x_cat, x_cont], 1)
+        # x_cat, x_cont, t, y, y_cf, mu_0, mu_1 = features
+        # x = tf.concat([x_cat, x_cont], -1)
 
         encoder_params = self.encode(x, t, y, step, training=training)
         _, _, qz_mean, qz_std = encoder_params
-        # qz = tfd.Independent(tfd.Normal(loc=qz_mean, scale=qz_std),
-        #                      reinterpreted_batch_ndims=1,
-        #                      name="qz")
-        # qz_sample = qz.sample()
         qz = tf.random.normal(qz_mean.shape, dtype=tf.float64)
         qz = qz * qz_std + qz_mean
 
@@ -54,26 +80,22 @@ class CENF(Model):
              step, params):
         if self.debug:
             print("Calculating loss")
-        x_cat, x_cont, t, y, y_cf, mu_0, mu_1 = features
+        x_cat, x_cont, t, y, *_ = features
         qt_prob, qy_mean, qz_mean, qz_std = encoder_params
         x_cat_prob, x_cont_mean, x_cont_std, t_prob, y_mean = decoder_params
-        l, f = x_cat.shape
-        x_cat_prob = tf.reshape(x_cat_prob, (l, f//self.category_sizes,
-                                             self.category_sizes))
-        x_cat = tf.reshape(x_cat, (l, f//self.category_sizes,
+        x_cat = tf.reshape(x_cat, (len(x_cat), *self.x_cat_dims,
                                    self.category_sizes))
 
         distortion_x = -get_log_prob(x_cat, 'M', probs=x_cat_prob) \
                        - get_log_prob(x_cont, 'N', mean=x_cont_mean,
                                       std=x_cont_std)
-        distortion_t = -get_log_prob(t, 'B', probs=t_prob)
-        distortion_y = -get_log_prob(y, 'N', mean=y_mean)
+        distortion_t = -get_log_prob(t, 'M', probs=t_prob)
+        distortion_y = -get_log_prob(y, self.y_type, mean=y_mean, probs=y_mean)
 
         rate = get_analytical_KL_divergence(qz_mean, qz_std)
-        # ldj_z = tf.reduce_mean(-ldj_z)
 
-        variational_t = -get_log_prob(t, 'B', probs=qt_prob)
-        variational_y = -get_log_prob(y, 'N', mean=qy_mean)
+        variational_t = -get_log_prob(t, 'M', probs=qt_prob)
+        variational_y = -get_log_prob(y, self.y_type, mean=qy_mean, probs=y_mean)
 
         if step is not None and step % (params['log_steps'] * 5) == 0:
             l_step = step // (params['log_steps'] * 5)
@@ -99,17 +121,14 @@ class CENF(Model):
 
     def do_intervention(self, x, nr_samples):
         *_, qz_mean, qz_std = self.encode(x, None, None, None, training=False)
-        # qz = tfd.Independent(tfd.Normal(loc=qz_mean, scale=qz_std),
-        #                      reinterpreted_batch_ndims=1,
-        #                      name="qz")
-        # qz_sample = qz.sample(nr_samples)
         qz = tf.random.normal((nr_samples, *qz_mean.shape), dtype=tf.float64)
-        qz = qz * qz_std + qz_mean
+        z = qz * qz_std + qz_mean
 
-        qz_k, ldj = self.z_flow(qz, None, training=False)
+        z_k, ldj = self.z_flow(z, None, training=False)
 
-        mu_y0, mu_y1 = self.decode.do_intervention(qz_k, nr_samples)
+        mu_y0, mu_y1 = self.decode.do_intervention(z_k, nr_samples)
         return mu_y0, mu_y1
+
 
 if __name__ == "__main__":
     pass

@@ -43,11 +43,12 @@ def IHDP(params, path_data="datasets/IHDP/csv/", separate_files=False,
         original version. The third number is the number of classes for each
         categorical variable.
     """
-    params["x_bin_size"] = 19
-    params["x_cat_size"] = 0 + 19
-    params["x_cont_size"] = 6
-    params["y_size"] = 1
-    params["z_size"] = 16
+    params["x_cat_dims"] = 19
+    params["x_cont_dims"] = 6
+    params["t_dims"] = 2
+    params["y_dims"] = 1
+    params["z_dims"] = 16
+    params['category_sizes'] = 2
 
     binfeats = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
     contfeats = [i for i in range(25) if i not in binfeats]
@@ -112,8 +113,7 @@ def IHDP(params, path_data="datasets/IHDP/csv/", separate_files=False,
     mu_1 = np.expand_dims(np.array(mu_1), axis=1)
     scaling_data = (y_mean, y_std)
 
-    nr_unique_values = (2, 2)
-    metadata = (scaling_data, nr_unique_values)
+    params['scaling_data'] = scaling_data
 
     train_set = tf.data.Dataset.from_tensor_slices(((x_bin[idx_tr],
                                                      x_cont[idx_tr],
@@ -130,7 +130,7 @@ def IHDP(params, path_data="datasets/IHDP/csv/", separate_files=False,
                                                     mu_0[idx_te],
                                                     mu_1[idx_te])))
 
-    return train_set, test_set,  metadata
+    return train_set, test_set
 
 
 def TWINS(params, path_data="datasets/TWINS/", do_preprocessing=True,
@@ -164,11 +164,12 @@ def TWINS(params, path_data="datasets/TWINS/", do_preprocessing=True,
 
     """
 
-    params["x_bin_size"] = 0
-    params["x_cat_size"] = 3
-    params["x_cont_size"] = 0
-    params["y_size"] = 1
-    params["z_size"] = 16
+    params["x_cat_dims"] = 3
+    params["x_cont_dims"] = 0
+    params["t_dims"] = 2
+    params["y_dims"] = 1
+    params["z_dims"] = 16
+    params["category_sizes"] = 10
 
     flip_prob = 0.3
     data_t = np.loadtxt(f"{path_data}twin_pairs_T_3years_samesex.csv",
@@ -246,10 +247,8 @@ def TWINS(params, path_data="datasets/TWINS/", do_preprocessing=True,
                                                     mu_1[idx_te],
                                                     mu_0[idx_te])))
     scaling_data = (0, 1)
-    nr_unique_values = (10, 2)
-    metadata = (scaling_data, nr_unique_values)
-
-    return train_set, test_set, metadata
+    params["scaling_data"] = scaling_data
+    return train_set, test_set
 
 
 def SHAPES(params, path_data="datasets/SHAPES/", separate_files=None,
@@ -262,11 +261,12 @@ def SHAPES(params, path_data="datasets/SHAPES/", separate_files=None,
     the outcome when no action was taken, so just the original image.
     """
 
-    params["x_bin_size"] = (0, 0, 0)
-    params["x_cat_size"] = (50, 50, 0)
-    params["x_cont_size"] = (50, 50, 3)
-    params["y_size"] = (50, 50, 3)
-    params["z_size"] = (50, 50, 3)
+    params["x_cat_dims"] = (50, 50, 0)
+    params["x_cont_dims"] = (50, 50, 3)
+    params["t_dims"] = 16
+    params["y_dims"] = (50, 50, 3)
+    params["z_dims"] = (50, 50, 3)
+    params["category_sizes"] = 0
 
     train_name = "shapes_train.h5"
     test_name = "shapes_test.h5"
@@ -315,10 +315,8 @@ def SHAPES(params, path_data="datasets/SHAPES/", separate_files=None,
                                                     mu_0)))
 
     scaling_data = (0, 1)
-    nr_unique_values = (0, 16)
-    metadata = (scaling_data, nr_unique_values)
-
-    return train_set, test_set, metadata
+    params["scaling_data"] = scaling_data
+    return train_set, test_set
 
 
 def load_list_dict_h5py(fname):
@@ -337,10 +335,7 @@ def load_list_dict_h5py(fname):
 
 def test_IHDP():
     params = {}
-    train_data, test_data, metadata = IHDP(params, separate_files=True,
-                                                   file_index=0)
-    nr_unique_values = metadata[1]
-    print(metadata)
+    train_data, test_data = IHDP(params, separate_files=True, file_index=0)
 
     for _, data_sample in train_data.batch(5).enumerate():
         for data in data_sample:
@@ -350,9 +345,7 @@ def test_IHDP():
 
 def test_TWINS():
     params = {}
-    train_data, test_data, metadata = TWINS(params,
-                                                    do_preprocessing=True)
-    nr_unique_values = metadata[1]
+    train_data, test_data = TWINS(params, do_preprocessing=True)
 
     for _, data_sample in train_data.batch(5).enumerate():
         for data in data_sample:
@@ -364,7 +357,7 @@ def test_TWINS():
 
 def test_SHAPES():
     params = {}
-    train_data, test_data, metadata = SHAPES(params)
+    train_data, test_data = SHAPES(params)
     for _, data_sample in train_data.batch(5).enumerate():
         for data in data_sample:
             for var in data:
