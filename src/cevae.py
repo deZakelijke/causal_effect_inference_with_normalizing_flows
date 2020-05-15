@@ -3,6 +3,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras import layers, Model
 from tensorflow.keras.activations import softplus
+from tensorflow.keras.losses import CategoricalCrossentropy
 from tensorflow import nn
 from tensorflow_probability import distributions as tfd
 
@@ -97,15 +98,20 @@ class CEVAE(Model):
         x_cat = tf.reshape(x_cat, (len(x_cat), *self.x_cat_dims,
                                    self.category_sizes))
 
-        distortion_x = -get_log_prob(x_cat, 'M', probs=x_cat_prob) \
+        print(x_cat.shape)
+        print(x_cat_prob.shape)
+        print(CategoricalCrossentropy()(x_cat, x_cat_prob))
+        distortion_x = CategoricalCrossentropy()(x_cat, x_cat_prob) \
                        - get_log_prob(x_cont, 'N', mean=x_cont_mean,
                                       std=x_cont_std)
-        distortion_t = -get_log_prob(t, 'M', probs=t_prob)
+        # distortion_t = -get_log_prob(t, 'M', probs=t_prob)
+        distortion_t = CategoricalCrossentropy()(t, t_prob)
         distortion_y = -get_log_prob(y, self.y_type, mean=y_mean, probs=y_mean)
 
         rate = get_analytical_KL_divergence(qz_mean, qz_std)
 
-        variational_t = -get_log_prob(t, 'M', probs=qt_prob)
+        # variational_t = -get_log_prob(t, 'M', probs=qt_prob)
+        variational_t = CategoricalCrossentropy()(t, qt_prob)
         variational_y = -get_log_prob(y, self.y_type, mean=qy_mean)
 
         if step is not None and step % (self.log_steps * 5) == 0:
@@ -159,6 +165,7 @@ class Encoder(Model):
         super().__init__(name=name_tag)
         self.t_dims = t_dims
         self.debug = debug
+        network = eval(architecture_type)
 
         if architecture_type == "ResNet":
             intermediate_dims = x_dims
@@ -174,7 +181,6 @@ class Encoder(Model):
             z_net_out_dims = z_dims * 2 * t_dims
             self.y_dims = (y_dims, )
             self.z_dims = (z_dims * 2, )
-        network = eval(architecture_type)
 
         self.qt_logits = network(in_dims=x_dims, out_dims=x_dims,
                                  name_tag="qt", n_layers=1,
@@ -212,9 +218,9 @@ class Encoder(Model):
         hqy = self.hqy(x, step, training=training)
         mu_qy_t = self.mu_qy_t(hqy, step, training=training)
         mu_qy_t = tf.reshape(mu_qy_t, (len(x), *self.y_dims, self.t_dims))
-        shape = tf.concat([[t.shape[0]], 
+        shape = tf.concat([[qt_sample.shape[0]], 
                            tf.ones(tf.rank(mu_qy_t) - 2, dtype=tf.int32),
-                           [t.shape[-1]]], axis=0)
+                           [qt_sample.shape[-1]]], axis=0)
         if training:
             t = tf.reshape(t, shape)
             qy_mean = tf.reduce_sum(t * mu_qy_t, axis=-1)
@@ -268,24 +274,27 @@ class Decoder(Model):
 
         super().__init__(name=name_tag)
         self.category_sizes = category_sizes
+        self.t_dims = t_dims
+        self.z_dims = z_dims
+        self.debug = debug
+        network = eval(architecture_type)
 
         if architecture_type == "ResNet":
             intermediate_dims = x_cont_dims
             x_cont_out = x_cont_dims[:-1] + (x_cont_dims[-1] * 2, )
             y_out_dims = y_dims[:-1] + (y_dims[-1] * t_dims, )
-            self.x_cat_out_dims = x_cat_dims[:-1] +\
-                (x_cat_dims[-1] * category_sizes, )
+            # self.x_cat_out_dims = x_cat_dims[:-1] +\
+            #     (x_cat_dims[-1] * category_sizes, )
+
             self.x_cat_dims = x_cat_dims
+            self.y_dims = y_dims
         else:
             intermediate_dims = feature_maps
             x_cont_out = x_cont_dims * 2
             y_out_dims = y_dims * t_dims
             self.x_cat_out_dims = x_cat_dims * category_sizes
             self.x_cat_dims = (x_cat_dims, )
-        network = eval(architecture_type)
-
-        self.z_dims = z_dims
-        self.debug = debug
+            self.y_dims = (y_dims, )
 
         self.hx = network(in_dims=z_dims, out_dims=intermediate_dims,
                           name_tag="hx", n_layers=2,
@@ -300,7 +309,10 @@ class Decoder(Model):
                                     out_dims=self.x_cat_out_dims,
                                     name_tag="x_cat", n_layers=2,
                                     feature_maps=feature_maps,
+                                    squeeze=do_squeeze,
+                                    squeeze_dims=x_cat_out_dims,
                                     debug=self.debug)
+        # TODO make these two one network and split them at the end
 
         self.t_logits = network(in_dims=z_dims, out_dims=z_dims, name_tag="t",
                                 n_layers=1, feature_maps=feature_maps,
@@ -326,12 +338,16 @@ class Decoder(Model):
         x_cont_std = softplus(x_cont_std)
 
         t_prob = nn.softmax(self.t_logits(z, step, training=training))
-
         mu_y_t = self.mu_y_t(z, step, training=training)
+        mu_y_t = tf.reshape(mu_y_t, (len(z), *self.y_dims, self.t_dims))
+
+        shape = tf.concat([[t.shape[0]], 
+                           tf.ones(tf.rank(mu_y_t) - 2, dtype=tf.int32),
+                           [t.shape[-1]]], axis=0)
+        t = tf.reshape(t, shape)
         y_mean = tf.reduce_sum(t * mu_y_t, axis=-1)
 
         return x_cat_prob, x_cont_mean, x_cont_std, t_prob, y_mean
-        # return x_cont_mean, x_cont_std, t_prob, y_mean
 
     def do_intervention(self, z, nr_samples):
         """ Computes the quantity E[y|z, do(t=0)] and E[y|z, do(t=1)]
@@ -341,10 +357,6 @@ class Decoder(Model):
         The samples are averaged at the end.
 
         """
-        # y0 = self.mu_y_t0(z, None, training=False)
-        # y1 = self.mu_y_t1(z, None, training=False)
-        # mu_y0 = tf.reduce_mean(y0, axis=0)
-        # mu_y1 = tf.reduce_mean(y1, axis=0)
         # Is this correct? Do we average and sample correctly?
 
         y = self.mu_y_t(z, None, training=False)
