@@ -49,6 +49,7 @@ def IHDP(params, path_data="datasets/IHDP/csv/", separate_files=False,
     params["y_dims"] = 1
     params["z_dims"] = 16
     params['category_sizes'] = 2
+    params['architecture_type'] = 'FC_net'
 
     binfeats = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
     contfeats = [i for i in range(25) if i not in binfeats]
@@ -170,6 +171,7 @@ def TWINS(params, path_data="datasets/TWINS/", do_preprocessing=True,
     params["y_dims"] = 1
     params["z_dims"] = 16
     params["category_sizes"] = 10
+    params['architecture_type'] = 'FC_net'
 
     flip_prob = 0.3
     data_t = np.loadtxt(f"{path_data}twin_pairs_T_3years_samesex.csv",
@@ -263,10 +265,11 @@ def SHAPES(params, path_data="datasets/SHAPES/", separate_files=None,
 
     params["x_cat_dims"] = (50, 50, 0)
     params["x_cont_dims"] = (50, 50, 3)
-    params["t_dims"] = 16
+    params["t_dims"] = 20
     params["y_dims"] = (50, 50, 3)
     params["z_dims"] = (50, 50, 3)
     params["category_sizes"] = 0
+    params['architecture_type'] = 'ResNet'
 
     train_name = "shapes_train.h5"
     test_name = "shapes_test.h5"
@@ -280,6 +283,7 @@ def SHAPES(params, path_data="datasets/SHAPES/", separate_files=None,
 
     # x_bin = np.array(x_bin, dtype=int)
     t = train_array_dict['action']
+    t = np.expand_dims(t, axis=1).astype(float)
     enc = OneHotEncoder(categories='auto', sparse=False)
     # x_bin = enc.fit(x_bin).transform(x_bin)
     t = enc.fit(t).transform(t)

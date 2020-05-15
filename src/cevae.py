@@ -78,8 +78,6 @@ class CEVAE(Model):
         """
         if self.debug:
             print("Starting forward pass")
-        # x_cat, x_cont, t, y, y_cf, mu_0, mu_1 = features
-        # x = tf.concat([x_cat, x_cont], -1)
 
         encoder_params = self.encode(x, t, y, step, training=training)
         _, _, qz_mean, qz_std = encoder_params
@@ -93,7 +91,6 @@ class CEVAE(Model):
     def loss(self, features, encoder_params, decoder_params, step):
         if self.debug:
             print("Calculating loss")
-        # x_cat, x_cont, t, y, y_cf, mu_0, mu_1 = features
         x_cat, x_cont, t, y, *_ = features
         qt_prob, qy_mean, qz_mean, qz_std = encoder_params
         x_cat_prob, x_cont_mean, x_cont_std, t_prob, y_mean = decoder_params
@@ -130,17 +127,6 @@ class CEVAE(Model):
                        variational_t + variational_y)
         elbo = tf.reduce_mean(elbo_local)
         return -elbo
-
-    def grad(self, features, step):
-        with tf.GradientTape() as tape:
-            x = tf.concat([features[0], features[1]], -1)
-            t = features[2]
-            y = features[3]
-            output = self(x, t, y, step, training=True)
-            loss = self.loss(features, *output, step)
-        if self.debug:
-            print(f"Forward pass complete, step: {step}")
-        return loss, tape.gradient(loss, self.trainable_variables)
 
     def do_intervention(self, x, nr_samples):
         *_, qz_mean, qz_std = self.encode(x, None, None, None, training=False)
@@ -222,16 +208,18 @@ class Encoder(Model):
                              reinterpreted_batch_ndims=1,
                              name="qt")
         qt_sample = qt.sample()
-        
+
         hqy = self.hqy(x, step, training=training)
         mu_qy_t = self.mu_qy_t(hqy, step, training=training)
         mu_qy_t = tf.reshape(mu_qy_t, (len(x), *self.y_dims, self.t_dims))
-
+        shape = tf.concat([[t.shape[0]], 
+                           tf.ones(tf.rank(mu_qy_t) - 2, dtype=tf.int32),
+                           [t.shape[-1]]], axis=0)
         if training:
-            t = tf.expand_dims(t, axis=1)
+            t = tf.reshape(t, shape)
             qy_mean = tf.reduce_sum(t * mu_qy_t, axis=-1)
         else:
-            qt_sample = tf.expand_dims(qt_sample, axis=1)
+            qt_sample = tf.reshape(qt_sample, shape)
             qy_mean = tf.reduce_sum(qt_sample * mu_qy_t, axis=-1)
         qy = tfd.Independent(tfd.Normal(loc=qy_mean,
                                         scale=tf.ones_like(qy_mean)),
@@ -320,8 +308,8 @@ class Decoder(Model):
                                 debug=self.debug)
 
         self.mu_y_t = network(in_dims=z_dims, out_dims=y_out_dims,
-                               name_tag="mu_y_t", n_layers=2,
-                               feature_maps=feature_maps * 2, debug=debug)
+                              name_tag="mu_y_t", n_layers=2,
+                              feature_maps=feature_maps * 2, debug=debug)
 
     @tf.function
     def call(self, z, t, step, training=False):

@@ -68,7 +68,8 @@ def parse_arguments():
                         "Disabled in debug mode")
     parser.add_argument("--feature_maps", type=int, default=200,
                         help="Number of nodes in hidden fully connected layers"
-                        " or number of filters in convolutional layers")
+                        " or number of filters in convolutional layers. "
+                        "(default: 32)")
     parser.add_argument("--learning_rate", type=float, default=1e-4,
                         help="Learning rate of the optmiser (default: 1e-4)")
     parser.add_argument("--log_steps", type=int, default=10,
@@ -161,6 +162,18 @@ def print_stats(stats, index, training=False):
                       step=index)
 
 
+def grad(model, features, step, debug):
+    with tf.GradientTape() as tape:
+        x = tf.concat([features[0], features[1]], -1)
+        t = features[2]
+        y = features[3]
+        output = model(x, t, y, step, training=True)
+        loss = model.loss(features, *output, step)
+    if debug:
+        print(f"Forward pass complete, step: {step}")
+    return loss, tape.gradient(loss, model.trainable_variables)
+
+
 def train(params, writer, train_iteration=0):
     """ Runs training of selected model.
 
@@ -189,6 +202,7 @@ def train(params, writer, train_iteration=0):
         Tuple of the statistics that were calculated after the last epoch.
     """
 
+    debug = params['debug']
     cardinality = tf.data.experimental.cardinality
     data = eval(params['dataset'])
     train_dataset, test_dataset = data(params,
@@ -216,7 +230,7 @@ def train(params, writer, train_iteration=0):
             step_start = global_train_step + epoch * len_epoch
             for step, features in train_dataset.batch(params["batch_size"]).enumerate(step_start):
                 step = tf.constant(step)
-                loss_value, grads = model.grad(features, step)
+                loss_value, grads = grad(model, features, step, debug)
                 avg_loss += loss_value
                 optimizer.apply_gradients(zip(grads,
                                               model.trainable_variables))

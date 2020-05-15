@@ -26,9 +26,11 @@ class CENF(Model):
         z_dims=32,
         category_sizes=2,
         y_type='N',
+        n_flows=2,
         name_tag="no_name",
         feature_maps=256,
         architecture_type="FC_net",
+        log_steps=10,
         debug=False,
         **_
     ):
@@ -41,6 +43,7 @@ class CENF(Model):
         self.debug = debug
         self.category_sizes = category_sizes
         self.y_type = y_type
+        self.log_steps = log_steps
 
         if architecture_type == "ResNet":
             self.x_cat_dims = x_cat_dims
@@ -62,9 +65,6 @@ class CENF(Model):
         if self.debug:
             print("Starting forward pass CENF")
 
-        # x_cat, x_cont, t, y, y_cf, mu_0, mu_1 = features
-        # x = tf.concat([x_cat, x_cont], -1)
-
         encoder_params = self.encode(x, t, y, step, training=training)
         _, _, qz_mean, qz_std = encoder_params
         qz = tf.random.normal(qz_mean.shape, dtype=tf.float64)
@@ -77,7 +77,7 @@ class CENF(Model):
 
     @tf.function
     def loss(self, features, encoder_params, qz_k, ldj_z, decoder_params,
-             step, params):
+             step):
         if self.debug:
             print("Calculating loss")
         x_cat, x_cont, t, y, *_ = features
@@ -95,10 +95,11 @@ class CENF(Model):
         rate = get_analytical_KL_divergence(qz_mean, qz_std)
 
         variational_t = -get_log_prob(t, 'M', probs=qt_prob)
-        variational_y = -get_log_prob(y, self.y_type, mean=qy_mean, probs=y_mean)
+        variational_y = -get_log_prob(y, self.y_type, mean=qy_mean,
+                                      probs=y_mean)
 
-        if step is not None and step % (params['log_steps'] * 5) == 0:
-            l_step = step // (params['log_steps'] * 5)
+        if step is not None and step % (self.log_steps * 5) == 0:
+            l_step = step // (self.log_steps * 5)
             tf.summary.scalar("partial_loss/distortion_x",
                               tf.reduce_mean(distortion_x), step=l_step)
             tf.summary.scalar("partial_loss/distortion_t",
