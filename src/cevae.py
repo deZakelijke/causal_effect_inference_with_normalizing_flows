@@ -98,19 +98,14 @@ class CEVAE(Model):
         x_cat = tf.reshape(x_cat, (len(x_cat), *self.x_cat_dims,
                                    self.category_sizes))
 
-        print(x_cat.shape)
-        print(x_cat_prob.shape)
-        print(CategoricalCrossentropy()(x_cat, x_cat_prob))
         distortion_x = CategoricalCrossentropy()(x_cat, x_cat_prob) \
                        - get_log_prob(x_cont, 'N', mean=x_cont_mean,
                                       std=x_cont_std)
-        # distortion_t = -get_log_prob(t, 'M', probs=t_prob)
         distortion_t = CategoricalCrossentropy()(t, t_prob)
         distortion_y = -get_log_prob(y, self.y_type, mean=y_mean, probs=y_mean)
 
         rate = get_analytical_KL_divergence(qz_mean, qz_std)
 
-        # variational_t = -get_log_prob(t, 'M', probs=qt_prob)
         variational_t = CategoricalCrossentropy()(t, qt_prob)
         variational_y = -get_log_prob(y, self.y_type, mean=qy_mean)
 
@@ -280,40 +275,25 @@ class Decoder(Model):
         network = eval(architecture_type)
 
         if architecture_type == "ResNet":
-            intermediate_dims = x_cont_dims
-            x_cont_out = x_cont_dims[:-1] + (x_cont_dims[-1] * 2, )
+            x_out_dims = x_cont_dims[:-1] + (x_cont_dims[-1] * 2 +\
+                x_cat_dims[-1] * category_sizes, )
             y_out_dims = y_dims[:-1] + (y_dims[-1] * t_dims, )
-            # self.x_cat_out_dims = x_cat_dims[:-1] +\
-            #     (x_cat_dims[-1] * category_sizes, )
-
+            self.x_split_dims = [x_cont_dims[-1], x_cont_dims[-1],
+                                x_cat_dims[-1] * category_sizes]
             self.x_cat_dims = x_cat_dims
             self.y_dims = y_dims
         else:
-            intermediate_dims = feature_maps
-            x_cont_out = x_cont_dims * 2
+            x_out_dims = x_cont_dims * 2 + x_cat_dims * category_sizes
             y_out_dims = y_dims * t_dims
-            self.x_cat_out_dims = x_cat_dims * category_sizes
+            self.x_split_dims = [x_cont_dims, x_cont_dims,
+                                 x_cat_dims * category_sizes]
             self.x_cat_dims = (x_cat_dims, )
             self.y_dims = (y_dims, )
 
-        self.hx = network(in_dims=z_dims, out_dims=intermediate_dims,
-                          name_tag="hx", n_layers=2,
-                          feature_maps=feature_maps, debug=self.debug)
-
-        self.x_cont_logits = network(in_dims=intermediate_dims,
-                                     out_dims=x_cont_out, name_tag="x_cont",
-                                     n_layers=2, feature_maps=feature_maps,
-                                     debug=self.debug)
-
-        self.x_cat_logits = network(in_dims=intermediate_dims,
-                                    out_dims=self.x_cat_out_dims,
-                                    name_tag="x_cat", n_layers=2,
-                                    feature_maps=feature_maps,
-                                    squeeze=do_squeeze,
-                                    squeeze_dims=x_cat_out_dims,
-                                    debug=self.debug)
-        # TODO make these two one network and split them at the end
-
+        self.x_logits = network(in_dims=z_dims, out_dims=x_out_dims,
+                                name_tag="x", n_layers=4,
+                                feature_maps=feature_maps,
+                                debug=debug)
         self.t_logits = network(in_dims=z_dims, out_dims=z_dims, name_tag="t",
                                 n_layers=1, feature_maps=feature_maps,
                                 squeeze=True, squeeze_dims=t_dims,
@@ -327,15 +307,13 @@ class Decoder(Model):
     def call(self, z, t, step, training=False):
         if self.debug:
             print("Decoding")
-        hidden_x = self.hx(z, step, training=training)
-        x_cat_logits = self.x_cat_logits(hidden_x, step, training=training)
-        x_cat_prob = nn.softmax(tf.reshape(x_cat_logits,
-                                           (len(z), *self.x_cat_dims,
-                                            self.category_sizes)))
-
-        x_cont_h = self.x_cont_logits(hidden_x, step, training=training)
-        x_cont_mean, x_cont_std = tf.split(x_cont_h, 2, axis=-1)
+        x_logits = self.x_logits(z, step, training=training)
+        x_cont_mean, x_cont_std, x_cat_logits = tf.split(x_logits,
+                                                         self.x_split_dims,
+                                                         axis=-1)
         x_cont_std = softplus(x_cont_std)
+        x_cat_prob = nn.softmax(tf.reshape(x_cat_logits, (len(z), *self.x_cat_dims,
+                                                          self.category_sizes)))
 
         t_prob = nn.softmax(self.t_logits(z, step, training=training))
         mu_y_t = self.mu_y_t(z, step, training=training)

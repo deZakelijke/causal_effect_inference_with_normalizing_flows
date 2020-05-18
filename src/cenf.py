@@ -4,6 +4,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras import layers, Model
 from tensorflow.keras.activations import softplus
+from tensorflow.keras.losses import CategoricalCrossentropy
 from tensorflow_probability import distributions as tfd
 
 from cevae import Encoder, Decoder
@@ -86,15 +87,15 @@ class CENF(Model):
         x_cat = tf.reshape(x_cat, (len(x_cat), *self.x_cat_dims,
                                    self.category_sizes))
 
-        distortion_x = -get_log_prob(x_cat, 'M', probs=x_cat_prob) \
+        distortion_x = CategoricalCrossentropy()(x_cat, x_cat_prob) \
                        - get_log_prob(x_cont, 'N', mean=x_cont_mean,
                                       std=x_cont_std)
-        distortion_t = -get_log_prob(t, 'M', probs=t_prob)
+        distortion_t = CategoricalCrossentropy()(t, t_prob)
         distortion_y = -get_log_prob(y, self.y_type, mean=y_mean, probs=y_mean)
 
         rate = get_analytical_KL_divergence(qz_mean, qz_std)
 
-        variational_t = -get_log_prob(t, 'M', probs=qt_prob)
+        variational_t = CategoricalCrossentropy()(t, qt_prob)
         variational_y = -get_log_prob(y, self.y_type, mean=qy_mean,
                                       probs=y_mean)
 
