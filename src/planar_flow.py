@@ -32,7 +32,7 @@ class PlanarFlow(Model):
         self.nr_flows = nr_flows
         if type(z_dims) == tuple:
             self.first_layer = layers.Flatten()
-        else: 
+        else:
             self.first_layer = tf.identity
         z_dims = tf.cast(tf.reduce_prod(z_dims), tf.int32).numpy()
 
@@ -128,6 +128,7 @@ def test_flow():
     assert ldj.shape == (batch_size, 1)
 
     print("All assertions passed, test successful")
+
 
 if __name__ == "__main__":
     tf.keras.backend.set_floatx('float64')

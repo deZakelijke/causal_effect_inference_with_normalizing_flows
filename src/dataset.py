@@ -11,7 +11,7 @@ from scipy.special import expit
 
 
 def IHDP(params, path_data="datasets/IHDP/csv/", separate_files=False,
-                 file_index=None):
+         file_index=None):
     """ Tensorflow Dataset generator for the IHDP dataset.
 
     Parameters
@@ -51,7 +51,8 @@ def IHDP(params, path_data="datasets/IHDP/csv/", separate_files=False,
     params['category_sizes'] = 2
     params['architecture_type'] = 'FC_net'
 
-    binfeats = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
+    binfeats = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+                23, 24]
     contfeats = [i for i in range(25) if i not in binfeats]
     catfeats = binfeats
     nr_files = 10
@@ -135,7 +136,7 @@ def IHDP(params, path_data="datasets/IHDP/csv/", separate_files=False,
 
 
 def TWINS(params, path_data="datasets/TWINS/", do_preprocessing=True,
-                  separate_files=None, file_index=None):
+          separate_files=None, file_index=None):
     """Tensorflow Dataset generator for the TWINS dataset.
 
     Parameters
@@ -275,7 +276,7 @@ def SHAPES(params, path_data="datasets/SHAPES/", separate_files=None,
     test_name = "shapes_test.h5"
 
     train_array_dict = load_list_dict_h5py(path_data + train_name)
-    # test_array_dict = 
+    # test_array_dict =
     x_cont = np.rollaxis(train_array_dict['obs'], 1, 4).astype(float)
     x_cat = np.zeros((len(x_cont), 50, 50, 0))
     # t = np.reshape(train_array_dict['action'],
@@ -368,10 +369,9 @@ def test_SHAPES():
                 print(var.shape)
         break
 
-   
+
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
     test_SHAPES()
     print()
     test_TWINS()
-

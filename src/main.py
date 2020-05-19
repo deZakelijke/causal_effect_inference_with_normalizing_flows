@@ -236,7 +236,7 @@ def train(params, writer, train_iteration=0):
                                               model.trainable_variables))
             if epoch % params["log_steps"] == 0:
                 print(f"Epoch: {epoch}, average training loss: "
-                      f"{(avg_loss / tf.dtypes.cast(len_epoch, tf.float64)):.4f}")
+                      f"{(avg_loss / tf.cast(len_epoch, tf.float64)):.4f}")
                 l_step = (epoch + global_log_step) // params['log_steps']
                 tf.summary.scalar("metrics/train/loss", loss_value,
                                   step=l_step)
@@ -315,7 +315,8 @@ if __name__ == "__main__":
             # set_vdc(gpu, [vdc(memory_limit=4096)])
             tf.config.experimental.set_memory_growth(gpu, True)
             logical_gpus = tf.config.experimental.list_logical_devices('GPU')
-            print(len(gpus), "Physical GPUs, ", len(logical_gpus), "Logical GPUs")
+            print(len(gpus), "Physical GPUs, ",
+                  len(logical_gpus), "Logical GPUs")
         with tf.device('device:GPU:0'):
             main(params)
     else:
