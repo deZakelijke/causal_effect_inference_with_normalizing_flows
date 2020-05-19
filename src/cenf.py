@@ -88,8 +88,8 @@ class CENF(Model):
                                    self.category_sizes))
 
         distortion_x = CategoricalCrossentropy()(x_cat, x_cat_prob) \
-                       - get_log_prob(x_cont, 'N', mean=x_cont_mean,
-                                      std=x_cont_std)
+            - get_log_prob(x_cont, 'N', mean=x_cont_mean,
+                           std=x_cont_std)
         distortion_t = CategoricalCrossentropy()(t, t_prob)
         distortion_y = -get_log_prob(y, self.y_type, mean=y_mean, probs=y_mean)
 
