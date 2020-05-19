@@ -8,9 +8,20 @@ from tensorflow.keras import Model
 class CouplingLayers(Model):
     """ Implementation of the coupling layers of the RealNVP."""
 
-    def __init__(self, dims, name_tag, feature_maps, scale_idx, n_scales,
-                 n_layers=3, activation='relu', architecture_type="FC_net",
-                 context=False, context_dims=0, debug=False):
+    def __init__(
+        self,
+        dims,
+        name_tag,
+        feature_maps,
+        scale_idx,
+        n_scales,
+        n_layers=3,
+        activation='relu',
+        architecture_type="FC_net",
+        context=False,
+        context_dims=0,
+        debug=False
+    ):
         """
         Parameters
         ----------
@@ -36,20 +47,24 @@ class CouplingLayers(Model):
         coupling_index = scale_idx * 6
 
         self.in_couplings = [
-            Coupling(dims, feature_maps, f"Coupling_layer_{coupling_index + 1}",
+            Coupling(dims, feature_maps,
+                     f"Coupling_layer_{coupling_index + 1}",
                      n_layers, activation, mask, architecture_type, context,
                      context_dims, debug),
-            Coupling(dims, feature_maps, f"Coupling_layer_{coupling_index + 2}",
+            Coupling(dims, feature_maps,
+                     f"Coupling_layer_{coupling_index + 2}",
                      n_layers, activation, 1 - mask, architecture_type,
                      context, context_dims, debug),
-            Coupling(dims, feature_maps, f"Coupling_layer_{coupling_index + 3}",
+            Coupling(dims, feature_maps,
+                     f"Coupling_layer_{coupling_index + 3}",
                      n_layers, activation, mask, architecture_type, context,
                      context_dims, debug)
         ]
 
         if self.is_last_block:
             self.in_couplings.append(
-                Coupling(dims, feature_maps, f"Coupling_layer_{coupling_index + 4}",
+                Coupling(dims, feature_maps,
+                         f"Coupling_layer_{coupling_index + 4}",
                          n_layers, activation, 1 - mask, architecture_type,
                          context, context_dims, debug)
             )
@@ -60,13 +75,16 @@ class CouplingLayers(Model):
                 mask = self.get_channel_mask(dims)
 
             self.out_couplings = [
-                Coupling(dims, feature_maps, f"Coupling_layer_{coupling_index + 4}",
+                Coupling(dims, feature_maps,
+                         f"Coupling_layer_{coupling_index + 4}",
                          n_layers, activation, 1 - mask, architecture_type,
                          context, context_dims, debug),
-                Coupling(dims, feature_maps, f"Coupling_layer_{coupling_index + 5}",
+                Coupling(dims, feature_maps,
+                         f"Coupling_layer_{coupling_index + 5}",
                          n_layers, activation, mask, architecture_type,
                          context, context_dims, debug),
-                Coupling(dims, feature_maps, f"Coupling_layer_{coupling_index + 6}",
+                Coupling(dims, feature_maps,
+                         f"Coupling_layer_{coupling_index + 6}",
                          n_layers, activation, 1 - mask, architecture_type,
                          context, context_dims, debug)
             ]
@@ -192,9 +210,19 @@ class CouplingLayers(Model):
 class Coupling(Model):
     """ Single coupling layer."""
 
-    def __init__(self, in_dims, feature_maps, name_tag, n_layers, activation,
-                 mask, architecture_type="FC_net", context=False,
-                 context_dims=0, debug=False):
+    def __init__(
+        self,
+        in_dims,
+        feature_maps,
+        name_tag,
+        n_layers,
+        activation,
+        mask,
+        architecture_type="FC_net",
+        context=False,
+        context_dims=0,
+        debug=False
+    ):
         """
         Parameters
         ----------
@@ -202,9 +230,9 @@ class Coupling(Model):
             The input dimensions of the coupling layers
 
         feature_maps : int
-            The number of feature_maps used when using ResNet as architecture type.
-            If the architecture type = Fc_net, this variable is used to pass
-            the number of hidden nodes in each hidden layer.
+            The number of feature_maps used when using ResNet as architecture
+            type. If the architecture type = Fc_net, this variable is used to
+            pass the number of hidden nodes in each hidden layer.
 
         name_tag : str
             The name of this coupling layer. Used when printing the model and
@@ -332,7 +360,8 @@ def test_coupling_layers():
     x = tf.ones((batch_size, dims), dtype=tf.float64)
     t = tf.ones((batch_size, context_dims), dtype=tf.float64)
     ldj = tf.zeros((batch_size), dtype=tf.float64)
-    coupling = CouplingLayers(dims, name_tag, feature_maps, 0, n_scales, n_layers,
+    coupling = CouplingLayers(dims, name_tag, feature_maps, 0, n_scales,
+                              n_layers,
                               activation, "FC_net", True, context_dims,
                               debug=True)
     z, ldj_out = coupling(x, ldj, 0, training=True, t=t)
@@ -352,7 +381,8 @@ def test_coupling_layers():
 
     x = tf.ones((batch_size, *dims), dtype=tf.float64)
     ldj = tf.zeros((batch_size), dtype=tf.float64)
-    coupling = CouplingLayers(dims, name_tag, feature_maps, 0, n_scales, n_layers,
+    coupling = CouplingLayers(dims, name_tag, feature_maps, 0, n_scales,
+                              n_layers,
                               activation, architecture_type="ResNet",
                               debug=True)
     z, ldj_out = coupling(x, ldj, 0, training=True)

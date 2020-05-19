@@ -125,7 +125,6 @@ class CENF(Model):
         *_, qz_mean, qz_std = self.encode(x, None, None, None, training=False)
         qz = tf.random.normal((nr_samples, *qz_mean.shape), dtype=tf.float64)
         z = qz * qz_std + qz_mean
-
         z_k, ldj = self.z_flow(z, None, training=False)
 
         mu_y0, mu_y1 = self.decode.do_intervention(z_k, nr_samples)

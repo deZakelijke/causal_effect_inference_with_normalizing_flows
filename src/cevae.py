@@ -99,8 +99,8 @@ class CEVAE(Model):
                                    self.category_sizes))
 
         distortion_x = CategoricalCrossentropy()(x_cat, x_cat_prob) \
-                       - get_log_prob(x_cont, 'N', mean=x_cont_mean,
-                                      std=x_cont_std)
+            - get_log_prob(x_cont, 'N', mean=x_cont_mean,
+                           std=x_cont_std)
         distortion_t = CategoricalCrossentropy()(t, t_prob)
         distortion_y = -get_log_prob(y, self.y_type, mean=y_mean, probs=y_mean)
 
@@ -213,7 +213,7 @@ class Encoder(Model):
         hqy = self.hqy(x, step, training=training)
         mu_qy_t = self.mu_qy_t(hqy, step, training=training)
         mu_qy_t = tf.reshape(mu_qy_t, (len(x), *self.y_dims, self.t_dims))
-        shape = tf.concat([[qt_sample.shape[0]], 
+        shape = tf.concat([[qt_sample.shape[0]],
                            tf.ones(tf.rank(mu_qy_t) - 2, dtype=tf.int32),
                            [qt_sample.shape[-1]]], axis=0)
         if training:
@@ -275,11 +275,11 @@ class Decoder(Model):
         network = eval(architecture_type)
 
         if architecture_type == "ResNet":
-            x_out_dims = x_cont_dims[:-1] + (x_cont_dims[-1] * 2 +\
-                x_cat_dims[-1] * category_sizes, )
+            x_out_dims = x_cont_dims[:-1] + (x_cont_dims[-1] * 2 +
+                                             x_cat_dims[-1] * category_sizes, )
             y_out_dims = y_dims[:-1] + (y_dims[-1] * t_dims, )
             self.x_split_dims = [x_cont_dims[-1], x_cont_dims[-1],
-                                x_cat_dims[-1] * category_sizes]
+                                 x_cat_dims[-1] * category_sizes]
             self.x_cat_dims = x_cat_dims
             self.y_dims = y_dims
         else:
@@ -312,14 +312,16 @@ class Decoder(Model):
                                                          self.x_split_dims,
                                                          axis=-1)
         x_cont_std = softplus(x_cont_std)
-        x_cat_prob = nn.softmax(tf.reshape(x_cat_logits, (len(z), *self.x_cat_dims,
-                                                          self.category_sizes)))
+        x_cat_prob = nn.softmax(tf.reshape(x_cat_logits, (len(z),
+                                                          *self.x_cat_dims,
+                                                          self.category_sizes
+                                                          )))
 
         t_prob = nn.softmax(self.t_logits(z, step, training=training))
         mu_y_t = self.mu_y_t(z, step, training=training)
         mu_y_t = tf.reshape(mu_y_t, (len(z), *self.y_dims, self.t_dims))
 
-        shape = tf.concat([[t.shape[0]], 
+        shape = tf.concat([[t.shape[0]],
                            tf.ones(tf.rank(mu_y_t) - 2, dtype=tf.int32),
                            [t.shape[-1]]], axis=0)
         t = tf.reshape(t, shape)
