@@ -103,6 +103,7 @@ class ResNet(Model):
             self.out_layers.add(self.activation)
             self.out_layers.add(Flatten())
             self.out_layers.add(fc_out)
+        self.out_layers.build((None, *image_size, feature_maps))
 
     @tf.function
     def call(self, x, step, training=False):

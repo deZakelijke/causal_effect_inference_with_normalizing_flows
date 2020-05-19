@@ -26,6 +26,7 @@ class CEVAE(Model):
 
     def __init__(
         self,
+        x_dims=30,
         x_cat_dims=10,
         x_cont_dims=10,
         t_dims=2,

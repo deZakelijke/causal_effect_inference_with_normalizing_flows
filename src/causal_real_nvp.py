@@ -4,6 +4,7 @@ import time
 
 from coupling import CouplingLayers
 from tensorflow.keras import Model
+from tensorflow.keras.layers import Dense
 
 
 class CRNVP(Model):
@@ -21,16 +22,20 @@ class CRNVP(Model):
 
     def __init__(
         self,
+        x_dims=(50, 50, 3),
+        x_cat_dims=(50, 50, 0),
         x_cont_dims=(50, 50, 3),
         t_dims=16,
         y_dims=(50, 50, 3),
         z_dims=(50, 50, 6),
+        category_sizes=0,
         name_tag="no_name",
         feature_maps=32,
         n_scales=2,
         n_layers=3,
         activation="relu",
         architecture_type="FC_net",
+        log_steps=10,
         debug=False,
         **_
     ):
@@ -41,15 +46,17 @@ class CRNVP(Model):
         """
 
         super().__init__(name=name_tag)
-        self.x_dims = x_cont_dims
         self.debug = debug
+        self.log_steps = log_steps
         if architecture_type == "FC_net":
             y_dims *= 2
+            self.y_dims = (y_dims, )
             z_dims = x_dims + y_dims
             self.dims_split = [x_dims, y_dims]
         else:
             z_dims = x_dims[:-1] + (x_dims[-1] + y_dims[-1], )
             self.dims_split = [x_dims[-1], y_dims[-1]]
+            self.y_dims = y_dims
 
         with tf.name_scope(f"RealNVP/{name_tag}") as scope:
             self.flow_x = CouplingLayers(x_dims, "flow_x", feature_maps, 0,
@@ -63,8 +70,12 @@ class CRNVP(Model):
             self.flow_y = CouplingLayers(y_dims, "flow_y", feature_maps, 0,
                                          n_scales, n_layers, activation,
                                          architecture_type, context=True,
-                                         context_dims=t_dims,
+                                         context_dims=self.y_dims[-1],
                                          debug=debug)
+            self.t_map = Dense(tf.reduce_prod(y_dims))
+            # Context dims is what is concatenated to y. So the output of
+            # t_map should have the same rank as y and the N-1 dimensions must match.
+
             # TODO I have to adjust flow_y in such a way that it also uses the
             # context variable
             n_scales = 2
@@ -220,7 +231,9 @@ class CRNVP(Model):
         # y, ldj = self.logit_normalize(y, ldj)
 
         x_intermediate, ldj = self.flow_x(x, ldj, step, training=training)
-        y = self.project(y)
+        # y = self.project(y)
+        t = tf.reshape(self.t_map(t), (len(y), *self.y_dims))
+
         y_intermediate, ldj = self.flow_y(y, ldj, step, training=training, t=t)
         # TODO Flow y with context t
 
@@ -233,13 +246,13 @@ class CRNVP(Model):
         return bpd, ldj, z
 
     @tf.function
-    def loss(self, features, bpd, ldj, z, step, params):
+    def loss(self, features, bpd, ldj, z, step):
         """ Loss function of the model. """
         if self.debug:
             print("Calculating loss")
 
-        if step is not None and step % (params['log_steps'] * 5) == 0:
-            l_step = step // (params['log_steps'] * 5)
+        if step is not None and step % (self.log_steps * 5) == 0:
+            l_step = step // (self.log_steps * 5)
             tf.summary.scalar("partial_loss/ldj",
                               tf.reduce_mean(ldj), step=l_step)
 
@@ -278,8 +291,10 @@ class CRNVP(Model):
             y = tf.constant(y, shape=(1, 1), dtype=tf.float64)
             y = tf.tile(y, (x.shape[0], 1))
             for t in t_values:
-                t = tf.constant(t, shape=(1, 1), dtype=tf.float64)
+                t = tf.constant([t, 1-t], shape=(1, 2), dtype=tf.float64)
+                print(t.shape)
                 t = tf.tile(t, (x.shape[0], 1))
+                print(t.shape)
                 bpd, ldj, z = self(x, t, y, None)
                 z_values.append(z)
         z = tf.reduce_mean(z_values, axis=0)

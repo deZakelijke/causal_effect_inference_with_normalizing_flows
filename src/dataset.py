@@ -43,6 +43,7 @@ def IHDP(params, path_data="datasets/IHDP/csv/", separate_files=False,
         original version. The third number is the number of classes for each
         categorical variable.
     """
+    params["x_dims"] = 44
     params["x_cat_dims"] = 19
     params["x_cont_dims"] = 6
     params["t_dims"] = 2
@@ -166,6 +167,7 @@ def TWINS(params, path_data="datasets/TWINS/", do_preprocessing=True,
 
     """
 
+    params["x_dims"] = 30
     params["x_cat_dims"] = 3
     params["x_cont_dims"] = 0
     params["t_dims"] = 2
@@ -264,6 +266,7 @@ def SHAPES(params, path_data="datasets/SHAPES/", separate_files=None,
     the outcome when no action was taken, so just the original image.
     """
 
+    params["x_dims"] = (50, 50, 3)
     params["x_cat_dims"] = (50, 50, 0)
     params["x_cont_dims"] = (50, 50, 3)
     params["t_dims"] = 20

@@ -260,13 +260,17 @@ class Coupling(Model):
         if architecture_type == "FC_net":
             out_dims = in_dims * 2
             in_dims += context_dims
-            self.nn = FC_net(in_dims, out_dims, name_tag, n_layers,
-                             feature_maps, activation, debug)
+            self.nn = FC_net(in_dims=in_dims, out_dims=out_dims,
+                             name_tag=name_tag, n_layers=n_layers,
+                             feature_maps=feature_maps,
+                             activation=activation, debug=debug)
         if architecture_type == "ResNet":
             out_dims = in_dims[:-1] + (2 * in_dims[-1], )
             in_dims = in_dims[:-1] + (in_dims[-1] + context_dims, )
-            self.nn = ResNet(in_dims, out_dims, name_tag, n_layers,
-                             feature_maps, activation, debug)
+            self.nn = ResNet(in_dims=in_dims, out_dims=out_dims,
+                             name_tag=name_tag, n_layers=n_layers,
+                             feature_maps=feature_maps,
+                             activation=activation, debug=debug)
 
         weights = self.nn.layers[-1].weights
         self.nn.layers[-1].set_weights([tf.zeros_like(weights[0]),
