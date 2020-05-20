@@ -45,6 +45,8 @@ class CENF(Model):
         self.category_sizes = category_sizes
         self.y_type = y_type
         self.log_steps = log_steps
+        self.t_dims = t_dims
+        self.y_dims = y_dims
 
         if architecture_type == "ResNet":
             self.x_cat_dims = x_cat_dims
@@ -123,11 +125,13 @@ class CENF(Model):
 
     def do_intervention(self, x, nr_samples):
         *_, qz_mean, qz_std = self.encode(x, None, None, None, training=False)
+        final_shape = (nr_samples, qz_mean.shape[0], self.y_dims, self.t_dims)
         qz = tf.random.normal((nr_samples, *qz_mean.shape), dtype=tf.float64)
         z = qz * qz_std + qz_mean
         z_k, ldj = self.z_flow(z, None, training=False)
-
-        mu_y0, mu_y1 = self.decode.do_intervention(z_k, nr_samples)
+        y = self.decode.do_intervention(z_k, nr_samples)
+        y_mean = tf.reduce_mean(tf.reshape(y, final_shape), axis=0)
+        mu_y0, mu_y1 = y_mean[..., 0], y_mean[..., 1]
         return mu_y0, mu_y1
 
 

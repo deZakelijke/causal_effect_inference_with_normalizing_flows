@@ -75,8 +75,8 @@ def calc_stats(model, dataset, scaling_data, params):
 
         x = tf.concat([x_bin, x_cont], -1)
         ypred0, ypred1 = model.do_intervention(x, nr_samples)
-        ypred0 = tf.expand_dims(ypred0, -1)
-        ypred1 = tf.expand_dims(ypred1, -1)
+        # ypred0 = tf.expand_dims(ypred0, -1)
+        # ypred1 = tf.expand_dims(ypred1, -1)
         y_mean, y_std = scaling_data[0], scaling_data[1]
         ypred0, ypred1 = ypred0 * y_std + y_mean, ypred1 * y_std + y_mean
         y = y * y_std + y_mean
