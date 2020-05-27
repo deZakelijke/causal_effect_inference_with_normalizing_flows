@@ -1,0 +1,58 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{tikz}
+\usepackage{standalone}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage[a4paper, total={7in, 10in}]{geometry}
+\usepackage{hyperref}
+\usepackage{pbox}
+
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\Norm}{\mathcal{N}}
+\newcommand{\Loss}{\mathcal{L}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\bt}{\mathbf{t}}
+\newcommand{\bU}{\mathbb{U}}
+\newcommand{\bu}{\mathbf{u}}
+\newcommand{\bw}{\mathbf{w}}
+\newcommand{\bX}{\mathbf{X}}
+\newcommand{\bx}{\mathbf{x}}
+\newcommand{\by}{\mathbf{y}}
+\newcommand{\bZ}{\mathbf{Z}}
+\newcommand{\bz}{\mathbf{z}}
+
+\newcommand{\eq}{=}
+\newcommand{\parfrac}[2]{\frac{\partial #1}{\partial#2}}
+
+\title{Causal flow: Timeline}
+
+\begin{document}
+\begin{table}[]
+    \centering
+    \begin{tabular}{l|p{10cm}}
+        Week & Tasks/goals \\
+        \hline
+        April 27th - May 10th   &  Discuss/email current results with Joris. \newline Work out details on confounding in the Shapes dataset from Thomas Kipf. \newline Fix remaining implementation issues with causal-real-nvp implementation.  \newline Make plan on which additional datasets/simulations could be used in a causal setup. \\
+        \hline
+        May 11th - May 24th     & Implement confounding in Shapes dataset. \newline Test models on Shapes dataset \newline Write out all theoretical details of causal-real-nvp. \\
+        \hline
+        May 25th - June 7th     & Start modification of new datasets. \newline Define what the interventions and the confounding are for new datasets \newline Write out methodology \\
+        \hline
+        June 8th - June 21st    & Implement interventions and confounding in additional datasets \newline Test models on new datasets \newline Write out results thus far \\
+        \hline
+        June 22nd - July 5th    & Finish overflow from earlier weeks/maybe work on a publication?\\
+        \hline
+        July 6th - July 19th    & Finish overflow from earlier weeks/maybe work on a publication?\\
+        \hline
+        July 20th - August 9th  & I'm on holiday (depending on the corona situation)\\ 
+        \hline
+        August 10th - August 23rd & Write conclusion and discussion \newline Write abstract \\
+        \hline
+        August 24th - August 30th & Thesis defence\\
+    \end{tabular}
+    \caption{Timeline for the project}
+\end{table}
+
+
+\end{document}
