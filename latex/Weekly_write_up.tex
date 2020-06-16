@@ -4,71 +4,219 @@
 \usepackage{standalone}
 \usepackage{amsmath}
 \usepackage{amsfonts}
-\usepackage[a4paper, total={7.5in, 10in}]{geometry}
+\usepackage[a4paper, total={7in, 10in}]{geometry}
 \usepackage{hyperref}
 \usepackage{pbox}
 
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric}
+\usepackage{standalone}
+\usepackage{graphicx, color}
 
+\newcommand{\bA}{\mathbf{A}}
+\newcommand{\bB}{\mathbf{B}}
+\newcommand{\bC}{\mathbf{C}}
+\newcommand{\bD}{\mathbf{D}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\f}{\mathbf{f}}
+\newcommand{\bg}{\mathbf{g}}
+\newcommand{\bh}{\mathbf{h}}
+\newcommand{\bL}{\mathbf{L}}
+\newcommand{\Loss}{\mathcal{L}}
+\newcommand{\bM}{\mathbf{M}}
+\newcommand{\bN}{\mathbf{N}}
+\newcommand{\Norm}{\mathcal{N}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\bt}{\mathbf{t}}
+\newcommand{\bU}{\mathbb{U}}
+\newcommand{\bu}{\mathbf{u}}
+\newcommand{\bw}{\mathbf{w}}
+\newcommand{\bX}{\mathbf{X}}
+\newcommand{\bx}{\mathbf{x}}
+\newcommand{\by}{\mathbf{y}}
+\newcommand{\bZ}{\mathbf{Z}}
+\newcommand{\bz}{\mathbf{z}}
+
+\newcommand{\bmu}{\boldsymbol{\mu}}
+\newcommand{\bLam}{\boldsymbol{\Lambda}}
+
+\newcommand{\eq}{=}
+\newcommand{\parfrac}[2]{\frac{\partial #1}{\partial#2}}
+\newcommand{\inv}{^{-1}}
+\newcommand{\twovec}[2]{\begin{pmatrix} #1 \\ #2 \end{pmatrix}}
+\newcommand{\threevec}[3]{\begin{pmatrix} #1 \\ #2 \\ #3\end{pmatrix}}
 
 \title{Causal Effect Inference with Normalizing Flows}
 \author{Micha de Groot}
 \date{August 2019}
 
 \begin{document}
+% The structured causal world model also predicts the next state/frame based on a state and an action. They don't have latent confounding or a bias over the actions/interventions. Their model can query what would happen if a different action was taken, but the actions in the training set are independent of the states
 
-\section*{Metrics: which are important and why}
-   Why are these metrics all relevant and is thera a convention on how to use them?
-   \vspace{5cm}
-    \begin{table}[h]
-        \centering
-        \bgroup
-        \def\arraystretch{3}%  1 is the default, change whatever you need
-        \begin{tabular}{c|c|c|c|c}
-             &  Johansson \cite{johansson2016learning} & Johansson \cite{shalit2017estimating} & Louizos \cite{louizos2017causal} & Künzel \cite{kunzel2019metalearners}\\
-             \hline
-            RMSE - ITE & 
-                $\begin{cases}
-                y_i^F - h(x_i, 1-t_i), & t_i=1\\
-                h(x_i, 1-t_i) - y_i^F, & t_i=0
-                \end{cases}$ &
-                $\mathbb{E}[Y_1 - Y_0 | x] $ & 
-                \pbox{20cm}{$\mathbb{E}[\mathbf{y} | \mathbf{X} = x, do(\mathbf{t} = 1)]$\\ 
-                $- \mathbb{E}[\mathbf{y} | \mathbf{X} = x, do(\mathbf{t} = 0)]$} & 
-                $Y_i(1) - Y_i(0)$\\
-            %
-            \hline
-            AbsE - ATE & 
-            $\mathbb{E}_{x\sim p(x)}[ITE(x)]$ & $\mathbb{E}_{x\sim p(x)}[ITE(x)]$ & $\mathbb{E}[ITE(x)]$ & $\mathbb{E}[Y(1) - Y(0)]$\\
-            %
-            \hline
-            CATE & N.A. & \pbox{20cm}{Different name\\ for the ITE} & \pbox{20cm}{Different name\\ for the ITE} & $\mathbb{E}[Y(1) - Y(0)|X=x] $\\
-            %
-            \hline
-            RMSE - PEHE & 
-            \pbox{20cm}{$(y_1(x) - y_0(x))$ \\$- (Y_1(x) - Y_0(x))$} & 
-            $ \int_\mathcal{X}(\hat{\tau}(x) -\tau(x))^2p(x) dx$ & 
-            \pbox{20cm}{$(y_1(x) - y_0(x))$ \\$- (\hat{y}_1(x) - \hat{y}_0(x))$}& 
-            N.A \\
-            %
-        \end{tabular}
-        \egroup
-        \caption{Metrics of causal inference across papers. Most metrics look very  similar, but have some subtle differences.  $\tau(x) = \mathbb{E}[Y_1 - Y_0|x]$}
-        \label{tab:metrics}
-    \end{table}
+% Variational Inference versus density estimation. Explanation by Jakub:
+% "They are indeed not the same.
+% The density estimation is about looking for p(x), but the variational inference is a general class of looking for approximate inference.
+% For instance, a VAE could be treated as a density estimator, because it models $p(x) = |E_{z~p(z)}[p(x,z)]$.
+% But variational inference is about looking for a distribution q that is closest (e.g., in the sense of the KL) to p.
 
-\bibliographystyle{plain}
-\bibliography{references}
+% This could be confusing, because VAE uses variational inference, but in principle these are not the same thing."
 
-\newpage
-\section*{Infant Health and Development Program data set}
-Real data contains $x \in \mathbb{R}^{25}$ and $t \in \{0, 1\}$ per individual. Simulations yield $y^f, y^{cf}, \mu_0, \mu_1$. The first two are the sampled $y$ values for the real value of $t$, and the counterfactual value of $t$ respectively. According to Fredrik Johansson $\mu_0$ and $\mu_1$ are to " the individual/conditional potential outcomes before noise is added (which is equal to the conditional expectation of the outcome given features if the noise has mean 0). As such, they are not means over individuals but over draws of the noise variables. These are the values we would like to identify given enough data. In particular, CATE = mu1 – mu0".
+% So which one do I need? Maybe both? I do want to know p(x,t,y) and I also want to estimate posteriors. So that's what a VAE does
 
-So from a simulation perspective $y^f$ and $y^{cf}$ are sampled from Gaussians with mean $\mu_0$ or $\mu_1$, but during training only the $y$'s are used even though the $\mu$'s seem like cleaner data as they don't have added noise to them. What is the convention here? Do we ignore $\mu$ during training because we assume we don't have it in a 'real' dataset? In that case, which metrics can we measure when we use a data set without counterfactual values or noiseless values?
 
-\vspace{5cm}
 
-\section*{More general treatment variables}
-We think we can leverage the power of deep learning for more complex or higher dimensional data sets. Is there recent work in causal inference that deals with either continuous treatment variables or higher dimensional treatment variables? I've read the work on causal confusion by Pim de Haan et al. which is somewhat what we are looking for.
 
+
+
+% \noindent
+% The last idea was as follows:
+% \vspace{0.5cm}
+% \fbox{\parbox{0.8\textwidth}{
+% We have: $\quad f(x, t, y) = z \quad$ and $\quad g(z, t) = y \quad$ with $\quad x \in \mathbb{R}^n \quad t \in \mathbb{R}^m \quad y \in \mathbb{R}^k $
+
+
+% If $f$ were invertible then $ z \in \mathbb{R}^{n+m+k}$, but if $g$ were invertible then $z \in \mathbb{R}^{k-m}$
+% }}
+
+% \noindent
+% The dimensionality problem with that idea seems solvable and I have found some possible leads. But before I started working out the details I realised that there are two other, more fundamental problems with this idea. In this idea we assume that $f$ and $g$ exist and can be learned through a normalising flow algorithm. That $f$ exists is plausible, since the combination of all three variables gives enough information to get $z$. But if we wanted to learn $g$ with normalising flows, we would have to do that through its inverse. Otherwise we couldn't optimise the log likelihood. More formally put:
+% $$
+% \log p(y) = \log p(z,t) - \sum \log \det \left|\parfrac{g}{z,t} \right|
+% $$
+% Now the problem here is that we would need to define a parameterised distribution over $y$ if we want to optimise $g$ by mapping from $z,t$ to $y$. What is more common, in models such as the RealNVP is to map from the observed variables to the latent variables and then calculate the log likelihood from those samples based on the change of variable equation. But in our case it is not possible to invert this model and get sensible results. We could of course just invert the neural network but it wouldn't make sense. This is because only $y$ doesn't give enough information to distinguish between $z$ and $t$ because of the latent confounding. Imagine a patient from which we only know that it died. Without any additional information we can't know if this was caused by the treatment $t$ or by some prior condition, represented by $z$. 
+
+% I'm not sure about the following statement, but I think that in general it is not possible to invert a collider node in a Bayesian net/Structural causal model when there are no other nodes. That would be similar to Independent Component Analysis where we know that there are more sources than observations.
+
+% \vspace{1cm}
+% \noindent
+% That is why I thought about dropping that idea and designing some model where we only have one flow that we can just invert. We still have in a sense the problem that if we want to do an intervention to get $y$ we have $t$ on one side of the flow and if we want to do an inference to get $z$ we have $t$ on the other side of the flow. I drew some inspiration from the idea of a context variable, used in Inverse Autoregressive Flow and Sylvester Flow, to make $t$ a part of the context instead of the input of the flow itself. Then we would have one function: $f(x,y;t) = z$ that we can invert: $f(z;t)^{-1} = x,y$. What we lose with this approach is the ability to predict $t$ for a given $x$ or $z$ but that wasn't really a useful feature to have. The 'only' thing that that has to be considered is that if we infer z: $z = f(x,y;t)$, and then want to ask a counterfactual question "What if $t$ had been $\hat{t}$?", then inverting $z$ with a new context should only yield a different value for $y$, not for $x$: $x, \hat{y} = f(z;\hat{t})$. But that seems a solvable problem.
+
+% One way we could do that is start with two separate inputs from $x$ and $y$, and that both first to through several (coupling) layers. Then we concatenate these two intermediate representations and pass them through additional (coupling) layers to get the final log likelihood. So then we would only ever have the log likelihood of a pair $x, y$. 
+
+% Because we are using normalising flows we could, after training, also query interesting things like: What is a more likely outcome for this intervention. The weird thing is that with this model we can make counterfactual queries but not regular intervention questions without first having a observation of the outcome of some random intervention. We do have the possibility to sample from $z$ of course. If we can sample from $z$ in such a way that the corresponding $x$ is close to a sample that we are looking for we can still do regular intervention queries. 
+
+% \begin{figure}[h]
+%     \centering
+%     \includestandalone{Figures/bi_headed_causal_flow_with_intervention_context}
+%     \caption{Very rough sketch of my idea. The white bar in the middle represents a concatenation/split operation. Each arrow is a series of coupling layers}
+% \end{figure}
+
+
+
+
+
+
+
+% \noindent
+% We are considering two ideas as an improvement upon the causal VAE. I've listed them here with their positive and negative properties.
+
+% \subsubsection*{CEVAE}
+% The CEVAE consist of an encoder and a decoder. The encoder maps from the observed variables to the parameters of the variational latent distribution $q(z|x,t,y)$, which we call $f$. The decoder consist of several functions. One function, $g_1$, from the latent variable to the parameters of the intervention distribution $p(t|z)$, one function, $g_2$, from the latent variable and the intervention variable to the outcome distribution $p(y|t,z)$ and the third function, $g_3$, from the latent variable to the distribution of the proxy variable $p(x|z)$. By setting the input $t$ to a specific value, $g_2$ can be used to do an intervention.
+
+% \paragraph{Advantages}
+% \begin{itemize}
+%     \item The dimensionality of every function in the model can be different and is unrestricted in the size of the hidden layers
+%     \item  Explicitly models the distribution of the intervention variable
+% \end{itemize}
+% \paragraph{Disadvantages}
+% \begin{itemize}
+%     \item Doesn't model the log likelihood directly
+%     \item Have to define parameterised distributions for all observed variables
+% \end{itemize}
+
+% \vspace{1cm}
+% \subsubsection*{Causal flows}
+% There are several factors that need to be considered when designing the causal flow:
+% \begin{itemize}
+%     \item All function of the flow itself have to be invertible, at least in theory.
+%     \item The intervention variable $t$ plays two roles. It is used to infer the latent variable $z$ and it is used \textit{with} $z$ to do the intervention and predict $y$.
+%     \item We have to assume that the dimensionality of $x$, $t$ and $y$ is fixed and probably not a convenient number such as a power of two.
+%     \item The dimensionality of $y$ can be much smaller than that of $x$.
+% \end{itemize}
+
+% \subsubsection*{Causal normalising flow with two flows}
+% This model has one flow that maps the observed variables $x, t, y$ to the latent variable $z$ with a function $f$. It also has a second function/flow $g$ that maps from the pair $z,t$ to the outcome variable $y$. The flow $f$ doesn't require the observed variables to have a parameterised distribution. This flow models the joint distribution of all observed variables. The second flow $g$ can, theoretically, perform the intervention. 
+
+% Normalising flows require the functions to be invertible, which leads to an odd situation with the function $g$. If it were an invertible function we could use that to get both the latent variable $z$ and the corresponding intervention variable $t$ from just the outcome variable $y$: $g(t,z) = y \leftrightarrow g^{-1}(y) = z, t$. Could such a function exist if there is latent confounding between $t, y$ and $z$?
+
+% \paragraph{Advantages}
+% \begin{itemize}
+%     \item Optimises the log likelihood directly
+%     \item Doesn't require parameterised distributions
+%     \item Models the joint distribution of all observed variables
+% \end{itemize}
+% \paragraph{Disadvantages}
+% \begin{itemize}
+%     \item Unclear/unlikely that $g$ can exist as invertible function.
+%     \item Has the "solvable" issue that the dimensions of $f$ and $g$ are constrained due to the invertibility
+%     \item Doesn't model the marginal distributions of the observed variables
+% \end{itemize}
+
+% \subsubsection*{Causal normalising flow with one two-headed flow}
+% Another possibility of using normalising flows is by using one flow that is divided into three components and where the intervention variable is used as a 'context' variable in the flow. The first part of the flow maps $x$ to an intermediate representation: $f_1(x) = z_x$, the second part maps $y$ to an intermediate representation, while using $t$ as a context variable: $f_2(y;t) = z_y$. The last part combines these two into one latent variable: $f_3(z_x, z_y) = z$. Each function $f_i$ is in itself invertible.
+
+% Using $t$ as context variable means that we no longer view it as a random variable and it is not part of the variable that is being transformed. Looking at the RealNVP and its coupling layers as an example we would have the following:
+% \begin{align}
+%     y_{1:d} &= x_{1:d}\\
+%     y_{d:D} &= x_{d:D} \odot \exp (scale(x_{1:d}, t)) + transl(x_{1:d}, t)
+% \end{align}
+% We leverage the fact that the functions \textit{scale} and \textit{transl} don't have to be invertible and are unrestricted. That is why we can just add $t$ as an input. There are several options on how $t$ can be used within these networks, but that is for another discussion.
+
+% \paragraph{Advantages}
+% \begin{itemize}
+%     \item Optimises the log likelihood directly
+%     \item Doesn't require parameterised distributions
+%     \item Can do an intervention by changing $t$ as input of the coupling networks.
+%     \item The two flows $f_1$ and $f_2$ can be different in both dimensionality and architecture.
+% \end{itemize}
+% \paragraph{Disadvantages}
+% \begin{itemize}
+%     \item Only models the joint distribution of $x$ and $y$. We don't model $t$ at all.
+%     \item Although a difference in dimensionality of $x$ and $y$ is not a problem, we do need $y$ to be at least two-dimensional if we want to use coupling layers without modifications. This is not always the case
+% \end{itemize} 
+% The last point could maybe be solved by not using coupling layers. It would need to be replaced by an invertible 1-dimensional function.
+\begin{figure}
+    \centering
+    \includestandalone{Figures/causal_graph_one_proxy_one_confounder}
+    \caption{Causal graph}
+\end{figure}
+
+
+\noindent
+More general model of the setup with each variable a multivariate Gaussian with full covariance and linear dependence on its parent variables:
+
+\begin{align}
+p(\bz) &= \Norm(\bz | \bmu, \bLam\inv)\\
+p(\bx|\bz) &= \Norm(\bx | \bA\bz + \f, \bL\inv)\\
+p(\bt|\bz) &= \Norm(\bt|\bB\bz + \bg, \bM\inv)\\
+p(\by|\bt, \bz) &= \Norm(\by |\bC\bt + \bD\bz + \bh , \bN\inv)
+\end{align}
+
+\noindent
+We want confirm that explicitly modelling the latent variable $\bz$ is needed and that you can only ignore the latent variable if either the proxy variable $\bx$ is a perfect proxy ($\bL^{-1}$ goes to zero) or if the intervention variable $\bt$ is independent of $\bz$ ($\bB=0$). To compare to the simple version of Christos I repeated his calculation with the more general distribution.
+The correct calculation to get the intervention distribution is:
+\begin{equation}
+\begin{split}
+    p(\by|do(\bt)) &= \int_\bz p(\by |do(\bt), \bz) p(\bz|do(\bt))\\
+    &=\int_\bz p(\by |\bt, \bz) p(\bz)\\
+    &=\int_\bz \Norm(\twovec{\bz}{\by} | \twovec{\bmu}{\bD\bmu + \bC\bt + \bh}, \begin{pmatrix}
+    \bLam\inv & \bLam\inv\bD^T \\ \bD\bLam\inv & \bN\inv + \bD\bLam\inv\bD^T\end{pmatrix})\\
+    &= \Norm(\by | \bD\bmu + \bC\bt + \bh , \bN\inv + \bD\bLam\inv\bD^T)
+\end{split}
+\end{equation}
+
+\noindent
+The incorrect way is the following. We hope to derive that it is the same as above if and only if one of the two conditions are met.
+\begin{equation}
+\begin{split}
+    p_{\text{wrong}}(\by | do(\bt)) &= \int_\bx p(\by |do(\bt), \bx) p(\bx|do(\bt))\\
+    &= \int_\bx p(\by |\bt, \bx) p(\bx)\\
+    &= \int_\bx p(\bx) \frac{p(\by, \bt, \bx)}{p(\bx, \bt)}\\
+    &= \int_\bx p(\bx) \frac{\int_\bz p(\by, \bt, \bx, \bz)}{\int_\bz p(\bx, \bt, \bz)}\\
+\end{split}
+\end{equation}
+Unfortunately I got stuck at the inverse of a specific matrix. 
 
 \end{document}
+
+
