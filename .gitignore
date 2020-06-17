@@ -3,6 +3,7 @@ notes.txt
 
 # Folder with all datasets
 datasets/
+results/
 
 # Test code for quick tests
 test/

@@ -46,19 +46,18 @@ def get_colors(cmap='Set1', num_colors=9):
 class SpaceShapesGenerator():
     """Gym environment for space objects task."""
 
-    def __init__(self, width=5, height=5, num_objects=5, prior_dims=64,
+    def __init__(self, width=6, height=6, num_objects=5, prior_dims=64,
                  seed=None):
         self.width = width
         self.height = height
         self.num_objects = num_objects
         self.prior_dims = prior_dims
-
         self.colors = get_colors(num_colors=max(9, self.num_objects))
 
-        # rng = default_rng()
-        self.intervention_map = random.standard_normal((prior_dims + num_objects, 2))
+        self.intervention_map = random.standard_normal((prior_dims +
+                                                        num_objects, 2))
         self.position_map = random.standard_normal((prior_dims + num_objects,
-                                                width * height))
+                                                    width * height))
         self.object_gravity = random.standard_normal((1, num_objects))
 
     def generate_data(self, nr_samples):
@@ -72,13 +71,17 @@ class SpaceShapesGenerator():
         steering = prior_data @ self.intervention_map
 
         rendering = self.render(object_positions)
+        plt.subplot(121)
         plt.imshow(rendering)
-        plt.show()
+        plt.title(f"Steering: {np.around(steering[0], 2)}")
         print()
 
-        move_result = self.move_spaceship(object_positions, object_gravity, steering)
+        move_result = self.move_spaceship(object_positions,
+                                          object_gravity, steering)
         rendering = self.render(move_result[0])
+        plt.subplot(122)
         plt.imshow(rendering)
+        plt.title(f"Movement: {move_result[1][0]}")
         plt.show()
 
     def move_spaceship(self, object_positions, object_gravity, steering):
@@ -87,16 +90,18 @@ class SpaceShapesGenerator():
         distances = object_positions[1:] - object_positions[0]
         weighted_distances = distances * object_gravity.T
         direction = (steering + np.sum(weighted_distances, axis=0)) / 2
-        new_pos = object_positions[0] + direction
+        new_pos = np.around(object_positions[0] + direction)
         new_dist = np.linalg.norm(object_positions[:1] - new_pos, axis=-1)
+        # Round this to integers
         while self.valid_new_pos(object_positions, new_pos, new_dist):
             direction *= 0.5
-            new_pos = object_positions[0] + direction
+            new_pos = np.around(object_positions[0] + direction)
             new_dist = np.linalg.norm(object_positions[1:] - new_pos, axis=-1)
-        object_positions[0] = new_pos 
+        object_positions[0] = new_pos
+        direction = np.around(direction)
         return object_positions, direction
 
-    def valid_new_pos(self, object_positions, new_pos, new_dist, threshold=0.9):
+    def valid_new_pos(self, object_positions, new_pos, new_dist):
         if np.any(new_dist < 1):
             return True
         if np.any(new_pos < 0.0):
@@ -104,7 +109,6 @@ class SpaceShapesGenerator():
         if np.any(new_pos > 5.0):
             return True
         return False
-
 
     def render(self, object_positions):
         im = np.zeros((self.width * 10, self.height * 10, 3), dtype=float)
@@ -131,6 +135,7 @@ class SpaceShapesGenerator():
                                      replace=False, p=position_probs.flatten())
         object_positions = positions[position_idx]
         return object_positions
+
 
 if __name__ == "__main__":
     generator = SpaceShapesGenerator()
