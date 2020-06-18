@@ -1,17 +1,3 @@
-""" Gym environment for space objects task in 2D.
-
-Does it make sense to do this in a Gym env? We don't really have an episode
-or multiple states. Most likely we only have an initial state and one action.
-So we can't even do mutliple steps. If we were to do this in a Gym env we would
-have to end each episode after the first action. Doe it then make sense to do
-it like this?
-Since the data generation process consists of 'playing' the env with random actions,
-we could also just cut out the middel man. We can sample the prior, sample the 
-intervention, generate the proxy and then calculate the outcome. This could be
-parallelised massively to generate a lot of data quickly.
-
-"""
-
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
@@ -45,7 +31,18 @@ def get_colors(cmap='Set1', num_colors=9):
 
 
 class SpaceShapesGenerator():
-    """Gym environment for space objects task."""
+    """Class to generate dataset for space objects task.
+
+    The class generates three files, the original state, visualised as images
+    with some noise, the intervenion variable, which is a 2D 'steering'
+    vector, and the outcome variable. For the outcome variable it is possible
+    to represent it as an image as well but for now we pick the distance to
+    the middle right of the image, inverted and normalised. This means that
+    the score is 1 when the 'space ship' is in the middle right position
+    after the action and has a score of 0 when it is widht * height away from
+    that position. Of course that position is outside of the frame so no
+    instace will actually have a score of zero.
+    """
 
     def __init__(self, width=6, height=6, num_objects=5, prior_dims=64,
                  seed=None):
@@ -60,45 +57,64 @@ class SpaceShapesGenerator():
         self.position_map = random.standard_normal((prior_dims + num_objects,
                                                     width * height))
         self.object_gravity = random.standard_normal((1, num_objects))
+        self.goal = np.array([[(height - 1) / 2, (width - 1)]])
         print(f"Gravities: {self.object_gravity[0]}")
 
-    def generate_data(self, nr_samples):
+    def generate_data(self, nr_samples, render=False, save=False):
         prior_data = random.standard_normal((nr_samples, self.prior_dims))
         object_gravity = np.tile(self.object_gravity, (nr_samples, 1))
         prior_data = np.concatenate((prior_data, object_gravity), axis=1)
 
         position_probs = softmax(prior_data @ self.position_map, axis=1)
-        position_probs = np.reshape(position_probs, (nr_samples, self.height, self.width))
+        position_probs = np.reshape(position_probs, (nr_samples, self.height,
+                                                     self.width))
         object_positions = self.set_positions(position_probs)
-        rendering = np.array([self.render(objects) for objects in object_positions])
-        with h5py.File("datasets/SPACE/space_data_x.hdf5", "w") as f:
-            dset = f.create_dataset("Space_dataset_x", data=rendering)
+        rendering = np.array([self.render(objects) for objects in
+                              object_positions])
+
+        if save:
+            with h5py.File("datasets/SPACE/space_data_x.hdf5", "w") as f:
+                dset = f.create_dataset("Space_dataset_x", data=rendering)
 
         steering = prior_data @ self.intervention_map
-        with h5py.File("datasets/SPACE/space_data_t.hdf5", "w") as f:
-            dset = f.create_dataset("Space_datset_t", data=steering)
+        if save:
+            with h5py.File("datasets/SPACE/space_data_t.hdf5", "w") as f:
+                dset = f.create_dataset("Space_datset_t", data=steering)
 
-        plt.subplot(121)
-        plt.imshow(rendering[0])
-        plt.title(f"Steering: {np.around(steering[0], 2)}")
+        if render:
+            plt.subplot(121)
+            plt.imshow(rendering[0])
+            plt.title(f"Steering: {np.around(steering[0], 2)}")
         print()
 
         move_result = self.move_spaceship(object_positions,
                                           object_gravity, steering)
-        rendering = np.array([self.render(objects) for objects in move_result[0]])
-        with h5py.File("datasets/SPACE/space_data_y.hdf5", "w") as f:
-            dset = f.create_dataset("Space_dataset_y", data=rendering)
 
-        plt.subplot(122)
-        plt.imshow(rendering[0])
-        plt.title(f"Movement: {move_result[1][0]}")
-        plt.show()
+        dist_to_goal = np.linalg.norm(move_result[0][:, 0] - self.goal, axis=1)
+        score = 1 - dist_to_goal / np.sqrt((self.height - 1) ** 2 +
+                                           (self.width - 1) ** 2)
+        if np.any(score < 0) or np.any(score > 1):
+            print(np.where(score < 0 or score > 1))
+            raise ValueError("Some scores are out of bounds")
 
+        if render:
+            rendering = np.array([self.render(objects) for objects in
+                                  move_result[0]])
+        if save:
+            with h5py.File("datasets/SPACE/space_data_y.hdf5", "w") as f:
+                dset = f.create_dataset("Space_dataset_y", data=score)
+
+        if render:
+            plt.subplot(122)
+            plt.imshow(rendering[0])
+            plt.title(f"Movement: {move_result[1][0]}\nScore: {score[0]:.2f}")
+            plt.show()
 
     def move_spaceship(self, object_positions, object_gravity, steering):
         """
         """
-        distances = object_positions[:, 1:] - np.expand_dims(object_positions[:, 0], 1)
+        distances = object_positions[:, 1:] -\
+            np.expand_dims(object_positions[:, 0], 1)
         weighted_distances = distances * np.expand_dims(object_gravity, -1)
         direction = (steering + np.sum(weighted_distances, axis=1)) / 2
         new_pos = np.around(object_positions[:, 0] + direction)
@@ -154,5 +170,5 @@ class SpaceShapesGenerator():
 
 
 if __name__ == "__main__":
-    generator = SpaceShapesGenerator()
-    generator.generate_data(1000)
+    generator = SpaceShapesGenerator(width=6, height=6, num_objects=5)
+    generator.generate_data(10, render=True, save=False)
