@@ -48,6 +48,7 @@ def IHDP(params, path_data="datasets/IHDP/csv/", separate_files=False,
     params["x_cont_dims"] = 6
     params["t_dims"] = 2
     params["y_dims"] = 1
+    params["y_type"] = 'N'
     params["z_dims"] = 16
     params['category_sizes'] = 2
     params['architecture_type'] = 'FC_net'
@@ -104,6 +105,7 @@ def IHDP(params, path_data="datasets/IHDP/csv/", separate_files=False,
 
     t = np.expand_dims(np.array(t), axis=1)
     t = enc.fit(t).transform(t)
+    t_cf = 1 - t
     y = np.expand_dims(np.array(y), axis=1)
     y_cf = np.expand_dims(np.array(y_cf), axis=1)
 
@@ -121,6 +123,7 @@ def IHDP(params, path_data="datasets/IHDP/csv/", separate_files=False,
     train_set = tf.data.Dataset.from_tensor_slices(((x_bin[idx_tr],
                                                      x_cont[idx_tr],
                                                      t[idx_tr],
+                                                     t_cf[idx_tr],
                                                      y[idx_tr],
                                                      y_cf[idx_tr],
                                                      mu_0[idx_tr],
@@ -128,6 +131,7 @@ def IHDP(params, path_data="datasets/IHDP/csv/", separate_files=False,
     test_set = tf.data.Dataset.from_tensor_slices(((x_bin[idx_te],
                                                     x_cont[idx_te],
                                                     t[idx_te],
+                                                    t_cf[idx_te],
                                                     y[idx_te],
                                                     y_cf[idx_te],
                                                     mu_0[idx_te],
@@ -136,7 +140,7 @@ def IHDP(params, path_data="datasets/IHDP/csv/", separate_files=False,
     return train_set, test_set
 
 
-def TWINS(params, path_data="datasets/TWINS/", do_preprocessing=True,
+def TWINS(params, path_data="datasets/TWINS/",
           separate_files=None, file_index=None):
     """Tensorflow Dataset generator for the TWINS dataset.
 
@@ -145,8 +149,6 @@ def TWINS(params, path_data="datasets/TWINS/", do_preprocessing=True,
     params : dict
         Dictionary that contains all hyperparameters of the program. Use
         the function parse_arguments() in main.py to generate it.
-
-    do_preprocessing : str
 
     separate_files : bool
         kept_for compatibility with other datasets.
@@ -172,6 +174,7 @@ def TWINS(params, path_data="datasets/TWINS/", do_preprocessing=True,
     params["x_cont_dims"] = 0
     params["t_dims"] = 2
     params["y_dims"] = 1
+    params["y_type"] = 'B'
     params["z_dims"] = 16
     params["category_sizes"] = 10
     params['architecture_type'] = 'FC_net'
@@ -231,6 +234,7 @@ def TWINS(params, path_data="datasets/TWINS/", do_preprocessing=True,
     t = np.expand_dims(t, axis=1).astype(float)
     enc = OneHotEncoder(categories='auto', sparse=False)
     t = enc.fit(t).transform(t)
+    t_cf = 1 - t
 
     mu_1 = np.expand_dims(data_y[indices, 1], axis=1)
     mu_0 = np.expand_dims(data_y[indices, 0], axis=1)
@@ -240,6 +244,7 @@ def TWINS(params, path_data="datasets/TWINS/", do_preprocessing=True,
     train_set = tf.data.Dataset.from_tensor_slices(((x_cat[idx_tr],
                                                      x_cont[idx_tr],
                                                      t[idx_tr],
+                                                     t_cf[idx_tr],
                                                      y[idx_tr],
                                                      y_cf[idx_tr],
                                                      mu_1[idx_tr],
@@ -247,6 +252,7 @@ def TWINS(params, path_data="datasets/TWINS/", do_preprocessing=True,
     test_set = tf.data.Dataset.from_tensor_slices(((x_cat[idx_te],
                                                     x_cont[idx_te],
                                                     t[idx_te],
+                                                    t_cf[idx_te],
                                                     y[idx_te],
                                                     y_cf[idx_te],
                                                     mu_1[idx_te],
@@ -271,6 +277,7 @@ def SHAPES(params, path_data="datasets/SHAPES/", separate_files=None,
     params["x_cont_dims"] = (50, 50, 3)
     params["t_dims"] = 20
     params["y_dims"] = (50, 50, 3)
+    params["y_type"] = 'N'
     params["z_dims"] = (50, 50, 3)
     params["category_sizes"] = 0
     params['architecture_type'] = 'ResNet'
@@ -291,6 +298,7 @@ def SHAPES(params, path_data="datasets/SHAPES/", separate_files=None,
     enc = OneHotEncoder(categories='auto', sparse=False)
     # x_bin = enc.fit(x_bin).transform(x_bin)
     t = enc.fit(t).transform(t)
+    t_cf = np.zeros_like(t)
     # Reshape t?
     y = np.rollaxis(train_array_dict['next_obs'], 1, 4).astype(float)
     y_cf = np.rollaxis(train_array_dict['obs'], 1, 4).astype(float)
@@ -299,24 +307,27 @@ def SHAPES(params, path_data="datasets/SHAPES/", separate_files=None,
     train_set = tf.data.Dataset.from_tensor_slices(((x_cat,
                                                      x_cont,
                                                      t,
+                                                     t_cf,
                                                      y,
                                                      y_cf,
                                                      mu_1,
                                                      mu_0)))
 
-    test_array_dict = load_list_dict_h5py(path_data + train_name)
-    x_cont = np.rollaxis(train_array_dict['obs'], 1, 4).astype(float)
+    test_array_dict = load_list_dict_h5py(path_data + test_name)
+    x_cont = np.rollaxis(test_array_dict['obs'], 1, 4).astype(float)
     x_cat = np.zeros((len(x_cont), 50, 50, 0))
-    t = np.reshape(train_array_dict['action'],
-                   (len(train_array_dict['action']), 1, 1, 1)).astype(float)
-    y = np.rollaxis(train_array_dict['next_obs'], 1, 4).astype(float)
-    y_cf = np.rollaxis(train_array_dict['obs'], 1, 4).astype(float)
+    t = np.reshape(test_array_dict['action'],
+                   (len(test_array_dict['action']), 1, 1, 1)).astype(float)
+    t_cf = np.zeros_like(t)
+    y = np.rollaxis(test_array_dict['next_obs'], 1, 4).astype(float)
+    y_cf = np.rollaxis(test_array_dict['obs'], 1, 4).astype(float)
     mu_1 = np.zeros((len(x_cont), 0, 0, 0))
     mu_0 = np.zeros((len(x_cont), 0, 0, 0))
 
     test_set = tf.data.Dataset.from_tensor_slices(((x_cat,
                                                     x_cont,
                                                     t,
+                                                    t_cf,
                                                     y,
                                                     y_cf,
                                                     mu_1,
@@ -325,6 +336,66 @@ def SHAPES(params, path_data="datasets/SHAPES/", separate_files=None,
     scaling_data = (0, 1)
     params["scaling_data"] = scaling_data
     return train_set, test_set
+
+
+def SPACE(params, path_data='datasets/SPACE/', separate_files=None):
+    """ """
+    params["x_dims"] = (60, 60, 3)
+    params["x_cat_dims"] = (60, 60, 0)
+    params["x_cont_dims"] = (60, 60, 3)
+    params["t_dims"] = 2
+    params["y_dims"] = 1
+    params["y_type"] = 'N'
+    params["z_dims"] = 64
+    params["category_sizes"] = 0
+    params['architecture_type'] = 'ResNet'
+
+    with h5py.File(f"{path_data}space_data_x.hdf5", "r") as f:
+        x = np.array(f['Space_dataset_x'])
+    with h5py.File(f"{path_data}space_data_t.hdf5", "r") as f:
+        t = np.array(f['Space_dataset_t'])
+    with h5py.File(f"{path_data}space_data_t_cf.hdf5", "r") as f:
+        t_cf = np.array(f['Space_dataset_t_cf'])
+    with h5py.File(f"{path_data}space_data_y.hdf5", "r") as f:
+        y = np.array(f['Space_dataset_y'])
+    with h5py.File(f"{path_data}space_data_y_cf.hdf5", "r") as f:
+        y_cf = np.array(f['Space_dataset_y_cf'])
+
+    idx_tr, idx_te = train_test_split(np.arange(x.shape[0]), test_size=0.1,
+                                      random_state=1)
+
+    x_cont = x
+    x_cat = np.zeros((len(x_cont), 50, 50, 0))
+    y = np.expand_dims(np.array(y), axis=1)
+    y_cf = np.expand_dims(np.array(y_cf), axis=1)
+    y_mean = np.mean(tf.concat([y, y_cf], 1))
+    y_std = np.std(tf.concat([y, y_cf], 1))
+    y = (y - y_mean) / y_std
+    y_cf = (y_cf - y_mean) / y_std
+    scaling_data = (y_mean, y_std)
+    params['scaling_data'] = scaling_data
+
+    mu_1 = np.zeros((len(x_cont), 1))
+    mu_0 = np.zeros((len(x_cont), 1))
+
+    train_set = tf.data.Dataset.from_tensor_slices(((x_cat[idx_tr],
+                                                     x_cont[idx_tr],
+                                                     t[idx_tr],
+                                                     t_cf[idx_tr],
+                                                     y[idx_tr],
+                                                     y_cf[idx_tr],
+                                                     mu_0[idx_tr],
+                                                     mu_1[idx_tr])))
+    test_set = tf.data.Dataset.from_tensor_slices(((x_cat[idx_te],
+                                                    x_cont[idx_te],
+                                                    t[idx_te],
+                                                    t_cf[idx_te],
+                                                    y[idx_te],
+                                                    y_cf[idx_te],
+                                                    mu_0[idx_te],
+                                                    mu_1[idx_te])))
+    return train_set, test_set
+
 
 
 def load_list_dict_h5py(fname):
@@ -353,7 +424,7 @@ def test_IHDP():
 
 def test_TWINS():
     params = {}
-    train_data, test_data = TWINS(params, do_preprocessing=True)
+    train_data, test_data = TWINS(params)
 
     for _, data_sample in train_data.batch(5).enumerate():
         for data in data_sample:
@@ -373,8 +444,22 @@ def test_SHAPES():
         break
 
 
+def test_SPACE():
+    params = {}
+    train_data, test_data = SPACE(params)
+    for _, data_sample in train_data.batch(5).enumerate():
+        for data in data_sample:
+            for var in data:
+                print(var.shape)
+        break
+
+
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
-    test_SHAPES()
-    print()
-    test_TWINS()
+    # test_IHDP()
+    # print()
+    # test_TWINS()
+    # print()
+    # test_SHAPES()
+    # print()
+    test_SPACE()
