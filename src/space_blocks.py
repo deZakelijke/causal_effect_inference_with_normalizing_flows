@@ -79,7 +79,7 @@ class SpaceShapesGenerator():
         steering = prior_data @ self.intervention_map
         if save:
             with h5py.File("datasets/SPACE/space_data_t.hdf5", "w") as f:
-                dset = f.create_dataset("Space_datset_t", data=steering)
+                dset = f.create_dataset("Space_dataset_t", data=steering)
 
         if render:
             plt.subplot(121)
@@ -87,7 +87,7 @@ class SpaceShapesGenerator():
             plt.title(f"Steering: {np.around(steering[0], 2)}")
         print()
 
-        move_result = self.move_spaceship(object_positions,
+        move_result = self.move_spaceship(object_positions.copy(),
                                           object_gravity, steering)
 
         dist_to_goal = np.linalg.norm(move_result[0][:, 0] - self.goal, axis=1)
@@ -97,18 +97,31 @@ class SpaceShapesGenerator():
             print(np.where(score < 0 or score > 1))
             raise ValueError("Some scores are out of bounds")
 
-        if render:
-            rendering = np.array([self.render(objects) for objects in
-                                  move_result[0]])
         if save:
             with h5py.File("datasets/SPACE/space_data_y.hdf5", "w") as f:
                 dset = f.create_dataset("Space_dataset_y", data=score)
 
         if render:
+            rendering = np.array([self.render(objects) for objects in
+                                  move_result[0]])
             plt.subplot(122)
             plt.imshow(rendering[0])
             plt.title(f"Movement: {move_result[1][0]}\nScore: {score[0]:.2f}")
             plt.show()
+
+        steering *= -1
+        if save:
+            with h5py.File("datasets/SPACE/space_data_t_cf.hdf5", "w") as f:
+                dset = f.create_dataset("Space_dataset_t_cf", data=steering)
+        move_result = self.move_spaceship(object_positions.copy(),
+                                          object_gravity, steering)
+
+        dist_to_goal = np.linalg.norm(move_result[0][:, 0] - self.goal, axis=1)
+        score = 1 - dist_to_goal / np.sqrt((self.height - 1) ** 2 +
+                                           (self.width - 1) ** 2)
+        if save:
+            with h5py.File("datasets/SPACE/space_data_y_cf.hdf5", "w") as f:
+                dset = f.create_dataset("Space_dataset_y_cf", data=score)
 
     def move_spaceship(self, object_positions, object_gravity, steering):
         """
@@ -171,4 +184,4 @@ class SpaceShapesGenerator():
 
 if __name__ == "__main__":
     generator = SpaceShapesGenerator(width=6, height=6, num_objects=5)
-    generator.generate_data(10, render=True, save=False)
+    generator.generate_data(1000, render=False, save=True)

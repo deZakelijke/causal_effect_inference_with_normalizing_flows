@@ -338,7 +338,8 @@ def SHAPES(params, path_data="datasets/SHAPES/", separate_files=None,
     return train_set, test_set
 
 
-def SPACE(params, path_data='datasets/SPACE/', separate_files=None):
+def SPACE(params, path_data='datasets/SPACE/', separate_files=None,
+          file_index=None):
     """ """
     params["x_dims"] = (60, 60, 3)
     params["x_cat_dims"] = (60, 60, 0)
@@ -365,7 +366,7 @@ def SPACE(params, path_data='datasets/SPACE/', separate_files=None):
                                       random_state=1)
 
     x_cont = x
-    x_cat = np.zeros((len(x_cont), 50, 50, 0))
+    x_cat = np.zeros((len(x_cont), 60, 60, 0))
     y = np.expand_dims(np.array(y), axis=1)
     y_cf = np.expand_dims(np.array(y_cf), axis=1)
     y_mean = np.mean(tf.concat([y, y_cf], 1))

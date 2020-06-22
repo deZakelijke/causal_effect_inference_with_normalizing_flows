@@ -12,11 +12,11 @@ from causal_real_nvp import CRNVP
 from cenf import CENF
 from cevae import CEVAE
 from contextlib import nullcontext
-from dataset import IHDP, TWINS, SHAPES
+from dataset import IHDP, TWINS, SHAPES, SPACE
 from evaluation import calc_stats
 
 VALID_MODELS = ["CEVAE", "CENF", "CRNVP"]
-VALID_DATASETS = ["IHDP", "TWINS", "SHAPES"]
+VALID_DATASETS = ["IHDP", "TWINS", "SHAPES", "SPACE"]
 
 tf.keras.backend.set_floatx('float64')
 
@@ -106,9 +106,11 @@ def parse_arguments():
             raise ValueError("Experment name may only contain alphanumerical "
                              "and underscore")
 
+    args.model = args.model.upper()
     if args.model not in VALID_MODELS:
         raise NotImplementedError(f"Model {args.model} is not implemented")
 
+    args.dataset = args.dataset.upper()
     if args.dataset not in VALID_DATASETS:
         raise NotImplementedError(f"Dataset {args.dataset} is not implemented")
 
@@ -166,7 +168,7 @@ def grad(model, features, step, debug):
     with tf.GradientTape() as tape:
         x = tf.concat([features[0], features[1]], -1)
         t = features[2]
-        y = features[3]
+        y = features[4]
         output = model(x, t, y, step, training=True)
         loss = model.loss(features, *output, step)
     if debug:

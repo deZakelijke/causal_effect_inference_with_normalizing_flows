@@ -1,7 +1,7 @@
 import tensorflow as tf
 from tensorflow.keras import Model, activations, Sequential
 from tensorflow.keras.layers import Activation, BatchNormalization
-from tensorflow.keras.layers import Conv2D, Dense, Flatten
+from tensorflow.keras.layers import Conv2D, Dense, Flatten, Reshape, Lambda
 
 
 class ResNet(Model):
@@ -10,7 +10,7 @@ class ResNet(Model):
     def __init__(self, in_dims=(16, 16, 3), out_dims=(16, 16, 3),
                  name_tag="res_net", n_layers=3, feature_maps=32,
                  activation='elu', squeeze=False, squeeze_dims=None,
-                 debug=False):
+                 unsqueeze=False, debug=False):
         """
         Parameters
         ----------
@@ -52,11 +52,26 @@ class ResNet(Model):
         self.activation = Activation(activation)
         self.squeeze = squeeze
         assert name_tag != "", "Name tag can't be an empty stirng"
-        channels_in = in_dims[2]
+        try:
+            channels_in = in_dims[2]
+        except TypeError:
+            channels_in = 1
         channels_out = out_dims[2]
-        image_size = (in_dims[0], in_dims[1])
+        try:
+            image_size = (in_dims[0], in_dims[1])
+        except TypeError:
+            image_size = (out_dims[0], out_dims[1])
         intermediate_dim = (None, *image_size, feature_maps)
 
+        self.in_layers = Sequential()
+        if unsqueeze:
+            dense_in = Dense(tf.reduce_prod(squeeze_dims), activation=None,
+                             dtype=tf.float64)
+            dense_in.build((None, in_dims))
+            self.in_layers.add(dense_in)
+            self.in_layers.add(Reshape((*image_size, channels_in)))
+        else:
+            self.in_layers.add(Lambda(tf.identity))
         self.bn_in = BatchNormalization(axis=3, dtype=tf.float64,
                                         fused=False, name="BN_in")
         self.bn_in.build((None, *image_size, channels_in))
@@ -108,6 +123,7 @@ class ResNet(Model):
     @tf.function
     def call(self, x, step, training=False):
         with tf.name_scope(f"ResNet/{self.name_tag}") as scope:
+            x = self.in_layers(x)
             x = self.bn_in(x)
             x = tf.concat([x, -x], 3)
             x = self.activation(x)

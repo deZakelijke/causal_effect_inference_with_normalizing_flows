@@ -144,6 +144,13 @@ class CEVAE(Model):
 
 
 class Encoder(Model):
+    """ 
+    New plan, we assume y is a scalar or vector to make life a bit simpler.
+    That means that networks generating y have to have a bottleneck at the end.
+    We can then also assume that z is a vector, so networks generating z will
+    have to have a bottleneck as well. From z to x we might need a reshape
+    or upsampling thingy.
+    """ 
 
     def __init__(
         self,
@@ -164,23 +171,15 @@ class Encoder(Model):
 
         super().__init__(name=name_tag)
         self.t_dims = t_dims
+        self.y_dims = y_dims
+        self.z_dims = z_dims
         self.debug = debug
         network = eval(architecture_type)
 
         if architecture_type == "ResNet":
-            intermediate_dims = x_dims
-            y_out_dims = y_dims[:-1] + (y_dims[-1] * t_dims, )
-            z_in_dims = x_dims[:-1] + (x_dims[-1] + y_dims[-1], )
-            z_net_out_dims = z_dims[:-1] + (z_dims[-1] * 2 * t_dims, )
-            self.y_dims = y_dims
-            self.z_dims = z_dims[:-1] + (z_dims[-1] * 2, )
+            intermediate_dims = feature_maps * 16
         else:
             intermediate_dims = feature_maps
-            y_out_dims = y_dims * t_dims
-            z_in_dims = x_dims + y_dims
-            z_net_out_dims = z_dims * 2 * t_dims
-            self.y_dims = (y_dims, )
-            self.z_dims = (z_dims * 2, )
 
         self.qt_logits = network(in_dims=x_dims, out_dims=x_dims,
                                  name_tag="qt", n_layers=1,
@@ -188,21 +187,23 @@ class Encoder(Model):
                                  squeeze=True, squeeze_dims=t_dims,
                                  debug=debug)
 
-        self.hqy = network(in_dims=x_dims, out_dims=intermediate_dims,
+        self.hqy = network(in_dims=x_dims, out_dims=x_dims,
                            name_tag="hqy", n_layers=2,
-                           feature_maps=feature_maps, debug=debug)
+                           feature_maps=feature_maps, squeeze=True,
+                           squeeze_dims=intermediate_dims, debug=debug)
 
-        self.mu_qy_t = network(in_dims=intermediate_dims, out_dims=y_out_dims,
+        self.mu_qy_t = FC_net(in_dims=intermediate_dims, out_dims=y_dims * t_dims,
                                name_tag="mu_qy_t", n_layers=2,
                                feature_maps=feature_maps * 2, debug=debug)
 
-        self.hqz = network(in_dims=z_in_dims, out_dims=intermediate_dims,
-                           name_tag="hqz", n_layers=2,
-                           feature_maps=feature_maps, debug=debug)
+        self.hqz = FC_net(in_dims=intermediate_dims + y_dims,
+                          out_dims=intermediate_dims,
+                          name_tag="hqz", n_layers=2,
+                          feature_maps=feature_maps, debug=debug)
 
-        self.qz_t = network(in_dims=intermediate_dims, out_dims=z_net_out_dims,
-                            name_tag="qz_t", n_layers=2,
-                            feature_maps=feature_maps * 2, debug=debug)
+        self.qz_t = FC_net(in_dims=intermediate_dims, out_dims=z_dims * 2 * t_dims,
+                           name_tag="qz_t", n_layers=2,
+                           feature_maps=feature_maps * 2, debug=debug)
 
     @tf.function
     def call(self, x, t, y, step, training=False):
@@ -217,7 +218,7 @@ class Encoder(Model):
 
         hqy = self.hqy(x, step, training=training)
         mu_qy_t = self.mu_qy_t(hqy, step, training=training)
-        mu_qy_t = tf.reshape(mu_qy_t, (len(x), *self.y_dims, self.t_dims))
+        mu_qy_t = tf.reshape(mu_qy_t, (len(x), self.y_dims, self.t_dims))
         shape = tf.concat([[qt_sample.shape[0]],
                            tf.ones(tf.rank(mu_qy_t) - 2, dtype=tf.int32),
                            [qt_sample.shape[-1]]], axis=0)
@@ -231,14 +232,15 @@ class Encoder(Model):
                                         scale=tf.ones_like(qy_mean)),
                              reinterpreted_batch_ndims=1,
                              name="qy")
+
         if training:
-            xy = tf.concat([x, y], -1)
+            xy = tf.concat([hqy, y], -1)
         else:
-            xy = tf.concat([x, qy.sample()], -1)
+            xy = tf.concat([hqy, qy.sample()], -1)
 
         hidden_z = self.hqz(xy, step, training=training)
         mu_qz_t = self.qz_t(hidden_z, step, training=training)
-        mu_qz_t = tf.reshape(mu_qz_t, (len(x), *self.z_dims, self.t_dims))
+        mu_qz_t = tf.reshape(mu_qz_t, (len(x), self.z_dims * 2, self.t_dims))
         qz_mean, qz_std = tf.split(mu_qz_t, 2, axis=-2)
 
         if training:
@@ -275,6 +277,7 @@ class Decoder(Model):
         super().__init__(name=name_tag)
         self.category_sizes = category_sizes
         self.t_dims = t_dims
+        self.y_dims = y_dims
         self.z_dims = z_dims
         self.debug = debug
         network = eval(architecture_type)
@@ -282,31 +285,30 @@ class Decoder(Model):
         if architecture_type == "ResNet":
             x_out_dims = x_cont_dims[:-1] + (x_cont_dims[-1] * 2 +
                                              x_cat_dims[-1] * category_sizes, )
-            y_out_dims = y_dims[:-1] + (y_dims[-1] * t_dims, )
             self.x_split_dims = [x_cont_dims[-1], x_cont_dims[-1],
                                  x_cat_dims[-1] * category_sizes]
             self.x_cat_dims = x_cat_dims
-            self.y_dims = y_dims
+            intermediate_dims = x_cont_dims[:-1]
         else:
             x_out_dims = x_cont_dims * 2 + x_cat_dims * category_sizes
-            y_out_dims = y_dims * t_dims
             self.x_split_dims = [x_cont_dims, x_cont_dims,
                                  x_cat_dims * category_sizes]
             self.x_cat_dims = (x_cat_dims, )
-            self.y_dims = (y_dims, )
+            intermediate_dims = x_cont_dims
 
         self.x_logits = network(in_dims=z_dims, out_dims=x_out_dims,
-                                name_tag="x", n_layers=4,
+                                name_tag="x", n_layers=3,
                                 feature_maps=feature_maps,
+                                unsqueeze=True, squeeze_dims=intermediate_dims,
                                 debug=debug)
-        self.t_logits = network(in_dims=z_dims, out_dims=z_dims, name_tag="t",
-                                n_layers=1, feature_maps=feature_maps,
-                                squeeze=True, squeeze_dims=t_dims,
-                                debug=self.debug)
+        self.t_logits = FC_net(in_dims=z_dims, out_dims=z_dims, name_tag="t",
+                               n_layers=1, feature_maps=feature_maps,
+                               squeeze=True, squeeze_dims=t_dims,
+                               debug=self.debug)
 
-        self.mu_y_t = network(in_dims=z_dims, out_dims=y_out_dims,
-                              name_tag="mu_y_t", n_layers=2,
-                              feature_maps=feature_maps * 2, debug=debug)
+        self.mu_y_t = FC_net(in_dims=z_dims, out_dims=y_dims * t_dims,
+                             name_tag="mu_y_t", n_layers=2,
+                             feature_maps=feature_maps * 2, debug=debug)
 
     @tf.function
     def call(self, z, t, step, training=False):
@@ -324,7 +326,7 @@ class Decoder(Model):
 
         t_prob = nn.softmax(self.t_logits(z, step, training=training))
         mu_y_t = self.mu_y_t(z, step, training=training)
-        mu_y_t = tf.reshape(mu_y_t, (len(z), *self.y_dims, self.t_dims))
+        mu_y_t = tf.reshape(mu_y_t, (len(z), self.y_dims, self.t_dims))
 
         shape = tf.concat([[t.shape[0]],
                            tf.ones(tf.rank(mu_y_t) - 2, dtype=tf.int32),

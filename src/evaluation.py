@@ -69,7 +69,7 @@ def calc_stats(model, dataset, scaling_data, params):
     y_error_val = tf.Variable(tf.zeros((len_dataset, 2), dtype=tf.double))
 
     for i, features in dataset.batch(params["batch_size"]).enumerate(0):
-        x_bin, x_cont, t, y, y_cf, mu_0, mu_1 = features
+        x_bin, x_cont, t, t_cf, y, y_cf, mu_0, mu_1 = features
         t = tf.expand_dims(t[:, 0], axis=-1)
         true_ite = mu_1 - mu_0
 
