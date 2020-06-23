@@ -8,6 +8,7 @@ from collections import defaultdict
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder
 from scipy.special import expit
+from tensorflow.keras.losses import CategoricalCrossentropy, MeanSquaredError
 
 
 def IHDP(params, path_data="datasets/IHDP/csv/", separate_files=False,
@@ -47,8 +48,9 @@ def IHDP(params, path_data="datasets/IHDP/csv/", separate_files=False,
     params["x_cat_dims"] = 19
     params["x_cont_dims"] = 6
     params["t_dims"] = 2
+    params["t_loss"] = CategoricalCrossentropy()
     params["y_dims"] = 1
-    params["y_type"] = 'N'
+    params["y_loss"] = MeanSquaredError()
     params["z_dims"] = 16
     params['category_sizes'] = 2
     params['architecture_type'] = 'FC_net'
@@ -173,8 +175,9 @@ def TWINS(params, path_data="datasets/TWINS/",
     params["x_cat_dims"] = 3
     params["x_cont_dims"] = 0
     params["t_dims"] = 2
+    params["t_loss"] = CategoricalCrossentropy()
     params["y_dims"] = 1
-    params["y_type"] = 'B'
+    params["y_loss"] = CategoricalCrossentropy()
     params["z_dims"] = 16
     params["category_sizes"] = 10
     params['architecture_type'] = 'FC_net'
@@ -276,8 +279,9 @@ def SHAPES(params, path_data="datasets/SHAPES/", separate_files=None,
     params["x_cat_dims"] = (50, 50, 0)
     params["x_cont_dims"] = (50, 50, 3)
     params["t_dims"] = 20
+    params["t_loss"] = CategoricalCrossentropy()
     params["y_dims"] = (50, 50, 3)
-    params["y_type"] = 'N'
+    params["y_loss"] = MeanSquaredError()
     params["z_dims"] = (50, 50, 3)
     params["category_sizes"] = 0
     params['architecture_type'] = 'ResNet'
@@ -345,8 +349,9 @@ def SPACE(params, path_data='datasets/SPACE/', separate_files=None,
     params["x_cat_dims"] = (60, 60, 0)
     params["x_cont_dims"] = (60, 60, 3)
     params["t_dims"] = 2
+    params["t_loss"] = MeanSquaredError()
     params["y_dims"] = 1
-    params["y_type"] = 'N'
+    params["y_loss"] = MeanSquaredError()
     params["z_dims"] = 64
     params["category_sizes"] = 0
     params['architecture_type'] = 'ResNet'

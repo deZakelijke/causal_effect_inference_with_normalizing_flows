@@ -3,7 +3,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras import layers, Model
 from tensorflow.keras.activations import softplus
-from tensorflow.keras.losses import CategoricalCrossentropy
+from tensorflow.keras.losses import CategoricalCrossentropy, MeanSquaredError
 from tensorflow import nn
 from tensorflow_probability import distributions as tfd
 
@@ -33,7 +33,8 @@ class CEVAE(Model):
         y_dims=1,
         z_dims=32,
         category_sizes=2,
-        y_type='N',
+        t_loss=CategoricalCrossentropy(),
+        y_loss=MeanSquaredError(),
         name_tag="no_name",
         feature_maps=256,
         architecture_type="FC_net",
@@ -49,7 +50,8 @@ class CEVAE(Model):
         self.debug = debug
         self.category_sizes = category_sizes
         self.t_dims = t_dims
-        self.y_type = y_type
+        self.t_loss = t_loss
+        self.y_loss = y_loss
         self.log_steps = log_steps
         self.y_dims = y_dims
 
@@ -60,6 +62,7 @@ class CEVAE(Model):
         else:
             self.x_cat_dims = (x_cat_dims, )
             x_dims = x_cont_dims + x_cat_dims * category_sizes
+        self.architecture_type = architecture_type
 
         self.encode = Encoder(x_dims, t_dims, y_dims, z_dims, "Encoder",
                               feature_maps, architecture_type, debug)
@@ -104,16 +107,24 @@ class CEVAE(Model):
         distortion_x = CategoricalCrossentropy()(x_cat, x_cat_prob) \
             - get_log_prob(x_cont, 'N', mean=x_cont_mean,
                            std=x_cont_std)
-        distortion_t = CategoricalCrossentropy()(t, t_prob)
-        distortion_y = -get_log_prob(y, self.y_type, mean=y_mean, probs=y_mean)
+        # distortion_t = CategoricalCrossentropy()(t, t_prob)
+        distortion_t = self.t_loss(t, t_prob)
+        # distortion_y = -get_log_prob(y, self.y_type, mean=y_mean, probs=y_mean)
+        distortion_y = self.y_loss(y, y_mean)
 
         rate = get_analytical_KL_divergence(qz_mean, qz_std)
 
-        variational_t = CategoricalCrossentropy()(t, qt_prob)
-        variational_y = -get_log_prob(y, self.y_type, mean=qy_mean)
+        # variational_t = CategoricalCrossentropy()(t, qt_prob)
+        variational_t = self.t_loss(t, qt_prob)
+        # variational_y = -get_log_prob(y, self.y_type, mean=qy_mean)
+        variational_y = self.y_loss(y, qy_mean)
 
         if step is not None and step % (self.log_steps * 5) == 0:
             l_step = step // (self.log_steps * 5)
+            if self.architecture_type == "ResNet":
+                with tf.device("cpu:0"):
+                    tf.summary.image("reconstructed_proxy",
+                                     x_cont_mean, step=l_step, max_outputs=4)
             tf.summary.scalar("partial_loss/distortion_x",
                               tf.reduce_mean(distortion_x), step=l_step)
             tf.summary.scalar("partial_loss/distortion_t",
@@ -183,18 +194,18 @@ class Encoder(Model):
 
         self.qt_logits = network(in_dims=x_dims, out_dims=x_dims,
                                  name_tag="qt", n_layers=1,
-                                 feature_maps=feature_maps,
+                                 feature_maps=feature_maps * 8,
                                  squeeze=True, squeeze_dims=t_dims,
                                  debug=debug)
 
         self.hqy = network(in_dims=x_dims, out_dims=x_dims,
-                           name_tag="hqy", n_layers=2,
+                           name_tag="hqy", n_layers=3,
                            feature_maps=feature_maps, squeeze=True,
                            squeeze_dims=intermediate_dims, debug=debug)
 
         self.mu_qy_t = FC_net(in_dims=intermediate_dims, out_dims=y_dims * t_dims,
                                name_tag="mu_qy_t", n_layers=2,
-                               feature_maps=feature_maps * 2, debug=debug)
+                               feature_maps=feature_maps, debug=debug)
 
         self.hqz = FC_net(in_dims=intermediate_dims + y_dims,
                           out_dims=intermediate_dims,
@@ -203,7 +214,7 @@ class Encoder(Model):
 
         self.qz_t = FC_net(in_dims=intermediate_dims, out_dims=z_dims * 2 * t_dims,
                            name_tag="qz_t", n_layers=2,
-                           feature_maps=feature_maps * 2, debug=debug)
+                           feature_maps=feature_maps, debug=debug)
 
     @tf.function
     def call(self, x, t, y, step, training=False):
@@ -308,7 +319,7 @@ class Decoder(Model):
 
         self.mu_y_t = FC_net(in_dims=z_dims, out_dims=y_dims * t_dims,
                              name_tag="mu_y_t", n_layers=2,
-                             feature_maps=feature_maps * 2, debug=debug)
+                             feature_maps=feature_maps, debug=debug)
 
     @tf.function
     def call(self, z, t, step, training=False):
