@@ -51,9 +51,10 @@ class CEVAE(Model):
         self.category_sizes = category_sizes
         self.t_dims = t_dims
         self.t_loss = t_loss
+        self.y_dims = y_dims
         self.y_loss = y_loss
         self.log_steps = log_steps
-        self.y_dims = y_dims
+        self.architecture_type = architecture_type
 
         if architecture_type == "ResNet":
             self.x_cat_dims = x_cat_dims
@@ -62,7 +63,6 @@ class CEVAE(Model):
         else:
             self.x_cat_dims = (x_cat_dims, )
             x_dims = x_cont_dims + x_cat_dims * category_sizes
-        self.architecture_type = architecture_type
 
         self.encode = Encoder(x_dims, t_dims, y_dims, z_dims, "Encoder",
                               feature_maps, architecture_type, debug)
@@ -107,16 +107,12 @@ class CEVAE(Model):
         distortion_x = CategoricalCrossentropy()(x_cat, x_cat_prob) \
             - get_log_prob(x_cont, 'N', mean=x_cont_mean,
                            std=x_cont_std)
-        # distortion_t = CategoricalCrossentropy()(t, t_prob)
         distortion_t = self.t_loss(t, t_prob)
-        # distortion_y = -get_log_prob(y, self.y_type, mean=y_mean, probs=y_mean)
         distortion_y = self.y_loss(y, y_mean)
 
         rate = get_analytical_KL_divergence(qz_mean, qz_std)
 
-        # variational_t = CategoricalCrossentropy()(t, qt_prob)
         variational_t = self.t_loss(t, qt_prob)
-        # variational_y = -get_log_prob(y, self.y_type, mean=qy_mean)
         variational_y = self.y_loss(y, qy_mean)
 
         if step is not None and step % (self.log_steps * 5) == 0:

@@ -4,7 +4,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras import layers, Model
 from tensorflow.keras.activations import softplus
-from tensorflow.keras.losses import CategoricalCrossentropy
+from tensorflow.keras.losses import CategoricalCrossentropy, MeanSquaredError
 from tensorflow_probability import distributions as tfd
 
 from cevae import Encoder, Decoder
@@ -26,7 +26,8 @@ class CENF(Model):
         y_dims=1,
         z_dims=32,
         category_sizes=2,
-        y_type='N',
+        t_loss=CategoricalCrossentropy(),
+        y_loss=MeanSquaredError(),
         n_flows=2,
         name_tag="no_name",
         feature_maps=256,
@@ -43,10 +44,12 @@ class CENF(Model):
         super().__init__()
         self.debug = debug
         self.category_sizes = category_sizes
-        self.y_type = y_type
-        self.log_steps = log_steps
         self.t_dims = t_dims
+        self.t_loss = t_loss
         self.y_dims = y_dims
+        self.y_loss = y_loss
+        self.log_steps = log_steps
+        self.architecture_type = architecture_type
 
         if architecture_type == "ResNet":
             self.x_cat_dims = x_cat_dims
@@ -83,7 +86,7 @@ class CENF(Model):
              step):
         if self.debug:
             print("Calculating loss")
-        x_cat, x_cont, t, y, *_ = features
+        x_cat, x_cont, t, _, y, *_ = features
         qt_prob, qy_mean, qz_mean, qz_std = encoder_params
         x_cat_prob, x_cont_mean, x_cont_std, t_prob, y_mean = decoder_params
         x_cat = tf.reshape(x_cat, (len(x_cat), *self.x_cat_dims,
@@ -92,17 +95,20 @@ class CENF(Model):
         distortion_x = CategoricalCrossentropy()(x_cat, x_cat_prob) \
             - get_log_prob(x_cont, 'N', mean=x_cont_mean,
                            std=x_cont_std)
-        distortion_t = CategoricalCrossentropy()(t, t_prob)
-        distortion_y = -get_log_prob(y, self.y_type, mean=y_mean, probs=y_mean)
+        distortion_t = self.t_loss(t, t_prob)
+        distortion_y = self.y_loss(y, y_mean)
 
         rate = get_analytical_KL_divergence(qz_mean, qz_std)
 
-        variational_t = CategoricalCrossentropy()(t, qt_prob)
-        variational_y = -get_log_prob(y, self.y_type, mean=qy_mean,
-                                      probs=y_mean)
+        variational_t = self.t_loss(t, qt_prob)
+        variational_y = self.y_loss(y, qy_mean)
 
         if step is not None and step % (self.log_steps * 5) == 0:
             l_step = step // (self.log_steps * 5)
+            if self.architecture_type == "ResNet":
+                with tf.device("cpu:0"):
+                    tf.summary.image("reconstructed_proxy",
+                                     x_cont_mean, step=l_step, max_outputs=4)
             tf.summary.scalar("partial_loss/distortion_x",
                               tf.reduce_mean(distortion_x), step=l_step)
             tf.summary.scalar("partial_loss/distortion_t",
