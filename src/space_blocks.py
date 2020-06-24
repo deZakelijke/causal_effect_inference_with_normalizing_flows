@@ -45,7 +45,7 @@ class SpaceShapesGenerator():
     """
 
     def __init__(self, width=6, height=6, num_objects=5, prior_dims=64,
-                 seed=None):
+                 no_gravity=False, seed=None):
         self.width = width
         self.height = height
         self.num_objects = num_objects
@@ -56,7 +56,12 @@ class SpaceShapesGenerator():
                                                         num_objects, 2))
         self.position_map = random.standard_normal((prior_dims + num_objects,
                                                     width * height))
-        self.object_gravity = random.standard_normal((1, num_objects))
+        if no_gravity:
+            self.object_gravity = np.zeros((1, num_objects))
+            self.save_path = "datasets/SPACE_NO_GRAV/"
+        else:
+            self.object_gravity = random.standard_normal((1, num_objects))
+            self.save_path = "datasets/SPACE/"
         self.goal = np.array([[(height - 1) / 2, (width - 1)]])
         print(f"Gravities: {self.object_gravity[0]}")
 
@@ -73,12 +78,12 @@ class SpaceShapesGenerator():
                               object_positions])
 
         if save:
-            with h5py.File("datasets/SPACE/space_data_x.hdf5", "w") as f:
+            with h5py.File(f"{self.save_path}space_data_x.hdf5", "w") as f:
                 dset = f.create_dataset("Space_dataset_x", data=rendering)
 
         steering = prior_data @ self.intervention_map
         if save:
-            with h5py.File("datasets/SPACE/space_data_t.hdf5", "w") as f:
+            with h5py.File(f"{self.save_path}space_data_t.hdf5", "w") as f:
                 dset = f.create_dataset("Space_dataset_t", data=steering)
 
         if render:
@@ -98,7 +103,7 @@ class SpaceShapesGenerator():
             raise ValueError("Some scores are out of bounds")
 
         if save:
-            with h5py.File("datasets/SPACE/space_data_y.hdf5", "w") as f:
+            with h5py.File(f"{self.save_path}space_data_y.hdf5", "w") as f:
                 dset = f.create_dataset("Space_dataset_y", data=score)
 
         if render:
@@ -111,7 +116,7 @@ class SpaceShapesGenerator():
 
         steering *= -1
         if save:
-            with h5py.File("datasets/SPACE/space_data_t_cf.hdf5", "w") as f:
+            with h5py.File(f"{self.save_path}space_data_t_cf.hdf5", "w") as f:
                 dset = f.create_dataset("Space_dataset_t_cf", data=steering)
         move_result = self.move_spaceship(object_positions.copy(),
                                           object_gravity, steering)
@@ -120,7 +125,7 @@ class SpaceShapesGenerator():
         score = 1 - dist_to_goal / np.sqrt((self.height - 1) ** 2 +
                                            (self.width - 1) ** 2)
         if save:
-            with h5py.File("datasets/SPACE/space_data_y_cf.hdf5", "w") as f:
+            with h5py.File(f"{self.save_path}space_data_y_cf.hdf5", "w") as f:
                 dset = f.create_dataset("Space_dataset_y_cf", data=score)
 
     def move_spaceship(self, object_positions, object_gravity, steering):
@@ -183,5 +188,6 @@ class SpaceShapesGenerator():
 
 
 if __name__ == "__main__":
-    generator = SpaceShapesGenerator(width=6, height=6, num_objects=5)
-    generator.generate_data(1000, render=False, save=True)
+    generator = SpaceShapesGenerator(width=6, height=6, num_objects=5,
+                                     no_gravity=True)
+    generator.generate_data(1000, render=True, save=False)

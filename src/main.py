@@ -3,20 +3,20 @@ import numpy as np
 import logging
 import os
 import re
+import shutil
 import sys
 import tensorflow as tf
 import time
 
-# from causal_inference_worker import CIWorker
 from causal_real_nvp import CRNVP
 from cenf import CENF
 from cevae import CEVAE
 from contextlib import nullcontext
-from dataset import IHDP, TWINS, SHAPES, SPACE
+from dataset import IHDP, TWINS, SHAPES, SPACE, SPACE_NO_GRAV
 from evaluation import calc_stats
 
 VALID_MODELS = ["CEVAE", "CENF", "CRNVP"]
-VALID_DATASETS = ["IHDP", "TWINS", "SHAPES", "SPACE"]
+VALID_DATASETS = ["IHDP", "TWINS", "SPACE", "SPACE_NO_GRAV"]
 
 tf.keras.backend.set_floatx('float64')
 
@@ -81,7 +81,8 @@ def parse_arguments():
                         help="The type of model used for predictions. "
                         f"Available models are: {VALID_MODELS} "
                         "(default: CEVAE)")
-    parser.add_argument("--model_dir", type=str, default="/home/mgroot/logs/",
+    parser.add_argument("--model_dir", type=str,
+                        default="/home/mdegroot/logs/",
                         help="The directory to save the model to "
                         "(default: ~/logs/)")
     parser.add_argument("--n_flows", type=int, default=2,
@@ -176,7 +177,12 @@ def grad(model, features, step, debug):
     return loss, tape.gradient(loss, model.trainable_variables)
 
 
-def train(params, writer, train_iteration=0):
+def set_inputs(model, dataset):
+    data = dataset.__iter__().next()
+    model._set_inputs(tf.concat([data[0], data[1]], -1), data[2], data[4])
+
+
+def train(params, writer, logdir, train_iteration=0):
     """ Runs training of selected model.
 
     Loads a dataset and trains a new mode lfor the specified number of epochs.
@@ -192,6 +198,9 @@ def train(params, writer, train_iteration=0):
     writer : tensorflow.summary.writer
         The writer opbject to which all results and logs are written.
         Can be None
+
+    logdir : str
+        Directory in which to save the model
 
     train_iteration : int, optional
         Incrementor that should count the repetitions of times train()
@@ -213,11 +222,10 @@ def train(params, writer, train_iteration=0):
     scaling_data = params['scaling_data']
 
     len_dataset = cardinality(train_dataset)
-    train_dataset = train_dataset.shuffle(len_dataset)
     len_dataset = cardinality(test_dataset)
-    test_dataset = test_dataset.shuffle(len_dataset)
 
     model = eval(params['model'])(**params)
+    set_inputs(model, train_dataset)
 
     optimizer = tf.keras.optimizers.Adam(learning_rate=params["learning_rate"])
     len_epoch = cardinality(train_dataset.batch(params["batch_size"]))
@@ -226,6 +234,7 @@ def train(params, writer, train_iteration=0):
 
     with writer.as_default() if writer is not None else nullcontext():
         for epoch in range(params["epochs"]):
+            train_dataset = train_dataset.shuffle(len_dataset)
             if params['debug']:
                 print(f"Epoch: {epoch}")
             avg_loss = 0
@@ -237,6 +246,7 @@ def train(params, writer, train_iteration=0):
                 optimizer.apply_gradients(zip(grads,
                                               model.trainable_variables))
             if epoch % params["log_steps"] == 0:
+                test_dataset = test_dataset.shuffle(len_dataset)
                 print(f"Epoch: {epoch}, average training loss: "
                       f"{(avg_loss / tf.cast(len_epoch, tf.float64)):.4f}")
                 l_step = (epoch + global_log_step) // params['log_steps']
@@ -246,6 +256,8 @@ def train(params, writer, train_iteration=0):
                 print_stats(stats, l_step, training=True)
                 stats = calc_stats(model, test_dataset, scaling_data, params)
                 print_stats(stats, l_step, training=False)
+                if not params["debug"]:
+                    model.save_weights(f"{logdir}/model_{train_iteration}")
 
         print(f"Epoch: {epoch}, average loss: "
               f"{(avg_loss / tf.dtypes.cast(len_epoch, tf.float64)):.4f}")
@@ -280,13 +292,14 @@ def main(params):
                   f"{params['experiment_name']}")
         writer = tf.summary.create_file_writer(logdir)
     else:
+        logdir = None
         writer = None
 
     if params["separate_files"]:
         total_stats_train = []
         total_stats_test = []
         for i in range(repetitions):
-            stats_train, stats_test = train(params, writer, i)
+            stats_train, stats_test = train(params, writer, logdir, i)
             total_stats_train.append(stats_train)
             total_stats_test.append(stats_test)
         total_stats_train = np.array(total_stats_train)
@@ -300,9 +313,8 @@ def main(params):
                 print_stats(total_stats_test.mean(0),
                             params['epochs'] * repetitions //
                             params['log_steps'] + 1, training=False)
-
     else:
-        train(params, writer)
+        train(params, writer, logdir)
 
 
 if __name__ == "__main__":

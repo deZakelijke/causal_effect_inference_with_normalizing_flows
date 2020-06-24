@@ -403,6 +403,11 @@ def SPACE(params, path_data='datasets/SPACE/', separate_files=None,
     return train_set, test_set
 
 
+def SPACE_NO_GRAV(params, path_data='datasets/SPACE_NO_GRAV/',
+                  separate_files=None,
+                  file_index=None):
+    return SPACE(params, path_data, separate_files, file_index)
+
 
 def load_list_dict_h5py(fname):
     """Restore list of dictionaries containing numpy arrays from h5py file."""

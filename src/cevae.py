@@ -151,13 +151,13 @@ class CEVAE(Model):
 
 
 class Encoder(Model):
-    """ 
+    """
     New plan, we assume y is a scalar or vector to make life a bit simpler.
     That means that networks generating y have to have a bottleneck at the end.
     We can then also assume that z is a vector, so networks generating z will
     have to have a bottleneck as well. From z to x we might need a reshape
     or upsampling thingy.
-    """ 
+    """
 
     def __init__(
         self,
@@ -199,16 +199,18 @@ class Encoder(Model):
                            feature_maps=feature_maps, squeeze=True,
                            squeeze_dims=intermediate_dims, debug=debug)
 
-        self.mu_qy_t = FC_net(in_dims=intermediate_dims, out_dims=y_dims * t_dims,
-                               name_tag="mu_qy_t", n_layers=2,
-                               feature_maps=feature_maps, debug=debug)
+        self.mu_qy_t = FC_net(in_dims=intermediate_dims,
+                              out_dims=y_dims * t_dims,
+                              name_tag="mu_qy_t", n_layers=2,
+                              feature_maps=feature_maps, debug=debug)
 
         self.hqz = FC_net(in_dims=intermediate_dims + y_dims,
                           out_dims=intermediate_dims,
                           name_tag="hqz", n_layers=2,
                           feature_maps=feature_maps, debug=debug)
 
-        self.qz_t = FC_net(in_dims=intermediate_dims, out_dims=z_dims * 2 * t_dims,
+        self.qz_t = FC_net(in_dims=intermediate_dims,
+                           out_dims=z_dims * 2 * t_dims,
                            name_tag="qz_t", n_layers=2,
                            feature_maps=feature_maps, debug=debug)
 
