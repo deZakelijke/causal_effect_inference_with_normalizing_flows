@@ -56,6 +56,8 @@ class CEVAE(Model):
         self.log_steps = log_steps
         self.architecture_type = architecture_type
 
+        self.annealing_factor = 1e-8
+
         if architecture_type == "ResNet":
             self.x_cat_dims = x_cat_dims
             x_dims = x_cont_dims[:-1] + (x_cont_dims[-1] + x_cat_dims[-1] *
@@ -104,9 +106,13 @@ class CEVAE(Model):
         x_cat = tf.reshape(x_cat, (len(x_cat), *self.x_cat_dims,
                                    self.category_sizes))
 
-        distortion_x = CategoricalCrossentropy()(x_cat, x_cat_prob) \
-            - get_log_prob(x_cont, 'N', mean=x_cont_mean,
-                           std=x_cont_std)
+        # distortion_x = CategoricalCrossentropy()(x_cat, x_cat_prob) \
+        #     - get_log_prob(x_cont, 'N', mean=x_cont_mean,
+        #                    std=x_cont_std)
+        distortion_x_cat = CategoricalCrossentropy()(x_cat, x_cat_prob)
+        distortion_x_cont = -get_log_prob(x_cont, 'N', mean=x_cont_mean)
+                                          # std=x_cont_std)
+        distortion_x = distortion_x_cat + distortion_x_cont
         distortion_t = self.t_loss(t, t_prob)
         distortion_y = self.y_loss(y, y_mean)
 
@@ -123,6 +129,11 @@ class CEVAE(Model):
                                      x_cont_mean, step=l_step, max_outputs=4)
             tf.summary.scalar("partial_loss/distortion_x",
                               tf.reduce_mean(distortion_x), step=l_step)
+            tf.summary.scalar("partial_loss/distortion_x_cat",
+                              tf.reduce_mean(distortion_x_cat), step=l_step)
+            tf.summary.scalar("partial_loss/distortion_x_cont",
+                              tf.reduce_mean(distortion_x_cont), step=l_step)
+
             tf.summary.scalar("partial_loss/distortion_t",
                               tf.reduce_mean(distortion_t), step=l_step)
             tf.summary.scalar("partial_loss/distortion_y",
@@ -134,8 +145,12 @@ class CEVAE(Model):
             tf.summary.scalar("partial_loss/variational_y",
                               tf.reduce_mean(variational_y), step=l_step)
 
-        elbo_local = -(rate + distortion_x + distortion_t + distortion_y +
-                       variational_t + variational_y)
+        elbo_local = -(self.annealing_factor * rate +
+                       distortion_x +
+                       distortion_t +
+                       distortion_y +
+                       variational_t +
+                       variational_y)
         elbo = tf.reduce_mean(elbo_local)
         return -elbo
 
@@ -324,10 +339,10 @@ class Decoder(Model):
         if self.debug:
             print("Decoding")
         x_logits = self.x_logits(z, step, training=training)
-        x_cont_mean, x_cont_std, x_cat_logits = tf.split(x_logits,
+        x_cont_mean, x_cont_logvar, x_cat_logits = tf.split(x_logits,
                                                          self.x_split_dims,
                                                          axis=-1)
-        x_cont_std = softplus(x_cont_std)
+        x_cont_std = softplus(x_cont_logvar)
         x_cat_prob = nn.softmax(tf.reshape(x_cat_logits, (len(z),
                                                           *self.x_cat_dims,
                                                           self.category_sizes

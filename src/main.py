@@ -258,6 +258,7 @@ def train(params, writer, logdir, train_iteration=0):
                 print_stats(stats, l_step, training=False)
                 if not params["debug"]:
                     model.save_weights(f"{logdir}/model_{train_iteration}")
+            model.annealing_factor += 1 / params["epochs"]
 
         print(f"Epoch: {epoch}, average loss: "
               f"{(avg_loss / tf.dtypes.cast(len_epoch, tf.float64)):.4f}")

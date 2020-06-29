@@ -3,6 +3,8 @@ import tensorflow as tf
 import time
 
 from coupling import CouplingLayers
+from fc_net import FC_net
+from res_net import ResNet
 from tensorflow.keras import Model
 from tensorflow.keras.layers import Dense
 
@@ -26,7 +28,7 @@ class CRNVP(Model):
         x_cat_dims=(50, 50, 0),
         x_cont_dims=(50, 50, 3),
         t_dims=16,
-        y_dims=(50, 50, 3),
+        y_dims=1,
         z_dims=(50, 50, 6),
         category_sizes=0,
         name_tag="no_name",
@@ -48,6 +50,8 @@ class CRNVP(Model):
         super().__init__(name=name_tag)
         self.debug = debug
         self.log_steps = log_steps
+        network = eval(architecture_type)
+
         if architecture_type == "FC_net":
             y_dims *= 2
             self.y_dims = (y_dims, )
@@ -82,6 +86,17 @@ class CRNVP(Model):
             self.flow_z = CouplingLayers(z_dims, "flow_z", feature_maps, 0,
                                          n_scales, n_layers, activation,
                                          architecture_type, debug=debug)
+
+            self.supervised_t = network(in_dims=x_dims, out_dims=x_dims,
+                                        name_tag='sup_t', n_layers=1,
+                                        feature_maps=feature_maps,
+                                        squeeze=True, squeeze_dims=t_dims,
+                                        debug=debug)
+            self.supervised_y = network(in_dims=x_dims, out_dims=x_dims,
+                                        name_tag='sup_y', n_layers=3,
+                                        squeeze=True,
+                                        squeeze_dims=y_dims * t_dim,
+                                        debug=debug)
 
     def dequantize(self, z, factor=1.0):
         """ Dequantisation of the input data.
@@ -243,10 +258,17 @@ class CRNVP(Model):
         log_pxy = log_pz + ldj
         log_2 = tf.math.log(tf.constant(2., dtype=tf.float64))
         bpd = -log_pxy / (tf.size(z[0], out_type=tf.float64) * log_2)
-        return bpd, ldj, z
+
+
+        sup_t = self.supervised_t(x, step, training=training)
+        sup_y = self.supervised_y(x, step, training=training)
+        sup_y = tf.reshape(sup_y, (len(x), self.y_dims, self.t_dims))
+        sup_t = tf.reshape(sup_t, (len(x), 1, self.t_dims))
+        sup_y = tf.reduce_sum(sup_t * sup_y, axis=-1)
+        return bpd, ldj, z, sup_t, sup_y
 
     @tf.function
-    def loss(self, features, bpd, ldj, z, step):
+    def loss(self, features, bpd, ldj, z, sup_y, sup_y, step):
         """ Loss function of the model. """
         if self.debug:
             print("Calculating loss")

@@ -51,6 +51,8 @@ class CENF(Model):
         self.log_steps = log_steps
         self.architecture_type = architecture_type
 
+        self.annealing_factor = 1e-8
+
         if architecture_type == "ResNet":
             self.x_cat_dims = x_cat_dims
             x_dims = x_cont_dims[:-1] + (x_cont_dims[-1] + x_cat_dims[-1] *
@@ -124,7 +126,8 @@ class CENF(Model):
             tf.summary.scalar("partial_loss/variational_y",
                               tf.reduce_mean(variational_y), step=l_step)
 
-        elbo_local = -(rate + distortion_x + distortion_t + distortion_y +
+        elbo_local = -(self.annealing_factor * rate + distortion_x +
+                       distortion_t + distortion_y +
                        variational_t + variational_y - ldj_z)
         elbo = tf.reduce_mean(input_tensor=elbo_local)
         return -elbo
