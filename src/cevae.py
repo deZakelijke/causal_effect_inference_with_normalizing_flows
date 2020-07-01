@@ -100,7 +100,7 @@ class CEVAE(Model):
     def loss(self, features, encoder_params, decoder_params, step):
         if self.debug:
             print("Calculating loss")
-        x_cat, x_cont, t, y, *_ = features
+        x_cat, x_cont, t, _, y, *_ = features
         qt_prob, qy_mean, qz_mean, qz_std = encoder_params
         x_cat_prob, x_cont_mean, x_cont_std, t_prob, y_mean = decoder_params
         x_cat = tf.reshape(x_cat, (len(x_cat), *self.x_cat_dims,
@@ -110,8 +110,8 @@ class CEVAE(Model):
         #     - get_log_prob(x_cont, 'N', mean=x_cont_mean,
         #                    std=x_cont_std)
         distortion_x_cat = CategoricalCrossentropy()(x_cat, x_cat_prob)
-        distortion_x_cont = -get_log_prob(x_cont, 'N', mean=x_cont_mean)
-                                          # std=x_cont_std)
+        distortion_x_cont = -get_log_prob(x_cont, 'N', mean=x_cont_mean,
+                                          std=x_cont_std)
         distortion_x = distortion_x_cat + distortion_x_cont
         distortion_t = self.t_loss(t, t_prob)
         distortion_y = self.y_loss(y, y_mean)
@@ -154,7 +154,7 @@ class CEVAE(Model):
         elbo = tf.reduce_mean(elbo_local)
         return -elbo
 
-    def do_intervention(self, x, nr_samples):
+    def do_intervention(self, x, t, t_cf, nr_samples):
         *_, qz_mean, qz_std = self.encode(x, None, None, None, training=False)
         final_shape = (nr_samples, qz_mean.shape[0], self.y_dims, self.t_dims)
         qz = tf.random.normal((nr_samples, *qz_mean.shape), dtype=tf.float64)

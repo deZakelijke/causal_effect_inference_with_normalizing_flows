@@ -6,6 +6,7 @@ from coupling import CouplingLayers
 from fc_net import FC_net
 from res_net import ResNet
 from tensorflow.keras import Model
+from tensorflow.keras.losses import CategoricalCrossentropy, MeanSquaredError
 from tensorflow.keras.layers import Dense
 
 
@@ -31,6 +32,8 @@ class CRNVP(Model):
         y_dims=1,
         z_dims=(50, 50, 6),
         category_sizes=0,
+        t_loss=CategoricalCrossentropy(),
+        y_loss=MeanSquaredError(),
         name_tag="no_name",
         feature_maps=32,
         n_scales=2,
@@ -50,17 +53,25 @@ class CRNVP(Model):
         super().__init__(name=name_tag)
         self.debug = debug
         self.log_steps = log_steps
+        self.t_dims = t_dims
+        self.t_loss = t_loss
+        self.y_dims = y_dims
+        self.y_loss = y_loss
         network = eval(architecture_type)
 
+        self.annealing_factor = 1e-8
+
         if architecture_type == "FC_net":
-            y_dims *= 2
-            self.y_dims = (y_dims, )
-            z_dims = x_dims + y_dims
-            self.dims_split = [x_dims, y_dims]
+            self.x_dims = (x_dims, )
+            # y_dims *= 2
+            # self.y_dims = y_dims
+            z_dims = x_dims + y_dims * 2
+            self.dims_split = [x_dims, y_dims * 2]
         else:
-            z_dims = x_dims[:-1] + (x_dims[-1] + y_dims[-1], )
-            self.dims_split = [x_dims[-1], y_dims[-1]]
-            self.y_dims = y_dims
+            self.x_dims = x_dims
+            # z_dims = x_dims[:-1] + (x_dims[-1] + y_dims[-1], )
+            z_dims = tf.reduce_prod(x_dims) + y_dims * 2
+            self.dims_split = [tf.reduce_prod(x_dims), y_dims * 2]
 
         with tf.name_scope(f"RealNVP/{name_tag}") as scope:
             self.flow_x = CouplingLayers(x_dims, "flow_x", feature_maps, 0,
@@ -73,8 +84,8 @@ class CRNVP(Model):
             n_scales = 1
             self.flow_y = CouplingLayers(y_dims, "flow_y", feature_maps, 0,
                                          n_scales, n_layers, activation,
-                                         architecture_type, context=True,
-                                         context_dims=self.y_dims[-1],
+                                         "FC_net", context=True,
+                                         context_dims=self.t_dims,
                                          debug=debug)
             self.t_map = Dense(tf.reduce_prod(y_dims))
             # Context dims is what is concatenated to y. So the output of
@@ -85,7 +96,7 @@ class CRNVP(Model):
             n_scales = 2
             self.flow_z = CouplingLayers(z_dims, "flow_z", feature_maps, 0,
                                          n_scales, n_layers, activation,
-                                         architecture_type, debug=debug)
+                                         "FC_net", debug=debug)
 
             self.supervised_t = network(in_dims=x_dims, out_dims=x_dims,
                                         name_tag='sup_t', n_layers=1,
@@ -95,7 +106,7 @@ class CRNVP(Model):
             self.supervised_y = network(in_dims=x_dims, out_dims=x_dims,
                                         name_tag='sup_y', n_layers=3,
                                         squeeze=True,
-                                        squeeze_dims=y_dims * t_dim,
+                                        squeeze_dims=y_dims * t_dims,
                                         debug=debug)
 
     def dequantize(self, z, factor=1.0):
@@ -246,8 +257,9 @@ class CRNVP(Model):
         # y, ldj = self.logit_normalize(y, ldj)
 
         x_intermediate, ldj = self.flow_x(x, ldj, step, training=training)
-        # y = self.project(y)
-        t = tf.reshape(self.t_map(t), (len(y), *self.y_dims))
+        x_intermediate = tf.reshape(x_intermediate, (len(x), -1))
+        y = self.project(y)
+        t = tf.reshape(self.t_map(t), (len(y), self.y_dims))
 
         y_intermediate, ldj = self.flow_y(y, ldj, step, training=training, t=t)
         # TODO Flow y with context t
@@ -268,33 +280,44 @@ class CRNVP(Model):
         return bpd, ldj, z, sup_t, sup_y
 
     @tf.function
-    def loss(self, features, bpd, ldj, z, sup_y, sup_y, step):
+    def loss(self, features, bpd, ldj, z, sup_t, sup_y, step):
         """ Loss function of the model. """
         if self.debug:
             print("Calculating loss")
+        _, _, t, _, y, *_ = features
+
+        variational_t = self.t_loss(t, sup_t)
+        variational_y = self.y_loss(y, sup_y)
 
         if step is not None and step % (self.log_steps * 5) == 0:
             l_step = step // (self.log_steps * 5)
             tf.summary.scalar("partial_loss/ldj",
                               tf.reduce_mean(ldj), step=l_step)
+            tf.summary.scalar("partial_loss/variational_t",
+                              tf.reduce_mean(variational_t), step=l_step)
+            tf.summary.scalar("partial_loss/variational_y",
+                              tf.reduce_mean(variational_y), step=l_step)
 
-        loss = tf.reduce_mean(bpd)
+        loss = tf.reduce_mean(bpd + variational_t + variational_y)
         return loss
 
-    @tf.function
+    # @tf.function
     def _reverse_flow(self, z, t, ldj):
         """ Reverse of flow"""
 
         z, ldj = self.flow_z(z, ldj, None, reverse=True)
         x, y = tf.split(z, self.dims_split, axis=-1)
+        x = tf.reshape(x, (len(x), *self.x_dims))
+        # print(y.shape, t.shape)
         y, ldj = self.flow_y(y, ldj, None, reverse=True, t=t)
         y = self.project(y, reverse=True)
+        # print(y.shape)
         x, ldj = self.flow_x(x, ldj, None, reverse=True)
 
         # y, ldj = self.logit_normalize(y, ldj, reverse=True)
         # x, ldj = self.logit_normalize(x, ldj, reverse=True)
 
-        return x, y, ldj
+        return x, y
 
     def sample(self, n_samples):
         shape = (n_samples, self.dims[0], self.dims[1], self.dims[2] * 2)
@@ -303,32 +326,28 @@ class CRNVP(Model):
         x, y, ldj = self._reverse_flow(z, ldj, 0)
         return x, y
 
-    def do_intervention(self, x, nr_samples):
+    def do_intervention(self, x, t, t_cf, nr_samples):
         """ Do an intervention for t=0 and t=1. """
-        # TODO parallelise this
-        y_values = [-1.5, -0.75, 0., 0.75, 1.5]
-        t_values = [0., 1.]
-        z_values = []
-        for y in y_values:
-            y = tf.constant(y, shape=(1, 1), dtype=tf.float64)
-            y = tf.tile(y, (x.shape[0], 1))
-            for t in t_values:
-                t = tf.constant([t, 1-t], shape=(1, 2), dtype=tf.float64)
-                print(t.shape)
-                t = tf.tile(t, (x.shape[0], 1))
-                print(t.shape)
-                bpd, ldj, z = self(x, t, y, None)
-                z_values.append(z)
-        z = tf.reduce_mean(z_values, axis=0)
-        t = tf.tile(tf.constant(0., shape=(1, 1), dtype=tf.float64),
-                    (z.shape[0], 1))
-        _, y_0, _ = self._reverse_flow(z, t, bpd)
+        sup_t = self.supervised_t(x, None, training=False)
+        sup_y = self.supervised_y(x, None, training=False)
+        sup_y = tf.reshape(sup_y, (len(x), self.y_dims, self.t_dims))
+        sup_t = tf.reshape(sup_t, (len(x), 1, self.t_dims))
+        sup_y = tf.reduce_sum(sup_t * sup_y, axis=-1)
 
-        t = tf.tile(tf.constant(1., shape=(1, 1), dtype=tf.float64),
-                    (z.shape[0], 1))
-        _, y_1, _ = self._reverse_flow(z, t, bpd)
+        ldj = tf.zeros(x.shape[0], dtype=tf.float64)
+        x_intermediate, ldj = self.flow_x(x, ldj, None, training=False)
+        x_intermediate = tf.reshape(x_intermediate, (len(x), -1))
+        sup_y = self.project(sup_y)
+        sup_t = tf.reshape(self.t_map(sup_t), (len(sup_y), self.y_dims))
 
-        return y_0, y_1
+        sup_y_intermediate, ldj = self.flow_y(sup_y, ldj, None, training=False, t=t)
+
+        z = tf.concat([x_intermediate, sup_y_intermediate], axis=-1)
+        z, ldj = self.flow_z(z, ldj, None, training=False)
+
+        x_pred, y_pred = self._reverse_flow(z, t, ldj)
+        x_pred_cf, y_pred_cf = self._reverse_flow(z, t_cf, ldj)
+        return y_pred, y_pred_cf
 
 
 def test_model():

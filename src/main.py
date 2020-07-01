@@ -69,7 +69,7 @@ def parse_arguments():
     parser.add_argument("--feature_maps", type=int, default=200,
                         help="Number of nodes in hidden fully connected layers"
                         " or number of filters in convolutional layers. "
-                        "(default: 32)")
+                        "(default: 200)")
     parser.add_argument("--learning_rate", type=float, default=1e-4,
                         help="Learning rate of the optmiser (default: 1e-4)")
     parser.add_argument("--log_steps", type=int, default=10,

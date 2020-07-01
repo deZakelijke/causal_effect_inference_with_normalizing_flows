@@ -132,7 +132,7 @@ class CENF(Model):
         elbo = tf.reduce_mean(input_tensor=elbo_local)
         return -elbo
 
-    def do_intervention(self, x, nr_samples):
+    def do_intervention(self, x, t, t_cf, nr_samples):
         *_, qz_mean, qz_std = self.encode(x, None, None, None, training=False)
         final_shape = (nr_samples, qz_mean.shape[0], self.y_dims, self.t_dims)
         qz = tf.random.normal((nr_samples, *qz_mean.shape), dtype=tf.float64)
