@@ -30,11 +30,11 @@ class CEVAE(Model):
         x_cat_dims=10,
         x_cont_dims=10,
         t_dims=2,
+        t_type='Categorical',
         y_dims=1,
+        y_type='Normal',
         z_dims=32,
         category_sizes=2,
-        t_loss=CategoricalCrossentropy(),
-        y_loss=MeanSquaredError(),
         name_tag="no_name",
         feature_maps=256,
         architecture_type="FC_net",
@@ -50,9 +50,7 @@ class CEVAE(Model):
         self.debug = debug
         self.category_sizes = category_sizes
         self.t_dims = t_dims
-        self.t_loss = t_loss
         self.y_dims = y_dims
-        self.y_loss = y_loss
         self.log_steps = log_steps
         self.architecture_type = architecture_type
 
@@ -60,15 +58,35 @@ class CEVAE(Model):
 
         if architecture_type == "ResNet":
             self.x_cat_dims = x_cat_dims
-            x_dims = x_cont_dims[:-1] + (x_cont_dims[-1] + x_cat_dims[-1] *
-                                         category_sizes, )
         else:
             self.x_cat_dims = (x_cat_dims, )
-            x_dims = x_cont_dims + x_cat_dims * category_sizes
 
-        self.encode = Encoder(x_dims, t_dims, y_dims, z_dims, "Encoder",
-                              feature_maps, architecture_type, debug)
-        self.decode = Decoder(x_cat_dims, x_cont_dims, t_dims, y_dims, z_dims,
+        if t_type == "Categorical":
+            self.t_loss = CategoricalCrossentropy()
+            t_dist = lambda x: tfd.OneHotCategorical(probs=x,
+                                                     dtype=tf.float64)
+            t_activation = nn.softmax
+        else:
+            self.t_loss = MeanSquaredError()
+            t_dist = lambda x: tfd.Normal(x, scale=tf.ones_like(x))
+            t_activation = lambda x: x
+
+        if y_type == "Categorical":
+            self.y_loss = CategoricalCrossentropy()
+            y_dist = lambda x: tfd.OneHotCategorical(probs=x,
+                                                     dtype=tf.float64)
+            y_activation = nn.softmax
+        else:
+            self.y_loss = MeanSquaredError()
+            y_dist = lambda x: tfd.Normal(x, scale=tf.ones_like(x))
+            y_activation = lambda x: x
+
+        self.encode = Encoder(x_dims, t_dims, t_dist, t_activation,
+                              y_dims, y_dist, y_activation, z_dims,
+                              "Encoder", feature_maps, architecture_type,
+                              debug)
+        self.decode = Decoder(x_cat_dims, x_cont_dims, t_dims,
+                              t_activation, y_dims, y_activation, z_dims,
                               category_sizes, "Decoder", feature_maps,
                               architecture_type, debug)
 
@@ -178,7 +196,11 @@ class Encoder(Model):
         self,
         x_dims=30,
         t_dims=2,
+        t_dist=None,
+        t_activation=None,
         y_dims=1,
+        y_dist=None,
+        y_activation=None,
         z_dims=32,
         name_tag="no_name",
         feature_maps=200,
@@ -193,7 +215,11 @@ class Encoder(Model):
 
         super().__init__(name=name_tag)
         self.t_dims = t_dims
+        self.t_dist = t_dist
+        self.t_activation = t_activation
         self.y_dims = y_dims
+        self.y_dist = y_dist
+        self.y_activation = y_activation
         self.z_dims = z_dims
         self.debug = debug
         network = eval(architecture_type)
@@ -202,6 +228,7 @@ class Encoder(Model):
             intermediate_dims = feature_maps * 16
         else:
             intermediate_dims = feature_maps
+
 
         self.qt_logits = network(in_dims=x_dims, out_dims=x_dims,
                                  name_tag="qt", n_layers=1,
@@ -233,9 +260,8 @@ class Encoder(Model):
     def call(self, x, t, y, step, training=False):
         if self.debug:
             print("Encoding")
-        qt_prob = nn.softmax(self.qt_logits(x, step, training=training))
-        qt = tfd.Independent(tfd.OneHotCategorical(probs=qt_prob,
-                                                   dtype=tf.float64),
+        qt_prob = self.t_activation(self.qt_logits(x, step, training=training))
+        qt = tfd.Independent(self.t_dist(qt_prob), 
                              reinterpreted_batch_ndims=1,
                              name="qt")
         qt_sample = qt.sample()
@@ -252,8 +278,8 @@ class Encoder(Model):
         else:
             qt_sample = tf.reshape(qt_sample, shape)
             qy_mean = tf.reduce_sum(qt_sample * mu_qy_t, axis=-1)
-        qy = tfd.Independent(tfd.Normal(loc=qy_mean,
-                                        scale=tf.ones_like(qy_mean)),
+        qy_mean = self.y_activation(qy_mean)
+        qy = tfd.Independent(self.y_dist(qy_mean), 
                              reinterpreted_batch_ndims=1,
                              name="qy")
 
@@ -283,7 +309,9 @@ class Decoder(Model):
         x_cat_dims=10,
         x_cont_dims=10,
         t_dims=2,
+        t_activation=None,
         y_dims=1,
+        y_activation=None,
         z_dims=32,
         category_sizes=2,
         name_tag="no_name",
@@ -301,7 +329,9 @@ class Decoder(Model):
         super().__init__(name=name_tag)
         self.category_sizes = category_sizes
         self.t_dims = t_dims
+        self.t_activation = t_activation
         self.y_dims = y_dims
+        self.y_activation = y_activation
         self.z_dims = z_dims
         self.debug = debug
         network = eval(architecture_type)
@@ -348,7 +378,7 @@ class Decoder(Model):
                                                           self.category_sizes
                                                           )))
 
-        t_prob = nn.softmax(self.t_logits(z, step, training=training))
+        t_prob = self.t_activation(self.t_logits(z, step, training=training))
         mu_y_t = self.mu_y_t(z, step, training=training)
         mu_y_t = tf.reshape(mu_y_t, (len(z), self.y_dims, self.t_dims))
 
@@ -356,7 +386,7 @@ class Decoder(Model):
                            tf.ones(tf.rank(mu_y_t) - 2, dtype=tf.int32),
                            [t.shape[-1]]], axis=0)
         t = tf.reshape(t, shape)
-        y_mean = tf.reduce_sum(t * mu_y_t, axis=-1)
+        y_mean = self.y_activation(tf.reduce_sum(t * mu_y_t, axis=-1))
 
         return x_cat_prob, x_cont_mean, x_cont_std, t_prob, y_mean
 

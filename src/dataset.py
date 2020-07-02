@@ -9,6 +9,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder
 from scipy.special import expit
 from tensorflow.keras.losses import CategoricalCrossentropy, MeanSquaredError
+from tensorflow_probability import distributions as tfd
 
 
 def IHDP(params, path_data="datasets/IHDP/csv/", separate_files=False,
@@ -48,9 +49,9 @@ def IHDP(params, path_data="datasets/IHDP/csv/", separate_files=False,
     params["x_cat_dims"] = 19
     params["x_cont_dims"] = 6
     params["t_dims"] = 2
-    params["t_loss"] = CategoricalCrossentropy()
+    params["t_type"] = 'Categorical'
     params["y_dims"] = 1
-    params["y_loss"] = MeanSquaredError()
+    params["y_type"] = "Normal"
     params["z_dims"] = 16
     params['category_sizes'] = 2
     params['architecture_type'] = 'FC_net'
@@ -175,9 +176,9 @@ def TWINS(params, path_data="datasets/TWINS/",
     params["x_cat_dims"] = 3
     params["x_cont_dims"] = 0
     params["t_dims"] = 2
-    params["t_loss"] = CategoricalCrossentropy()
+    params["t_type"] = "Categorical"
     params["y_dims"] = 1
-    params["y_loss"] = CategoricalCrossentropy()
+    params["y_type"] = "Categorical"
     params["z_dims"] = 16
     params["category_sizes"] = 10
     params['architecture_type'] = 'FC_net'
@@ -349,9 +350,9 @@ def SPACE(params, path_data='datasets/SPACE/', separate_files=None,
     params["x_cat_dims"] = (60, 60, 0)
     params["x_cont_dims"] = (60, 60, 3)
     params["t_dims"] = 2
-    params["t_loss"] = MeanSquaredError()
+    params["t_type"] = "Normal"
     params["y_dims"] = 1
-    params["y_loss"] = MeanSquaredError()
+    params["y_type"] = "Normal"
     params["z_dims"] = 64
     params["category_sizes"] = 0
     params['architecture_type'] = 'ResNet'
@@ -467,8 +468,8 @@ def test_SPACE():
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
-    # test_IHDP()
-    # print()
+    test_IHDP()
+    print()
     # test_TWINS()
     # print()
     # test_SHAPES()

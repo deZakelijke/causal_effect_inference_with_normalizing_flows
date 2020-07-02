@@ -7,27 +7,28 @@ from tensorflow.keras.activations import softplus
 from tensorflow.keras.losses import CategoricalCrossentropy, MeanSquaredError
 from tensorflow_probability import distributions as tfd
 
-from cevae import Encoder, Decoder
+from cevae import CEVAE, Encoder, Decoder
 from evaluation import calc_stats
 from planar_flow import PlanarFlow
 from utils import get_log_prob, get_analytical_KL_divergence
 
 
-class CENF(Model):
+class CENF(CEVAE):
     """ Causal Effect Normalising Flow
 
     """
 
     def __init__(
         self,
+        x_dims=30,
         x_cat_dims=10,
         x_cont_dims=10,
         t_dims=2,
+        t_type='Categorical',
         y_dims=1,
+        y_type='Normal',
         z_dims=32,
         category_sizes=2,
-        t_loss=CategoricalCrossentropy(),
-        y_loss=MeanSquaredError(),
         n_flows=2,
         name_tag="no_name",
         feature_maps=256,
@@ -41,31 +42,22 @@ class CENF(Model):
         ----------
 
         """
-        super().__init__()
-        self.debug = debug
-        self.category_sizes = category_sizes
-        self.t_dims = t_dims
-        self.t_loss = t_loss
-        self.y_dims = y_dims
-        self.y_loss = y_loss
-        self.log_steps = log_steps
-        self.architecture_type = architecture_type
-
-        self.annealing_factor = 1e-8
-
-        if architecture_type == "ResNet":
-            self.x_cat_dims = x_cat_dims
-            x_dims = x_cont_dims[:-1] + (x_cont_dims[-1] + x_cat_dims[-1] *
-                                         category_sizes, )
-        else:
-            self.x_cat_dims = (x_cat_dims, )
-            x_dims = x_cont_dims + x_cat_dims * category_sizes
-
-        self.encode = Encoder(x_dims, t_dims, y_dims, z_dims, "Encoder",
-                              feature_maps, architecture_type, debug)
-        self.decode = Decoder(x_cat_dims, x_cont_dims, t_dims, y_dims, z_dims,
-                              category_sizes, "Decoder", feature_maps,
-                              architecture_type, debug)
+        super().__init__(
+            x_dims=x_dims,
+            x_cat_dims=x_cat_dims,
+            x_cont_dims=x_cont_dims,
+            t_dims=t_dims,
+            t_type=t_type,
+            y_dims=y_dims,
+            y_type=y_type,
+            z_dims=z_dims,
+            category_sizes=category_sizes,
+            name_tag=name_tag,
+            feature_maps=feature_maps,
+            architecture_type=architecture_type,
+            log_steps=log_steps,
+            debug=debug
+        )
         self.z_flow = PlanarFlow(z_dims, n_flows)
 
     @tf.function
