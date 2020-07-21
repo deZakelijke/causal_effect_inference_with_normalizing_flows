@@ -10,7 +10,7 @@ class ResNet(Model):
     def __init__(self, in_dims=(16, 16, 3), out_dims=(16, 16, 3),
                  name_tag="res_net", n_layers=3, feature_maps=32,
                  activation='elu', squeeze=False, squeeze_dims=None,
-                 unsqueeze=False, debug=False):
+                 unsqueeze=False, coord_conv=False, debug=False):
         """
         Parameters
         ----------
@@ -51,16 +51,22 @@ class ResNet(Model):
         self.name_tag = name_tag
         self.activation = Activation(activation)
         self.squeeze = squeeze
+        self.coord_conv = coord_conv
+
         assert name_tag != "", "Name tag can't be an empty stirng"
         try:
             channels_in = in_dims[2]
         except TypeError:
             channels_in = 1
+        if coord_conv:
+            channels_in += 2
+
         channels_out = out_dims[2]
         try:
             image_size = (in_dims[0], in_dims[1])
         except TypeError:
             image_size = (out_dims[0], out_dims[1])
+        self.image_size = image_size
         intermediate_dim = (None, *image_size, feature_maps)
 
         self.in_layers = Sequential()
@@ -123,6 +129,8 @@ class ResNet(Model):
     @tf.function
     def call(self, x, step, training=False):
         with tf.name_scope(f"ResNet/{self.name_tag}") as scope:
+            if self.coord_conv:
+                x = self.add_coordinate_channels(x)
             x = self.in_layers(x)
             x = self.bn_in(x)
             x = tf.concat([x, -x], 3)
@@ -142,6 +150,33 @@ class ResNet(Model):
                 self.log_weights(step)
 
         return x
+
+    def add_coordinate_channels(self, x):
+        """ Adding coord conv channels to the images.
+        
+        https://github.com/uber-research/CoordConv/blob/master/CoordConv.py
+        """
+        batch_size = x.shape[0]
+
+        xx_ones = tf.ones((batch_size, self.image_size[0], 1),
+                           dtype=tf.float64)
+        xx_range = tf.expand_dims(tf.range(self.image_size[1],
+                                  dtype=tf.float64), 0)
+        xx_range = tf.expand_dims(tf.tile(xx_range, [batch_size, 1]), 1)
+        xx_channel = xx_ones * xx_range
+        xx_channel = tf.expand_dims(xx_channel, -1)
+
+        yy_ones = tf.ones((batch_size, 1, self.image_size[1]),
+                          dtype=tf.float64)
+        yy_range = tf.expand_dims(tf.range(self.image_size[0],
+                                  dtype=tf.float64), 0)
+        yy_range = tf.expand_dims(tf.tile(yy_range, [batch_size, 1]), -1)
+        yy_channel = tf.expand_dims(yy_ones * yy_range, -1)
+
+        xx_channel = xx_channel / (self.image_size[0] - 1) * 2 - 1
+        yy_channel = yy_channel / (self.image_size[1] - 1) * 2 - 1
+        return tf.concat([x, xx_channel, yy_channel], -1)
+
 
     def log_weights(self, step):
         name = self.bn_in.name
@@ -281,7 +316,8 @@ def test_residual_network():
     x = tf.zeros((2, 10, 20, 8), dtype=tf.float64)
 
     model = ResNet(in_dims, out_dims, name_tag, residual_blocks, feature_maps,
-                   activation, squeeze=True, squeeze_dims=1, debug=True)
+                   activation, squeeze=True, squeeze_dims=1, coord_conv=True,
+                   debug=True)
     out = model(x, 0, training=True)
     tf.debugging.assert_equal(out.shape, (2, 1),
                               "Shape mismatch in resnet")
