@@ -10,7 +10,7 @@ class ResNet(Model):
     def __init__(self, in_dims=(16, 16, 3), out_dims=(16, 16, 3),
                  name_tag="res_net", n_layers=3, feature_maps=32,
                  activation='elu', squeeze=False, squeeze_dims=None,
-                 unsqueeze=False, coord_conv=False, debug=False):
+                 unsqueeze=False, coord_conv=True, debug=False):
         """
         Parameters
         ----------
@@ -58,8 +58,6 @@ class ResNet(Model):
             channels_in = in_dims[2]
         except TypeError:
             channels_in = 1
-        if coord_conv:
-            channels_in += 2
 
         channels_out = out_dims[2]
         try:
@@ -78,6 +76,10 @@ class ResNet(Model):
             self.in_layers.add(Reshape((*image_size, channels_in)))
         else:
             self.in_layers.add(Lambda(tf.identity))
+
+        if coord_conv:
+            channels_in += 2
+
         self.bn_in = BatchNormalization(axis=3, dtype=tf.float64,
                                         fused=False, name="BN_in")
         self.bn_in.build((None, *image_size, channels_in))
@@ -129,9 +131,9 @@ class ResNet(Model):
     @tf.function
     def call(self, x, step, training=False):
         with tf.name_scope(f"ResNet/{self.name_tag}") as scope:
+            x = self.in_layers(x)
             if self.coord_conv:
                 x = self.add_coordinate_channels(x)
-            x = self.in_layers(x)
             x = self.bn_in(x)
             x = tf.concat([x, -x], 3)
             x = self.activation(x)

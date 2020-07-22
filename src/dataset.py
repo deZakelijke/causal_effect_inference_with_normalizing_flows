@@ -101,16 +101,30 @@ def IHDP(params, path_data="datasets/IHDP/csv/", separate_files=False,
 
     idx_tr, idx_te = train_test_split(np.arange(x.shape[0]), test_size=0.1,
                                       random_state=1)
+    idx_tr = np.arange(x.shape[0])
+    idx_te = np.arange(0)
     x_cont = np.array(x_cont)
     x_bin = np.array(x_bin, dtype=int)
     enc = OneHotEncoder(categories='auto', sparse=False)
     x_bin = enc.fit(x_bin).transform(x_bin)
 
+    # Make an array of the two value for t we want to compare in the ITE
     t = np.expand_dims(np.array(t), axis=1)
     t = enc.fit(t).transform(t)
-    t_cf = 1 - t
+    t_predict = np.zeros((len(t), 2, 2))
+    t_predict[:, 0, 0] = 1
+    t_predict[:, 1, 1] = 1
     y = np.expand_dims(np.array(y), axis=1)
     y_cf = np.expand_dims(np.array(y_cf), axis=1)
+
+    # we pick either y or y_cf depending on the value of t
+    y_predict = np.zeros((len(y), 2, 1))
+    idx_f = (t_predict[:, 0]==t)[:, 0]
+    idx_cf = (t_predict[:, 0]!=t)[:, 0]
+    y_predict[idx_f, 0] = y[idx_f]
+    y_predict[~idx_f, 1] = y[~idx_f]
+    y_predict[~idx_f, 0] = y_cf[~idx_f]
+    y_predict[idx_f, 1] = y_cf[idx_f]
 
     y_mean = np.mean(tf.concat([y, y_cf], 1))
     y_std = np.std(tf.concat([y, y_cf], 1))
@@ -126,17 +140,17 @@ def IHDP(params, path_data="datasets/IHDP/csv/", separate_files=False,
     train_set = tf.data.Dataset.from_tensor_slices(((x_bin[idx_tr],
                                                      x_cont[idx_tr],
                                                      t[idx_tr],
-                                                     t_cf[idx_tr],
+                                                     t_predict[idx_tr],
                                                      y[idx_tr],
-                                                     y_cf[idx_tr],
+                                                     y_predict[idx_tr],
                                                      mu_0[idx_tr],
                                                      mu_1[idx_tr])))
     test_set = tf.data.Dataset.from_tensor_slices(((x_bin[idx_te],
                                                     x_cont[idx_te],
                                                     t[idx_te],
-                                                    t_cf[idx_te],
+                                                    t_predict[idx_te],
                                                     y[idx_te],
-                                                    y_cf[idx_te],
+                                                    y_predict[idx_te],
                                                     mu_0[idx_te],
                                                     mu_1[idx_te])))
 
@@ -238,7 +252,24 @@ def TWINS(params, path_data="datasets/TWINS/",
     t = np.expand_dims(t, axis=1).astype(float)
     enc = OneHotEncoder(categories='auto', sparse=False)
     t = enc.fit(t).transform(t)
-    t_cf = 1 - t
+
+    # Make an array of the two value for t we want to compare in the ITE
+    t = np.expand_dims(np.array(t), axis=1)
+    t = enc.fit(t).transform(t)
+    t_predict = np.zeros((len(t), 2, 2))
+    t_predict[:, 0, 0] = 1
+    t_predict[:, 1, 1] = 1
+    y = np.expand_dims(np.array(y), axis=1)
+    y_cf = np.expand_dims(np.array(y_cf), axis=1)
+
+    # we pick either y or y_cf depending on the value of t
+    y_predict = np.zeros((len(y), 2, 1))
+    idx_f = (t_predict[:, 0]==t)[:, 0]
+    idx_cf = (t_predict[:, 0]!=t)[:, 0]
+    y_predict[idx_f, 0] = y[idx_f]
+    y_predict[~idx_f, 1] = y[~idx_f]
+    y_predict[~idx_f, 0] = y_cf[~idx_f]
+    y_predict[idx_f, 1] = y_cf[idx_f]
 
     mu_1 = np.expand_dims(data_y[indices, 1], axis=1)
     mu_0 = np.expand_dims(data_y[indices, 0], axis=1)
@@ -248,17 +279,17 @@ def TWINS(params, path_data="datasets/TWINS/",
     train_set = tf.data.Dataset.from_tensor_slices(((x_cat[idx_tr],
                                                      x_cont[idx_tr],
                                                      t[idx_tr],
-                                                     t_cf[idx_tr],
+                                                     t_predict[idx_tr],
                                                      y[idx_tr],
-                                                     y_cf[idx_tr],
+                                                     y_predict[idx_tr],
                                                      mu_1[idx_tr],
                                                      mu_0[idx_tr])))
     test_set = tf.data.Dataset.from_tensor_slices(((x_cat[idx_te],
                                                     x_cont[idx_te],
                                                     t[idx_te],
-                                                    t_cf[idx_te],
+                                                    t_predict[idx_te],
                                                     y[idx_te],
-                                                    y_cf[idx_te],
+                                                    y_predict[idx_te],
                                                     mu_1[idx_te],
                                                     mu_0[idx_te])))
     scaling_data = (0, 1)
@@ -474,4 +505,4 @@ if __name__ == "__main__":
     # print()
     # test_SHAPES()
     # print()
-    test_SPACE()
+    # test_SPACE()
