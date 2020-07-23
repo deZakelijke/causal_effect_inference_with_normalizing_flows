@@ -101,8 +101,6 @@ def IHDP(params, path_data="datasets/IHDP/csv/", separate_files=False,
 
     idx_tr, idx_te = train_test_split(np.arange(x.shape[0]), test_size=0.1,
                                       random_state=1)
-    idx_tr = np.arange(x.shape[0])
-    idx_te = np.arange(0)
     x_cont = np.array(x_cont)
     x_bin = np.array(x_bin, dtype=int)
     enc = OneHotEncoder(categories='auto', sparse=False)
@@ -392,12 +390,12 @@ def SPACE(params, path_data='datasets/SPACE/', separate_files=None,
         x = np.array(f['Space_dataset_x'])
     with h5py.File(f"{path_data}space_data_t.hdf5", "r") as f:
         t = np.array(f['Space_dataset_t'])
-    with h5py.File(f"{path_data}space_data_t_cf.hdf5", "r") as f:
-        t_cf = np.array(f['Space_dataset_t_cf'])
+    with h5py.File(f"{path_data}space_data_t_predict.hdf5", "r") as f:
+        t_predict = np.array(f['Space_dataset_t_predict'])
     with h5py.File(f"{path_data}space_data_y.hdf5", "r") as f:
         y = np.array(f['Space_dataset_y'])
-    with h5py.File(f"{path_data}space_data_y_cf.hdf5", "r") as f:
-        y_cf = np.array(f['Space_dataset_y_cf'])
+    with h5py.File(f"{path_data}space_data_y_predict.hdf5", "r") as f:
+        y_predict = np.array(f['Space_dataset_y_predict'])
 
     idx_tr, idx_te = train_test_split(np.arange(x.shape[0]), test_size=0.1,
                                       random_state=1)
@@ -405,13 +403,16 @@ def SPACE(params, path_data='datasets/SPACE/', separate_files=None,
     x_cont = x
     x_cat = np.zeros((len(x_cont), 60, 60, 0))
     y = np.expand_dims(np.array(y), axis=1)
-    y_cf = np.expand_dims(np.array(y_cf), axis=1)
-    y_mean = np.mean(tf.concat([y, y_cf], 1))
-    y_std = np.std(tf.concat([y, y_cf], 1))
+    # y_cf = np.expand_dims(np.array(y_cf), axis=1)
+    # y_mean = np.mean(tf.concat([y, y_cf], 1))
+    y_mean = np.mean(y)
+    # y_std = np.std(tf.concat([y, y_cf], 1))
+    y_std = np.std(y)
     y = (y - y_mean) / y_std
-    y_cf = (y_cf - y_mean) / y_std
+    # y_cf = (y_cf - y_mean) / y_std
     scaling_data = (y_mean, y_std)
     params['scaling_data'] = scaling_data
+    y_predict = np.expand_dims(y_predict, -1)
 
     mu_1 = np.zeros((len(x_cont), 1))
     mu_0 = np.zeros((len(x_cont), 1))
@@ -419,17 +420,17 @@ def SPACE(params, path_data='datasets/SPACE/', separate_files=None,
     train_set = tf.data.Dataset.from_tensor_slices(((x_cat[idx_tr],
                                                      x_cont[idx_tr],
                                                      t[idx_tr],
-                                                     t_cf[idx_tr],
+                                                     t_predict[idx_tr],
                                                      y[idx_tr],
-                                                     y_cf[idx_tr],
+                                                     y_predict[idx_tr],
                                                      mu_0[idx_tr],
                                                      mu_1[idx_tr])))
     test_set = tf.data.Dataset.from_tensor_slices(((x_cat[idx_te],
                                                     x_cont[idx_te],
                                                     t[idx_te],
-                                                    t_cf[idx_te],
+                                                    t_predict[idx_te],
                                                     y[idx_te],
-                                                    y_cf[idx_te],
+                                                    y_predict[idx_te],
                                                     mu_0[idx_te],
                                                     mu_1[idx_te])))
     return train_set, test_set
@@ -499,10 +500,10 @@ def test_SPACE():
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
-    test_IHDP()
+    # test_IHDP()
     print()
     # test_TWINS()
     # print()
     # test_SHAPES()
     # print()
-    # test_SPACE()
+    test_SPACE()

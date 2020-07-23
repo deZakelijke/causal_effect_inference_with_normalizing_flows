@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+from tensorflow_probability import distributions as tfd
 
 
 def calc_stats(model, dataset, scaling_data, params):
@@ -23,15 +24,23 @@ def calc_stats(model, dataset, scaling_data, params):
 
     nr_samples = 100
 
-    def rmse_ite(ypred1, ypred0, y):
+    def rmse_ite(ypred1, ypred0, y, idx0, idx1):
+        """ Calculate the square errors of the ITE
+
+        Only the squares of the errors terms are calculated. They are summed
+        donwstream.
+        It is important to note that we make use of the 'strong ignorability'
+        condition to calculate the ITE.
+        """
         # pred_ite = tf.zeros_like(true_ite)
         pred_ite = tf.zeros((len(true_ite), 1), dtype=tf.float64)
-        t_new = tf.squeeze(t)
-        idx1, idx0 = tf.where(t_new == 1), tf.where(t_new == 0)
-        ite1 = tf.gather_nd(y, idx1) - tf.gather_nd(ypred0, idx1)
-        ite0 = tf.gather_nd(ypred1, idx0) - tf.gather_nd(y, idx0)
-        pred_ite += tf.scatter_nd(idx1, ite1, pred_ite.shape)
-        pred_ite += tf.scatter_nd(idx0, ite0, pred_ite.shape)
+        # ite1 = tf.gather_nd(y, idx1) - tf.gather_nd(ypred0, idx1)
+        ite1 = y * idx1 - ypred0 * idx1
+        # ite0 = tf.gather_nd(ypred1, idx0) - tf.gather_nd(y, idx0)
+        ite0 = ypred1 * idx0 - y * idx0
+        # pred_ite += tf.scatter_nd(idx1, ite1, pred_ite.shape)
+        # pred_ite += tf.scatter_nd(idx0, ite0, pred_ite.shape)
+        pred_ite = ite1 + ite0
         return tf.square(true_ite - pred_ite)
 
     def abs_ate(ypred1, ypred0, true_ite):
@@ -44,19 +53,32 @@ def calc_stats(model, dataset, scaling_data, params):
     def pehe(ypred1, ypred0, mu_1, mu_0):
         return tf.square((mu_1 - mu_0) - (ypred1 - ypred0))
 
-    def y_errors(ypred0, ypred1, y, y_cf):
-        ypred = (1 - t) * ypred0 + t * ypred1
-        ypred_cf = t * ypred0 + (1 - t) * ypred1
-        se_factual = tf.square(ypred - y)
-        se_cfactual = tf.square(ypred_cf - y_cf)
+    def y_errors(ypred0, ypred1, y_predict, idx_f, idx_cf):
+        y_err0 = tf.square(y_predict[:, 0] - ypred0)
+        y_err1 = tf.square(y_predict[:, 1] - ypred1)
+        se_factual = y_err0 * idx_f + y_err1 * idx_cf
+        se_cfactual = y_err0 * idx_cf + y_err1 * idx_f
         return tf.concat([se_factual, se_cfactual], -1)
 
-    """
-    def y_errors_pcf(ypred, ypred_cf, y, y_cf):
-        rmse_factual = tf.sqrt(tf.reduce_mean(tf.square(ypred - y)))
-        rmse_cfactual = tf.sqrt(tf.reduce_mean(tf.square(ypred_cf - y_cf)))
-        return rmse_factual, rmse_cfactual
-    """
+    def calculate_indices(t, t0, t1, y, y0, y1):
+        t0_diff = tf.norm(tf.abs(t - t0), axis=1, keepdims=True) 
+        t1_diff = tf.norm(tf.abs(t - t1), axis=1, keepdims=True) 
+        y0_diff = tf.norm(tf.abs(y - y0), axis=1, keepdims=True) 
+        y1_diff = tf.norm(tf.abs(y - y1), axis=1, keepdims=True) 
+
+        idx0 = tf.cast(tf.greater(t1_diff, t0_diff), tf.float64)
+        idx1 = 1. - idx0
+
+        idx_f = tf.cast(tf.greater(y1_diff, y0_diff), tf.float64)
+        idx_cf = 1. - idx_f
+        """
+        We run into a new problem here, namely that we need to determine 
+        the indices without exact matches between t and t0, t1.
+        Similarly for y and y0, y1
+        Since we need to make a split into two pieces we might as well
+        just pick the one that is closest in both cases.
+        """
+        return idx0, idx1, idx_f, idx_cf
 
     len_dataset = 0
     for _ in dataset:
@@ -69,36 +91,47 @@ def calc_stats(model, dataset, scaling_data, params):
     y_error_val = tf.Variable(tf.zeros((len_dataset, 2), dtype=tf.double))
 
     for i, features in dataset.batch(params["batch_size"]).enumerate(0):
-        x_bin, x_cont, t, t_cf, y, y_cf, mu_0, mu_1 = features
-        t = tf.expand_dims(t[:, 0], axis=-1)
-        t_cf = tf.expand_dims(t_cf[:, 0], axis=-1)
-        # Why were we doing this? Because it was a binary one-hot encoding
-        # So we want to both generalise our metric and generalise the method
-        # That does the intervention. Both assume a binary intervention. 
-        # The intervention method could be changed to factual and counterfactual
-        # but what should the value of the counterfactual intervention be?
-        true_ite = mu_1 - mu_0
+        """
+        We need two arrays to select from other arrays. On the one hand
+        we need to select the factual and counterfactual entries from
+        the entries that are sorted by wheter or not the value of their
+        intervention belongs to the first intervention or the zero'th
+        intervention. After that we need to select from the y values
+        that are sorted by being factual on wheter or not in the factual
+        case we used the zero'th or first intervention value.
+        """
+        x_bin, x_cont, t, t_predict, y, y_predict, mu_0, mu_1 = features
 
         x = tf.concat([x_bin, x_cont], -1)
-        ypred0, ypred1 = model.do_intervention(x, tf.zeros_like(t),
-                                               tf.ones_like(t_cf), nr_samples)
-        # ypred0 = tf.expand_dims(ypred0, -1)
-        # ypred1 = tf.expand_dims(ypred1, -1)
+        # how do we define these in a dynamic way?
+        # We need y and y_cf in some way. Or maybe not?
+        t0 = t_predict[:, 0]
+        t1 = t_predict[:, 1]
+        y0 = y_predict[:, 0]
+        y1 = y_predict[:, 1]
+
+        idx0, idx1, idx_f, idx_cf = calculate_indices(t, t0, t1, y, y0, y1)
+        true_ite = mu_1 - mu_0
+
+        ypred0, ypred1 = model.do_intervention(x, t0, t1, nr_samples)
+
         y_mean, y_std = scaling_data[0], scaling_data[1]
         ypred0, ypred1 = ypred0 * y_std + y_mean, ypred1 * y_std + y_mean
         y = y * y_std + y_mean
-        y_cf = y_cf * y_std + y_mean
 
         slice_indices = (i * features[0].shape[0],
                          (i + 1) * features[0].shape[0])
         ite_scores = ite_scores[slice_indices[0]:slice_indices[1]].\
-            assign(rmse_ite(ypred1, ypred0, y))
+            assign(rmse_ite(ypred1, ypred0, y, idx0, idx1))
+
         ate_scores = ate_scores[slice_indices[0]:slice_indices[1]].\
             assign(abs_ate(ypred1, ypred0, true_ite))
+
         pehe_scores = pehe_scores[slice_indices[0]:slice_indices[1]].\
             assign(pehe(ypred1, ypred0, mu_1, mu_0))
+
         y_error_val = y_error_val[slice_indices[0]:slice_indices[1]].\
-            assign(y_errors(ypred1, ypred0, y, y_cf))
+            assign(y_errors(ypred1, ypred0, y_predict, idx_f, idx_cf))
 
     ite = tf.sqrt(tf.reduce_mean(ite_scores))
     ate = tf.abs(tf.reduce_mean(ate_scores[:, 0]) -
