@@ -114,19 +114,39 @@ class SpaceShapesGenerator():
             plt.title(f"Movement: {move_result[1][0]}\nScore: {score[0]:.2f}")
             plt.show()
 
-        steering *= -1
-        if save:
-            with h5py.File(f"{self.save_path}space_data_t_cf.hdf5", "w") as f:
-                dset = f.create_dataset("Space_dataset_t_cf", data=steering)
-        move_result = self.move_spaceship(object_positions.copy(),
-                                          object_gravity, steering)
+        # Okay so here we need to sample two set of vectors for t
+        # One is a standard normal and the other one is going to the right
+        # We then calculate the y values and we save them.
+        steering_0 = random.standard_normal(steering.shape)
+        steering_1 = random.normal(loc=(0, 1), size=steering.shape)
 
-        dist_to_goal = np.linalg.norm(move_result[0][:, 0] - self.goal, axis=1)
-        score = 1 - dist_to_goal / np.sqrt((self.height - 1) ** 2 +
-                                           (self.width - 1) ** 2)
+        move_result_0 = self.move_spaceship(object_positions.copy(),
+                                            object_gravity, steering_0)
+        move_result_1 = self.move_spaceship(object_positions.copy(),
+                                            object_gravity, steering_1)
+        dist_to_goal_0 = np.linalg.norm(move_result_0[0][:, 0] - self.goal,
+                                        axis=1)
+        dist_to_goal_1 = np.linalg.norm(move_result_1[0][:, 0] - self.goal,
+                                        axis=1)
+        score_0 = 1 - dist_to_goal_0 / np.sqrt((self.height - 1) ** 2 +
+                  (self.width - 1) ** 2)
+        score_1 = 1 - dist_to_goal_1 / np.sqrt((self.height - 1) ** 2 +
+                  (self.width - 1) ** 2)
+
+        steering_0 = np.reshape(steering_0, (len(steering_0), 1, 2))
+        steering_1 = np.reshape(steering_1, (len(steering_1), 1, 2))
+        steering_predict = np.concatenate((steering_0, steering_1), axis=1)
+        score_0 = np.reshape(score_0, (len(score_0), 1))
+        score_1 = np.reshape(score_1, (len(score_1), 1))
+        score_predict = np.concatenate((score_0, score_1), axis=1)
+
         if save:
-            with h5py.File(f"{self.save_path}space_data_y_cf.hdf5", "w") as f:
-                dset = f.create_dataset("Space_dataset_y_cf", data=score)
+            with h5py.File(f"{self.save_path}space_data_t_predict.hdf5", "w") as f:
+                dset = f.create_dataset("Space_dataset_t_predict",
+                                        data=steering_predict)
+            with h5py.File(f"{self.save_path}space_data_y_predict.hdf5", "w") as f:
+                dset = f.create_dataset("Space_dataset_y_predict",
+                                        data=score_predict)
 
     def move_spaceship(self, object_positions, object_gravity, steering):
         """
@@ -190,4 +210,4 @@ class SpaceShapesGenerator():
 if __name__ == "__main__":
     generator = SpaceShapesGenerator(width=6, height=6, num_objects=5,
                                      no_gravity=True)
-    generator.generate_data(1000, render=True, save=False)
+    generator.generate_data(10, render=False, save=True)
