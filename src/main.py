@@ -14,8 +14,9 @@ from cevae import CEVAE
 from contextlib import nullcontext
 from dataset import IHDP, TWINS, SHAPES, SPACE, SPACE_NO_GRAV
 from evaluation import calc_stats
+from tar_net import TARNet
 
-VALID_MODELS = ["CEVAE", "CENF", "CRNVP"]
+VALID_MODELS = ["CEVAE", "CENF", "CRNVP", "TARNET"]
 VALID_DATASETS = ["IHDP", "TWINS", "SPACE", "SPACE_NO_GRAV"]
 
 tf.keras.backend.set_floatx('float64')
@@ -113,7 +114,7 @@ def parse_arguments():
     if not args.mode == "train":
         raise NotImplementedError("Only training mode is implemented")
 
-    if args.model == "cevae":
+    if args.model == "cevae" or args.model=="tarnet":
         args.n_flows = 0
 
     for arg, value in vars(args).items():
