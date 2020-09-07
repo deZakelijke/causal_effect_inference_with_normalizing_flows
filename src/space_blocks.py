@@ -209,5 +209,5 @@ class SpaceShapesGenerator():
 
 if __name__ == "__main__":
     generator = SpaceShapesGenerator(width=6, height=6, num_objects=5,
-                                     no_gravity=True)
-    generator.generate_data(10, render=False, save=True)
+                                     no_gravity=False)
+    generator.generate_data(5000, render=False, save=True)

@@ -382,7 +382,7 @@ def SPACE(params, path_data='datasets/SPACE/', separate_files=None,
     params["t_type"] = "Normal"
     params["y_dims"] = 1
     params["y_type"] = "Normal"
-    params["z_dims"] = 64
+    params["z_dims"] = 256
     params["category_sizes"] = 0
     params['architecture_type'] = 'ResNet'
 

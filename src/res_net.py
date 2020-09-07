@@ -1,7 +1,9 @@
+import numpy as np
 import tensorflow as tf
 from tensorflow.keras import Model, activations, Sequential
 from tensorflow.keras.layers import Activation, BatchNormalization
 from tensorflow.keras.layers import Conv2D, Dense, Flatten, Reshape, Lambda
+from tensorflow.keras.layers import Conv2DTranspose
 
 
 class ResNet(Model):
@@ -69,11 +71,37 @@ class ResNet(Model):
 
         self.in_layers = Sequential()
         if unsqueeze:
-            dense_in = Dense(tf.reduce_prod(squeeze_dims), activation=None,
-                             dtype=tf.float64)
-            dense_in.build((None, in_dims))
-            self.in_layers.add(dense_in)
-            self.in_layers.add(Reshape((*image_size, channels_in)))
+            assert np.sqrt(in_dims) ** 2 == in_dims
+            im_height = int(np.sqrt(in_dims))
+            conv_trans1 = Conv2DTranspose(channels_in,
+                                          kernel_size=(3, 3),
+                                          data_format="channels_last",
+                                          activation=activation,
+                                          use_bias=True,
+                                          dtype=tf.float64,
+                                          dilation_rate=8)
+            conv_trans2 = Conv2DTranspose(channels_in,
+                                          kernel_size=(3, 3),
+                                          data_format="channels_last",
+                                          activation=activation,
+                                          use_bias=True,
+                                          dtype=tf.float64,
+                                          dilation_rate=6)
+            conv_trans3 = Conv2DTranspose(channels_in,
+                                          kernel_size=(3, 3),
+                                          data_format="channels_last",
+                                          activation=activation,
+                                          use_bias=True,
+                                          dtype=tf.float64,
+                                          dilation_rate=8)
+            conv_trans1.build((None, im_height, im_height, channels_in))
+            conv_trans2.build((None, 24, 24, channels_in))
+            conv_trans3.build((None, 40, 40, channels_in))
+            self.in_layers.add(Reshape((im_height, im_height, channels_in)))
+            self.in_layers.add(conv_trans1)
+            self.in_layers.add(conv_trans2)
+            self.in_layers.add(conv_trans3)
+
         else:
             self.in_layers.add(Lambda(tf.identity))
 

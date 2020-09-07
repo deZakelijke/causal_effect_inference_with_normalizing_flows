@@ -54,7 +54,7 @@ class CEVAE(Model):
         self.log_steps = log_steps
         self.architecture_type = architecture_type
 
-        self.annealing_factor = 1.
+        self.annealing_factor = 1e-4
 
         if architecture_type == "ResNet":
             self.x_cat_dims = x_cat_dims
@@ -128,8 +128,9 @@ class CEVAE(Model):
         #     - get_log_prob(x_cont, 'N', mean=x_cont_mean,
         #                    std=x_cont_std)
         distortion_x_cat = CategoricalCrossentropy()(x_cat, x_cat_prob)
-        distortion_x_cont = -get_log_prob(x_cont, 'N', mean=x_cont_mean,
-                                          std=x_cont_std)
+        # distortion_x_cont = -get_log_prob(x_cont, 'N', mean=x_cont_mean,
+        #                                   std=x_cont_std)
+        distortion_x_cont = MeanSquaredError()(x_cont, x_cont_mean)
         distortion_x = distortion_x_cat + distortion_x_cont
         distortion_t = self.t_loss(t, t_prob)
         distortion_y = self.y_loss(y, y_mean)
@@ -168,26 +169,27 @@ class CEVAE(Model):
                        distortion_t +
                        distortion_y +
                        variational_t +
-                       variational_y)
+                       variational_y
+                       )
         elbo = tf.reduce_mean(elbo_local)
         return -elbo
 
-    def do_intervention(self, x, t0, t1, nr_samples):
+    def do_intervention(self, x, t0, t1, n_samples):
         """ Perform two interventions to compare downstream.
 
-        Use nr_samples for both number of samples from latent space
+        Use n_samples for both number of samples from latent space
         and for number of samples from intervention distribution.
 
         """
         # Get latent confounder
         *_, qz_mean, qz_std = self.encode(x, None, None, None, training=False)
-        # final_shape = (nr_samples, qz_mean.shape[0], self.y_dims, self.t_dims)
-        qz = tf.random.normal((nr_samples, *qz_mean.shape), dtype=tf.float64)
+        # final_shape = (n_samples, qz_mean.shape[0], self.y_dims, self.t_dims)
+        qz = tf.random.normal((n_samples, *qz_mean.shape), dtype=tf.float64)
         z = qz * qz_std + qz_mean
 
         # Do simulation with intervention variable
         # We have to sample t0 and t1 several times
-        y0, y1 = self.decode.do_intervention(z, t0, t1, nr_samples)
+        y0, y1 = self.decode.do_intervention(z, t0, t1, n_samples)
         return y0, y1
 
 
@@ -370,9 +372,9 @@ class Decoder(Model):
                                 name_tag="x", n_layers=3,
                                 feature_maps=feature_maps,
                                 unsqueeze=True, squeeze_dims=intermediate_dims,
-                                debug=debug)
+                                coord_conv=False, debug=debug)
         self.t_logits = FC_net(in_dims=z_dims, out_dims=z_dims, name_tag="t",
-                               n_layers=1, feature_maps=feature_maps,
+                               n_layers=1, feature_maps=feature_maps * 4,
                                squeeze=True, squeeze_dims=t_dims,
                                debug=self.debug)
 
@@ -408,7 +410,7 @@ class Decoder(Model):
 
         return x_cat_prob, x_cont_mean, x_cont_std, t_prob, y_mean
 
-    def do_intervention(self, z, t0, t1, nr_samples):
+    def do_intervention(self, z, t0, t1, n_samples):
         """ Computes the quantity E[y|z, do(t=0)] and E[y|z, do(t=1)]
 
     `   nr_sample of samples are drawn from the Normal distribution
