@@ -53,7 +53,7 @@ class SpaceShapesGenerator():
         self.colors = get_colors(num_colors=max(9, self.num_objects))
 
         self.intervention_map = random.standard_normal((prior_dims +
-                                                        num_objects, 2))
+                                                        num_objects, 2)) * 0.5
         self.position_map = random.standard_normal((prior_dims + num_objects,
                                                     width * height))
         self.scale = 10.
@@ -87,12 +87,6 @@ class SpaceShapesGenerator():
             with h5py.File(f"{self.save_path}space_data_t.hdf5", "w") as f:
                 dset = f.create_dataset("Space_dataset_t", data=steering)
 
-        if render:
-            plt.subplot(121)
-            plt.imshow(rendering[0])
-            plt.title(f"Steering: {np.around(steering[0], 2)}")
-        print()
-
         move_result = self.move_spaceship(object_positions.copy(),
                                           object_gravity, steering)
 
@@ -104,6 +98,12 @@ class SpaceShapesGenerator():
             print(score[np.where(score > self.scale)])
             raise ValueError("Some scores are out of bounds")
 
+        if render:
+            plt.subplot(121)
+            plt.imshow(rendering[0])
+            plt.title(f"Steering: {np.around(steering[0], 2)}\nScore: {score[0]:.2f}")
+        print()
+
         if save:
             with h5py.File(f"{self.save_path}space_data_y.hdf5", "w") as f:
                 dset = f.create_dataset("Space_dataset_y", data=score)
@@ -113,7 +113,7 @@ class SpaceShapesGenerator():
                                   move_result[0]])
             plt.subplot(122)
             plt.imshow(rendering[0])
-            plt.title(f"Movement: {move_result[1][0]}\nScore: {score[0]:.2f}")
+            plt.title(f"Movement: {move_result[1][0]}")
             plt.show()
 
         # Okay so here we need to sample two set of vectors for t
