@@ -56,6 +56,7 @@ class SpaceShapesGenerator():
                                                         num_objects, 2))
         self.position_map = random.standard_normal((prior_dims + num_objects,
                                                     width * height))
+        self.scale = 10.
         if no_gravity:
             self.object_gravity = np.zeros((1, num_objects))
             self.save_path = "datasets/SPACE_NO_GRAV/"
@@ -96,10 +97,11 @@ class SpaceShapesGenerator():
                                           object_gravity, steering)
 
         dist_to_goal = np.linalg.norm(move_result[0][:, 0] - self.goal, axis=1)
-        score = 1 - dist_to_goal / np.sqrt((self.height - 1) ** 2 +
-                                           (self.width - 1) ** 2)
-        if np.any(score < 0) or np.any(score > 1):
-            print(np.where(score < 0 or score > 1))
+        score = self.calc_score(dist_to_goal)
+
+        if np.any(score < 0) or np.any(score > self.scale):
+            print(score[np.where(score < 0)])
+            print(score[np.where(score > self.scale)])
             raise ValueError("Some scores are out of bounds")
 
         if save:
@@ -128,10 +130,8 @@ class SpaceShapesGenerator():
                                         axis=1)
         dist_to_goal_1 = np.linalg.norm(move_result_1[0][:, 0] - self.goal,
                                         axis=1)
-        score_0 = 1 - dist_to_goal_0 / np.sqrt((self.height - 1) ** 2 +
-                  (self.width - 1) ** 2)
-        score_1 = 1 - dist_to_goal_1 / np.sqrt((self.height - 1) ** 2 +
-                  (self.width - 1) ** 2)
+        score_0 = self.calc_score(dist_to_goal_0)
+        score_1 = self.calc_score(dist_to_goal_1)
 
         steering_0 = np.reshape(steering_0, (len(steering_0), 1, 2))
         steering_1 = np.reshape(steering_1, (len(steering_1), 1, 2))
@@ -206,8 +206,13 @@ class SpaceShapesGenerator():
         object_positions = positions[position_idx]
         return object_positions
 
+    def calc_score(self, dist_to_goal):
+        score = self.scale * (1 - dist_to_goal /
+                np.sqrt((self.height - 1) ** 2 + (self.width - 1) ** 2))
+        return score
+
 
 if __name__ == "__main__":
     generator = SpaceShapesGenerator(width=6, height=6, num_objects=5,
                                      no_gravity=False)
-    generator.generate_data(5000, render=False, save=True)
+    generator.generate_data(50, render=True, save=True)
