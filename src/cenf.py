@@ -86,9 +86,14 @@ class CENF(CEVAE):
         x_cat = tf.reshape(x_cat, (len(x_cat), *self.x_cat_dims,
                                    self.category_sizes))
 
-        distortion_x = CategoricalCrossentropy()(x_cat, x_cat_prob) \
-            - get_log_prob(x_cont, 'N', mean=x_cont_mean,
-                           std=x_cont_std)
+        # distortion_x = CategoricalCrossentropy()(x_cat, x_cat_prob) \
+        #     - get_log_prob(x_cont, 'N', mean=x_cont_mean,
+        #                    std=x_cont_std)
+        distortion_x_cat = CategoricalCrossentropy()(x_cat, x_cat_prob)
+        # distortion_x_cont = -get_log_prob(x_cont, 'N', mean=x_cont_mean,
+        #                                   std=x_cont_std)
+        distortion_x_cont = MeanSquaredError()(x_cont, x_cont_mean)
+        distortion_x = distortion_x_cat + distortion_x_cont
         distortion_t = self.t_loss(t, t_prob)
         distortion_y = self.y_loss(y, y_mean)
 
@@ -118,22 +123,27 @@ class CENF(CEVAE):
             tf.summary.scalar("partial_loss/variational_y",
                               tf.reduce_mean(variational_y), step=l_step)
 
-        elbo_local = -(self.annealing_factor * rate + distortion_x +
-                       distortion_t + distortion_y +
-                       variational_t + variational_y - ldj_z)
+        elbo_local = -(self.annealing_factor * rate + 
+                       distortion_x +
+                       distortion_t + 
+                       1.2 * distortion_y +
+                       variational_t + 
+                       variational_y - 
+                       ldj_z)
         elbo = tf.reduce_mean(input_tensor=elbo_local)
         return -elbo
 
-    def do_intervention(self, x, t, t_cf, nr_samples):
+    def do_intervention(self, x, t0, t1, nr_samples):
         *_, qz_mean, qz_std = self.encode(x, None, None, None, training=False)
-        final_shape = (nr_samples, qz_mean.shape[0], self.y_dims, self.t_dims)
+        # final_shape = (nr_samples, qz_mean.shape[0], self.y_dims, self.t_dims)
         qz = tf.random.normal((nr_samples, *qz_mean.shape), dtype=tf.float64)
         z = qz * qz_std + qz_mean
         z_k, ldj = self.z_flow(z, None, training=False)
-        y = self.decode.do_intervention(z_k, nr_samples)
-        y_mean = tf.reduce_mean(tf.reshape(y, final_shape), axis=0)
-        mu_y0, mu_y1 = y_mean[..., 0], y_mean[..., 1]
-        return mu_y0, mu_y1
+
+        y0, y1 = self.decode.do_intervention(z_k, t0, t1, nr_samples)
+        # y_mean = tf.reduce_mean(tf.reshape(y, final_shape), axis=0)
+        # mu_y0, mu_y1 = y_mean[..., 0], y_mean[..., 1]
+        return y0, y1
 
 
 if __name__ == "__main__":
