@@ -220,11 +220,11 @@ def IHDP_LARGE(params, path_data="datasets/IHDP_LARGE/", separate_files=False,
         mu1 = mu1[..., file_index]
     else:
         x = np.concatenate([x[..., i] for i in np.arange(x.shape[-1])])
-        t = np.concatenate([t[..., i] for i in np.arange(x.shape[-1])])
-        y_f = np.concatenate([y_f[..., i] for i in np.arange(x.shape[-1])])
-        y_cf = np.concatenate([y_cf[..., i] for i in np.arange(x.shape[-1])])
-        mu0 = np.concatenate([mu0[..., i] for i in np.arange(x.shape[-1])])
-        mu1 = np.concatenate([mu1[..., i] for i in np.arange(x.shape[-1])])
+        t = np.concatenate([t[..., i] for i in np.arange(t.shape[-1])])
+        y_f = np.concatenate([y_f[..., i] for i in np.arange(y_f.shape[-1])])
+        y_cf = np.concatenate([y_cf[..., i] for i in np.arange(y_cf.shape[-1])])
+        mu0 = np.concatenate([mu0[..., i] for i in np.arange(mu0.shape[-1])])
+        mu1 = np.concatenate([mu1[..., i] for i in np.arange(mu1.shape[-1])])
 
     idx_tr, idx_te = train_test_split(np.arange(x.shape[0]), test_size=0.1,
                                       random_state=1)

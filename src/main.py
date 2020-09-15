@@ -12,12 +12,12 @@ from causal_real_nvp import CRNVP
 from cenf import CENF
 from cevae import CEVAE
 from contextlib import nullcontext
-from dataset import IHDP, TWINS, SHAPES, SPACE, SPACE_NO_GRAV
+from dataset import IHDP, IHDP_LARGE, TWINS, SHAPES, SPACE, SPACE_NO_GRAV
 from evaluation import calc_stats
 from tar_net import TARNET
 
 VALID_MODELS = ["CEVAE", "CENF", "CRNVP", "TARNET"]
-VALID_DATASETS = ["IHDP", "TWINS", "SPACE", "SPACE_NO_GRAV"]
+VALID_DATASETS = ["IHDP", "IHDP_LARGE", "TWINS", "SPACE", "SPACE_NO_GRAV"]
 
 tf.keras.backend.set_floatx('float64')
 
@@ -288,7 +288,7 @@ def main(params):
     Creates logging and writer, and launches selected training.
     """
 
-    repetitions = 10
+    repetitions = 100 if params["dataset"] == "IHDP_LARGE" else 10
 
     timestamp = time.strftime("%Y:%m:%d/%X")
     if not params["debug"]:
