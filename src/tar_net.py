@@ -6,7 +6,7 @@ from fc_net import FC_net
 from res_net import ResNet
 
 
-class TARNet(Model):
+class TARNET(Model):
     """ Implementation of Treatment-Agnostic Representation Network
 
     This is basically a multi-headed network, where we have a head for each
@@ -41,6 +41,8 @@ class TARNet(Model):
         self.y_dims = y_dims
         self.log_steps = log_steps
         self.architecture_type = architecture_type
+
+        self.annealing_factor = 1.0  # dummy variable
 
         if y_type == "Categorical":
             self.y_loss = CategoricalCrossentropy()
@@ -94,7 +96,7 @@ class TARNet(Model):
         return loss
 
     def do_intervention(self, x, t0, t1, n_samples):
-        intermediate_vec = self.x_network(x, step, training=training)
+        intermediate_vec = self.x_network(x, None, training=False)
         xt0 = tf.concat([intermediate_vec, t0], -1)
         xt1 = tf.concat([intermediate_vec, t1], -1)
         y0 = self.prediction_network(xt0, None, training=False)
