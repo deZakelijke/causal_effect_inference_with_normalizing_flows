@@ -120,7 +120,8 @@ class SpaceShapesGenerator():
         # One is a standard normal and the other one is going to the right
         # We then calculate the y values and we save them.
         steering_0 = random.standard_normal(steering.shape)
-        steering_1 = random.normal(loc=(0, 1), size=steering.shape)
+        steering_1 = random.normal(loc=(0, 2), size=steering.shape)
+        print(steering_1)
 
         move_result_0 = self.move_spaceship(object_positions.copy(),
                                             object_gravity, steering_0)
@@ -138,6 +139,8 @@ class SpaceShapesGenerator():
         steering_predict = np.concatenate((steering_0, steering_1), axis=1)
         score_0 = np.reshape(score_0, (len(score_0), 1))
         score_1 = np.reshape(score_1, (len(score_1), 1))
+        print(np.mean(score_0), np.mean(score_1))
+        print(np.mean(score_0) - np.mean(score_1))
         score_predict = np.concatenate((score_0, score_1), axis=1)
 
         if save:
@@ -215,4 +218,4 @@ class SpaceShapesGenerator():
 if __name__ == "__main__":
     generator = SpaceShapesGenerator(width=6, height=6, num_objects=5,
                                      no_gravity=False)
-    generator.generate_data(50, render=True, save=True)
+    generator.generate_data(50000, render=False, save=True)

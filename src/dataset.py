@@ -36,14 +36,12 @@ def IHDP(params, path_data="datasets/IHDP/csv/", separate_files=False,
 
     Returns
     -------
-    dataset : tensorflow.data.Dataset
+    train_dataset : tensorflow.data.Dataset
         The generated dataset
 
-    metadata : ((float, float), int)
-        Metadata used with the dataset. The first two floats are the original
-        mean and std of the data, needed to rescale the data back to its
-        original version. The third number is the number of classes for each
-        categorical variable.
+    test_dataset : tensorflow.data.Dataset
+        The generated dataset
+
     """
     params["x_dims"] = 44
     params["x_cat_dims"] = 19
@@ -117,8 +115,8 @@ def IHDP(params, path_data="datasets/IHDP/csv/", separate_files=False,
 
     # we pick either y or y_cf depending on the value of t
     y_predict = np.zeros((len(y), 2, 1))
-    idx_f = (t_predict[:, 0]==t)[:, 0]
-    idx_cf = (t_predict[:, 0]!=t)[:, 0]
+    idx_f = (t_predict[:, 0] == t)[:, 0]
+    idx_cf = (t_predict[:, 0] != t)[:, 0]
     y_predict[idx_f, 0] = y[idx_f]
     y_predict[~idx_f, 1] = y[~idx_f]
     y_predict[~idx_f, 0] = y_cf[~idx_f]
@@ -148,6 +146,137 @@ def IHDP(params, path_data="datasets/IHDP/csv/", separate_files=False,
                                                     t[idx_te],
                                                     t_predict[idx_te],
                                                     y[idx_te],
+                                                    y_predict[idx_te],
+                                                    mu_0[idx_te],
+                                                    mu_1[idx_te])))
+
+    return train_set, test_set
+
+
+def IHDP_LARGE(params, path_data="datasets/IHDP_LARGE/", separate_files=False,
+               file_index=None):
+    """ Tensorflow Dataset generator for the IHDP dataset.
+
+    Parameters
+    ----------
+    params : dict
+        Dictionary that contains all hyperparameters of the program. Use
+        the function parse_arguments() in main.py to generate it. This is
+        also where all shape information of all variables will be stored
+
+    path_data : str
+        Path to the folder that contains the csv files with data
+
+    separate_files : bool
+        Flag to determine if the files should all create a separate Dataset
+        object or if they should become one large dataset.
+
+    file_index : int
+        Index used to pick a specific csv file to create a Dataset with. Only
+        used if the separate_files flag is set.
+
+    Returns
+    -------
+    train_dataset : tensorflow.data.Dataset
+        The generated dataset
+
+    test_dataset : tensorflow.data.Dataset
+        The generated dataset
+
+    """
+    params["x_dims"] = 44
+    params["x_cat_dims"] = 19
+    params["x_cont_dims"] = 6
+    params["t_dims"] = 2
+    params["t_type"] = 'Categorical'
+    params["y_dims"] = 1
+    params["y_type"] = "Normal"
+    params["z_dims"] = 16
+    params['category_sizes'] = 2
+    params['architecture_type'] = 'FC_net'
+
+    binfeats = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+                23, 24]
+    contfeats = [i for i in range(25) if i not in binfeats]
+    catfeats = binfeats
+    nr_files = 100
+    file_name = "ihdp_npci_1-100"
+
+    with np.load(f"{path_data}{file_name}.train.npz") as train_data, \
+            np.load(f"{path_data}{file_name}.test.npz") as test_data:
+        x = np.concatenate([train_data['x'], test_data['x']])
+        t = np.concatenate([train_data['t'], test_data['t']])
+        y_f = np.concatenate([train_data['yf'], test_data['yf']])
+        y_cf = np.concatenate([train_data['ycf'], test_data['ycf']])
+        mu0 = np.concatenate([train_data['mu0'], test_data['mu0']])
+        mu1 = np.concatenate([train_data['mu1'], test_data['mu1']])
+
+    if separate_files:
+        x = x[..., file_index]
+        t = t[..., file_index]
+        y_f = y_f[..., file_index]
+        y_cf = y_cf[..., file_index]
+        mu0 = mu0[..., file_index]
+        mu1 = mu1[..., file_index]
+    else:
+        x = np.concatenate([x[..., i] for i in np.arange(x.shape[-1])])
+        t = np.concatenate([t[..., i] for i in np.arange(x.shape[-1])])
+        y_f = np.concatenate([y_f[..., i] for i in np.arange(x.shape[-1])])
+        y_cf = np.concatenate([y_cf[..., i] for i in np.arange(x.shape[-1])])
+        mu0 = np.concatenate([mu0[..., i] for i in np.arange(x.shape[-1])])
+        mu1 = np.concatenate([mu1[..., i] for i in np.arange(x.shape[-1])])
+
+    idx_tr, idx_te = train_test_split(np.arange(x.shape[0]), test_size=0.1,
+                                      random_state=1)
+
+
+    x_cont = x[:, contfeats]
+    x_cat = np.array(x[:, binfeats], dtype=int)
+    enc = OneHotEncoder(categories='auto', sparse=False)
+    x_cat = enc.fit(x_cat).transform(x_cat)
+
+    # Make an array of the two value for t we want to compare in the ITE
+    t = np.expand_dims(t, axis=1)
+    t = enc.fit(t).transform(t)
+    t_predict = np.zeros((len(t), 2, 2))
+    t_predict[:, 0, 0] = 1
+    t_predict[:, 1, 1] = 1
+    y_f = np.expand_dims(np.array(y_f), axis=1)
+    y_cf = np.expand_dims(np.array(y_cf), axis=1)
+
+    # we pick either y or y_cf depending on the value of t
+    y_predict = np.zeros((len(y_f), 2, 1))
+    idx_f = (t_predict[:, 0] == t)[:, 0]
+    idx_cf = (t_predict[:, 0] != t)[:, 0]
+    y_predict[idx_f, 0] = y_f[idx_f]
+    y_predict[~idx_f, 1] = y_f[~idx_f]
+    y_predict[~idx_f, 0] = y_cf[~idx_f]
+    y_predict[idx_f, 1] = y_cf[idx_f]
+
+    y_mean = np.mean(tf.concat([y_f, y_cf], 1))
+    y_std = np.std(tf.concat([y_f, y_cf], 1))
+    y_f = (y_f - y_mean) / y_std
+    y_cf = (y_cf - y_mean) / y_std
+
+    mu_0 = np.expand_dims(np.array(mu0), axis=1)
+    mu_1 = np.expand_dims(np.array(mu1), axis=1)
+    scaling_data = (y_mean, y_std)
+
+    params['scaling_data'] = scaling_data
+
+    train_set = tf.data.Dataset.from_tensor_slices(((x_cat[idx_tr],
+                                                     x_cont[idx_tr],
+                                                     t[idx_tr],
+                                                     t_predict[idx_tr],
+                                                     y_f[idx_tr],
+                                                     y_predict[idx_tr],
+                                                     mu_0[idx_tr],
+                                                     mu_1[idx_tr])))
+    test_set = tf.data.Dataset.from_tensor_slices(((x_cat[idx_te],
+                                                    x_cont[idx_te],
+                                                    t[idx_te],
+                                                    t_predict[idx_te],
+                                                    y_f[idx_te],
                                                     y_predict[idx_te],
                                                     mu_0[idx_te],
                                                     mu_1[idx_te])))
@@ -466,6 +595,16 @@ def test_IHDP():
         break
 
 
+def test_IHDP_LARGE():
+    params = {}
+    train_data, test_data = IHDP_LARGE(params, separate_files=True, file_index=0)
+
+    for _, data_sample in train_data.batch(5).enumerate():
+        for data in data_sample:
+            print(data)
+        break
+
+
 def test_TWINS():
     params = {}
     train_data, test_data = TWINS(params)
@@ -501,9 +640,11 @@ def test_SPACE():
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
     # test_IHDP()
+    # print()
+    test_IHDP_LARGE()
     print()
     # test_TWINS()
     # print()
     # test_SHAPES()
     # print()
-    test_SPACE()
+    # test_SPACE()

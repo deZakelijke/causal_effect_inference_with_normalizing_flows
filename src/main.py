@@ -14,7 +14,7 @@ from cevae import CEVAE
 from contextlib import nullcontext
 from dataset import IHDP, TWINS, SHAPES, SPACE, SPACE_NO_GRAV
 from evaluation import calc_stats
-from tar_net import TARNet
+from tar_net import TARNET
 
 VALID_MODELS = ["CEVAE", "CENF", "CRNVP", "TARNET"]
 VALID_DATASETS = ["IHDP", "TWINS", "SPACE", "SPACE_NO_GRAV"]
@@ -177,6 +177,16 @@ def set_inputs(model, dataset):
     data = dataset.__iter__().next()
     model._set_inputs(tf.concat([data[0], data[1]], -1), data[2], data[4])
 
+
+def load_weights(params, model):
+    path = (f"{params['model_dir']}{params['model']}/"
+            f"{params['dataset']}/"
+            f"{params['learning_rate']}/")
+    experiment_dir = [dir_name[0] for dir_name in os.walk(path) if \
+        dir_name[1] and dir_name[1][0] == params['experiment_name']]
+    experiment_dir = os.path.join(expeiment_dir[0], experiment_dir[1][0])
+    experiment_name = os.path.join(experiment_dir, "model_0")
+    model.load_weights(experiment_name)
 
 def train(params, writer, logdir, train_iteration=0):
     """ Runs training of selected model.

@@ -54,7 +54,8 @@ class CEVAE(Model):
         self.log_steps = log_steps
         self.architecture_type = architecture_type
 
-        self.annealing_factor = 1e-4
+        # self.annealing_factor = 1e-4
+        self.annealing_factor = 1.
 
         if architecture_type == "ResNet":
             self.x_cat_dims = x_cat_dims
@@ -167,7 +168,7 @@ class CEVAE(Model):
         elbo_local = -(self.annealing_factor * rate +
                        distortion_x +
                        distortion_t +
-                       distortion_y +
+                       1.2 * distortion_y +
                        variational_t +
                        variational_y
                        )
@@ -379,7 +380,7 @@ class Decoder(Model):
                                debug=self.debug)
 
         self.mu_y_t = FC_net(in_dims=z_dims + t_dims, out_dims=y_dims,
-                             name_tag="mu_y_t", n_layers=4,
+                             name_tag="mu_y_t", n_layers=3,
                              feature_maps=feature_maps, debug=debug)
 
     @tf.function
@@ -419,8 +420,8 @@ class Decoder(Model):
 
         """
         # Is this correct? Do we average and sample correctly?
-        in0 = tf.concat([z, tf.tile(tf.expand_dims(t0, 0), [100, 1, 1])], -1)
-        in1 = tf.concat([z, tf.tile(tf.expand_dims(t1, 0), [100, 1, 1])], -1)
+        in0 = tf.concat([z, tf.tile(tf.expand_dims(t0, 0), [n_samples, 1, 1])], -1)
+        in1 = tf.concat([z, tf.tile(tf.expand_dims(t1, 0), [n_samples, 1, 1])], -1)
         y0 = self.mu_y_t(in0, None, training=False)
         y1 = self.mu_y_t(in1, None, training=False)
         

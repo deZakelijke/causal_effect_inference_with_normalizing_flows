@@ -8,7 +8,7 @@ class FC_net(Model):
     def __init__(self, in_dims=256, out_dims=256, name_tag="fc_net",
                  n_layers=2, feature_maps=256, activation='elu',
                  squeeze=False, squeeze_dims=None, unsqueeze=False,
-                 debug=False):
+                 debug=False, **_):
         """
         Parameters
         ----------
