@@ -22,7 +22,7 @@ def calc_stats(model, dataset, scaling_data, params):
     params : dict
     """
 
-    nr_samples = 1000
+    nr_samples = 100
 
     def rmse_ite(ypred1, ypred0, y, idx0, idx1):
         """ Calculate the square errors of the ITE

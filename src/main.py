@@ -14,9 +14,10 @@ from cevae import CEVAE
 from contextlib import nullcontext
 from dataset import IHDP, IHDP_LARGE, TWINS, SHAPES, SPACE, SPACE_NO_GRAV
 from evaluation import calc_stats
+from normalizing_causal_flow import NCF
 from tar_net import TARNET
 
-VALID_MODELS = ["CEVAE", "CENF", "CRNVP", "TARNET"]
+VALID_MODELS = ["CEVAE", "CENF", "CRNVP", "NCF", "TARNET"]
 VALID_DATASETS = ["IHDP", "IHDP_LARGE", "TWINS", "SPACE", "SPACE_NO_GRAV"]
 
 tf.keras.backend.set_floatx('float64')
@@ -333,7 +334,7 @@ if __name__ == "__main__":
 
     if gpus:
         for gpu in gpus:
-            tf.config.experimental.set_memory_growth(gpu, True)
+            # tf.config.experimental.set_memory_growth(gpu, True)
             # set_vdc(gpu, [vdc(memory_limit=9000)])
             logical_gpus = tf.config.experimental.list_logical_devices('GPU')
             print(len(gpus), "Physical GPUs, ",
