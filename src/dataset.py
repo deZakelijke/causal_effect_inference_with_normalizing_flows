@@ -318,7 +318,7 @@ def TWINS(params, path_data="datasets/TWINS/",
     params["x_cont_dims"] = 0
     params["t_dims"] = 2
     params["t_type"] = "Categorical"
-    params["y_dims"] = 1
+    params["y_dims"] = 2
     params["y_type"] = "Categorical"
     params["z_dims"] = 16
     params["category_sizes"] = 10
@@ -376,9 +376,8 @@ def TWINS(params, path_data="datasets/TWINS/",
     x_cont = np.zeros((len(x_cat), 0))
     y = np.expand_dims(data_y[indices, t], axis=1)
     y_cf = np.expand_dims(data_y[indices, 1-t], axis=1)
-    t = np.expand_dims(t, axis=1).astype(float)
-    enc = OneHotEncoder(categories='auto', sparse=False)
-    t = enc.fit(t).transform(t)
+    y = enc.fit(y).transform(y)
+    y_cf = enc.transform(y_cf)
 
     # Make an array of the two value for t we want to compare in the ITE
     t = np.expand_dims(np.array(t), axis=1)
@@ -386,12 +385,10 @@ def TWINS(params, path_data="datasets/TWINS/",
     t_predict = np.zeros((len(t), 2, 2))
     t_predict[:, 0, 0] = 1
     t_predict[:, 1, 1] = 1
-    y = np.expand_dims(np.array(y), axis=1)
-    y_cf = np.expand_dims(np.array(y_cf), axis=1)
 
     # we pick either y or y_cf depending on the value of t
-    y_predict = np.zeros((len(y), 2, 1))
-    idx_f = (t_predict[:, 0]==t)[:, 0]
+    y_predict = np.zeros((len(y), 2, 2))
+    idx_f = (t_predict[:, 0]==t)
     idx_cf = (t_predict[:, 0]!=t)[:, 0]
     y_predict[idx_f, 0] = y[idx_f]
     y_predict[~idx_f, 1] = y[~idx_f]
@@ -610,6 +607,14 @@ def test_TWINS():
     train_data, test_data = TWINS(params)
 
     for _, data_sample in train_data.batch(5).enumerate():
+        print(data_sample[0].shape)
+        print(data_sample[1].shape)
+        print(data_sample[2].shape)
+        print(data_sample[3].shape)
+        print(data_sample[4].shape)
+        print(data_sample[5].shape)
+        print(data_sample[6].shape)
+        print(data_sample[7].shape)
         for data in data_sample:
             for var in data:
                 print(var.shape)
@@ -634,6 +639,8 @@ def test_SPACE():
         for data in data_sample:
             for var in data:
                 print(var.shape)
+                print(tf.math.reduce_min(var))
+                print(tf.math.reduce_max(var))
         break
 
 
@@ -641,9 +648,9 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
     # test_IHDP()
     # print()
-    test_IHDP_LARGE()
+    # test_IHDP_LARGE()
     print()
-    # test_TWINS()
+    test_TWINS()
     # print()
     # test_SHAPES()
     # print()

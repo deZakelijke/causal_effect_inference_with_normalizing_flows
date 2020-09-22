@@ -326,7 +326,6 @@ def main(params):
 
 
 if __name__ == "__main__":
-    params = parse_arguments()
 
     set_vdc = tf.config.experimental.set_virtual_device_configuration
     vdc = tf.config.experimental.VirtualDeviceConfiguration
@@ -334,12 +333,14 @@ if __name__ == "__main__":
 
     if gpus:
         for gpu in gpus:
-            # tf.config.experimental.set_memory_growth(gpu, True)
+            tf.config.experimental.set_memory_growth(gpu, True)
             # set_vdc(gpu, [vdc(memory_limit=9000)])
             logical_gpus = tf.config.experimental.list_logical_devices('GPU')
             print(len(gpus), "Physical GPUs, ",
                   len(logical_gpus), "Logical GPUs")
         with tf.device('device:GPU:0'):
+            params = parse_arguments()
             main(params)
     else:
+        params = parse_arguments()
         main(params)

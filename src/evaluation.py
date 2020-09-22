@@ -114,10 +114,13 @@ def calc_stats(model, dataset, scaling_data, params):
         true_ite = mu_1 - mu_0
 
         ypred0, ypred1 = model.do_intervention(x, t0, t1, nr_samples)
-
         y_mean, y_std = scaling_data[0], scaling_data[1]
+        ypred0, ypred1 = ypred0[:, -1:], ypred1[:, -1:]
         ypred0, ypred1 = ypred0 * y_std + y_mean, ypred1 * y_std + y_mean
+        y = y[:, -1:]
         y = y * y_std + y_mean
+        y_predict = y_predict[..., -1:]
+        y_predict = y_predict * y_std + y_mean
 
         slice_indices = (i * features[0].shape[0],
                          (i + 1) * features[0].shape[0])

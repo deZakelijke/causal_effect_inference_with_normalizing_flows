@@ -9,7 +9,6 @@ from tensorflow.keras import Model
 from tensorflow.keras.layers import Dense, Flatten
 
 
-log_2 = tf.math.log(tf.constant(2., dtype=tf.float64))
 
 
 class NCF(Model):
@@ -56,6 +55,7 @@ class NCF(Model):
         network = eval(architecture_type)
 
         self.annealing_factor = 1e-8
+        self.log_2 = tf.math.log(tf.constant(2., dtype=tf.float64))
         
         self.flatten = Flatten()
         if architecture_type == "ResNet":
@@ -167,7 +167,7 @@ class NCF(Model):
         z, ldj_xz = self.flow_xz(x, ldj_xz, step, training=training)
         log_pz = self.log_prior(z)
         log_px = log_pz + ldj_xz
-        bpd_z = -log_px / (tf.size(z[0], out_type=tf.float64) * log_2)
+        bpd_z = -log_px / (tf.size(z[0], out_type=tf.float64) * self.log_2)
 
         f_z = self.flatten(z)
         projected_z = self.z_proj(f_z)
@@ -175,7 +175,7 @@ class NCF(Model):
         y_prior, ldj_y = self.flow_y(y, ldj_y, step,
                                      training=training, t=context)
         log_py = self.log_prior(y_prior) + ldj_y
-        bpd_y = -log_py / (tf.size(y[0], out_type=tf.float64) * log_2)
+        bpd_y = -log_py / (tf.size(y[0], out_type=tf.float64) * self.log_2)
         return bpd_z, bpd_y, z
 
     @tf.function

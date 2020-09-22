@@ -1,6 +1,7 @@
 import tensorflow as tf
 from tensorflow.keras import layers, Model
 from tensorflow.keras.losses import CategoricalCrossentropy, MeanSquaredError
+from tensorflow import nn
 
 from fc_net import FC_net
 from res_net import ResNet
