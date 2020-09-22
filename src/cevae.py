@@ -125,13 +125,9 @@ class CEVAE(Model):
         x_cat = tf.reshape(x_cat, (len(x_cat), *self.x_cat_dims,
                                    self.category_sizes))
 
-        # distortion_x = CategoricalCrossentropy()(x_cat, x_cat_prob) \
-        #     - get_log_prob(x_cont, 'N', mean=x_cont_mean,
-        #                    std=x_cont_std)
         distortion_x_cat = CategoricalCrossentropy()(x_cat, x_cat_prob)
-        # distortion_x_cont = -get_log_prob(x_cont, 'N', mean=x_cont_mean,
-        #                                   std=x_cont_std)
-        distortion_x_cont = MeanSquaredError()(x_cont, x_cont_mean)
+        # Use relu to set nans to zero
+        distortion_x_cont = nn.relu(MeanSquaredError()(x_cont, x_cont_mean))
         distortion_x = distortion_x_cat + distortion_x_cont
         distortion_t = self.t_loss(t, t_prob)
         distortion_y = self.y_loss(y, y_mean)
@@ -168,7 +164,7 @@ class CEVAE(Model):
         elbo_local = -(self.annealing_factor * rate +
                        distortion_x +
                        distortion_t +
-                       1.2 * distortion_y +
+                       distortion_y +
                        variational_t +
                        variational_y
                        )
