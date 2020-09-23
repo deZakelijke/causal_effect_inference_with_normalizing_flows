@@ -59,13 +59,15 @@ class NCF(Model):
         
         self.flatten = Flatten()
         if architecture_type == "ResNet":
-            self.z_proj_dims = 2048 - t_dims - y_dims
+            self.z_proj_dims = 512 - t_dims - y_dims
         else:
             self.z_proj_dims = 45
         tz_dims = int(self.z_proj_dims + t_dims)
         self.z_proj = Dense(self.z_proj_dims)
         self.z_proj.build((None, tf.reduce_prod(x_dims)))
 
+        if x_dims == int and x_dims % 4 != 0:
+            n_scales = 2
         self.flow_xz = CouplingLayers(x_dims,
                                       "flow_xz",
                                       feature_maps,

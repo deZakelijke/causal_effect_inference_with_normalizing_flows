@@ -255,6 +255,7 @@ def train(params, writer, logdir, train_iteration=0):
                 avg_loss += loss_value
                 optimizer.apply_gradients(zip(grads,
                                               model.trainable_variables))
+                break
             if epoch % params["log_steps"] == 0:
                 test_dataset = test_dataset.shuffle(len_dataset)
                 print(f"Epoch: {epoch}, average training loss: "
@@ -330,6 +331,7 @@ def main(params):
 
 if __name__ == "__main__":
 
+    params = parse_arguments()
     set_vdc = tf.config.experimental.set_virtual_device_configuration
     vdc = tf.config.experimental.VirtualDeviceConfiguration
     gpus = tf.config.experimental.list_physical_devices("GPU")
@@ -342,8 +344,6 @@ if __name__ == "__main__":
             print(len(gpus), "Physical GPUs, ",
                   len(logical_gpus), "Logical GPUs")
         with tf.device('device:GPU:0'):
-            params = parse_arguments()
             main(params)
     else:
-        params = parse_arguments()
         main(params)
