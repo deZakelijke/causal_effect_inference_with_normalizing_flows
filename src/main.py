@@ -84,6 +84,9 @@ def parse_arguments():
                         "(default: ~/logs/)")
     parser.add_argument("--n_flows", type=int, default=2,
                         help="Number of flows in the flow models (default: 2)")
+    parser.add_argument("--n_samples", type=int, default=100,
+                        help="Number of samples to draw when performing an"
+                        "intervention, if sampling is used (default: 100)")
     parser.add_argument("--separate_files", action="store_true", default=False,
                         help="Switch to training the model on each data file "
                         "separately instead of everything at once")

@@ -22,7 +22,7 @@ def calc_stats(model, dataset, scaling_data, params):
     params : dict
     """
 
-    nr_samples = 100
+    n_samples = params['n_samples']
 
     def rmse_ite(ypred1, ypred0, y, idx0, idx1):
         """ Calculate the square errors of the ITE
@@ -113,7 +113,7 @@ def calc_stats(model, dataset, scaling_data, params):
         idx0, idx1, idx_f, idx_cf = calculate_indices(t, t0, t1, y, y0, y1)
         true_ite = mu_1 - mu_0
 
-        ypred0, ypred1 = model.do_intervention(x, t0, t1, nr_samples)
+        ypred0, ypred1 = model.do_intervention(x, t0, t1, n_samples)
         y_mean, y_std = scaling_data[0], scaling_data[1]
         ypred0, ypred1 = ypred0[:, -1:], ypred1[:, -1:]
         ypred0, ypred1 = ypred0 * y_std + y_mean, ypred1 * y_std + y_mean
