@@ -183,13 +183,13 @@ class ResNet(Model):
 
     def add_coordinate_channels(self, x):
         """ Adding coord conv channels to the images.
-        
+
         https://github.com/uber-research/CoordConv/blob/master/CoordConv.py
         """
         batch_size = x.shape[0]
 
         xx_ones = tf.ones((batch_size, self.image_size[0], 1),
-                           dtype=tf.float64)
+                          dtype=tf.float64)
         xx_range = tf.expand_dims(tf.range(self.image_size[1],
                                   dtype=tf.float64), 0)
         xx_range = tf.expand_dims(tf.tile(xx_range, [batch_size, 1]), 1)
@@ -206,7 +206,6 @@ class ResNet(Model):
         xx_channel = xx_channel / (self.image_size[0] - 1) * 2 - 1
         yy_channel = yy_channel / (self.image_size[1] - 1) * 2 - 1
         return tf.concat([x, xx_channel, yy_channel], -1)
-
 
     def log_weights(self, step):
         name = self.bn_in.name

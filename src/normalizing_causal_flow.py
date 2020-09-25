@@ -9,8 +9,6 @@ from tensorflow.keras import Model
 from tensorflow.keras.layers import Dense, Flatten
 
 
-
-
 class NCF(Model):
     """ Combination model of several normalising flow and causality models.
 
@@ -56,7 +54,7 @@ class NCF(Model):
 
         self.annealing_factor = 1e-8
         self.log_2 = tf.math.log(tf.constant(2., dtype=tf.float64))
-        
+
         self.flatten = Flatten()
         if architecture_type == "ResNet":
             self.z_proj_dims = 512 - t_dims - y_dims
@@ -135,7 +133,7 @@ class NCF(Model):
         """ Infers the latent confounder and the log-likelihood of the input.
 
         Calculates the latent confouder z by mapping the input through several
-        coupling layers. 
+        coupling layers.
         //It also calculates the log-likelihood of the input
         //triplet by adding the log-likelihood of z to the log determinant
         //Jacobian of the mapping.
@@ -220,5 +218,5 @@ class NCF(Model):
         y1, ldj_y = self.flow_y(y_prior, ldj, None, reverse=True,
                                 training=False, t=context)
         y1 = tf.reshape(y1, (x.shape[0], -1, 1))
-        y1 = tf.reduce_mean(y1, 1) 
+        y1 = tf.reduce_mean(y1, 1)
         return y0, y1

@@ -101,7 +101,8 @@ class SpaceShapesGenerator():
         if render:
             plt.subplot(121)
             plt.imshow(rendering[0])
-            plt.title(f"Steering: {np.around(steering[0], 2)}\nScore: {score[0]:.2f}")
+            plt.title(f"Steering: {np.around(steering[0], 2)}\n"
+                      f"Score: {score[0]:.2f}")
         print()
 
         if save:
@@ -144,10 +145,12 @@ class SpaceShapesGenerator():
         score_predict = np.concatenate((score_0, score_1), axis=1)
 
         if save:
-            with h5py.File(f"{self.save_path}space_data_t_predict.hdf5", "w") as f:
+            with h5py.File(f"{self.save_path}space_data_t_predict.hdf5", "w")
+            as f:
                 dset = f.create_dataset("Space_dataset_t_predict",
                                         data=steering_predict)
-            with h5py.File(f"{self.save_path}space_data_y_predict.hdf5", "w") as f:
+            with h5py.File(f"{self.save_path}space_data_y_predict.hdf5", "w")
+            as f:
                 dset = f.create_dataset("Space_dataset_y_predict",
                                         data=score_predict)
 
@@ -211,7 +214,8 @@ class SpaceShapesGenerator():
 
     def calc_score(self, dist_to_goal):
         score = self.scale * (1 - dist_to_goal /
-                np.sqrt((self.height - 1) ** 2 + (self.width - 1) ** 2))
+                              np.sqrt((self.height - 1) ** 2 +
+                                      (self.width - 1) ** 2))
         return score
 
 

@@ -118,7 +118,7 @@ def parse_arguments():
     if not args.mode == "train":
         raise NotImplementedError("Only training mode is implemented")
 
-    if args.model == "cevae" or args.model=="tarnet":
+    if args.model == "cevae" or args.model == "tarnet":
         args.n_flows = 0
 
     for arg, value in vars(args).items():
@@ -186,11 +186,13 @@ def load_weights(params, model):
     path = (f"{params['model_dir']}{params['model']}/"
             f"{params['dataset']}/"
             f"{params['learning_rate']}/")
-    experiment_dir = [dir_name[0] for dir_name in os.walk(path) if \
-        dir_name[1] and dir_name[1][0] == params['experiment_name']]
+    experiment_dir = [dir_name[0] for dir_name in os.walk(path) if
+                      dir_name[1] and
+                      dir_name[1][0] == params['experiment_name']]
     experiment_dir = os.path.join(expeiment_dir[0], experiment_dir[1][0])
     experiment_name = os.path.join(experiment_dir, "model_0")
     model.load_weights(experiment_name)
+
 
 def train(params, writer, logdir, train_iteration=0):
     """ Runs training of selected model.
@@ -249,7 +251,8 @@ def train(params, writer, logdir, train_iteration=0):
                 print(f"Epoch: {epoch}")
             avg_loss = 0
             step_start = global_train_step + epoch * len_epoch
-            for step, features in train_dataset.batch(params["batch_size"]).enumerate(step_start):
+            for step, features in train_dataset.batch(params["batch_size"])\
+                    .enumerate(step_start):
                 step = tf.constant(step)
                 loss_value, grads = grad(model, features, step, debug)
                 avg_loss += loss_value

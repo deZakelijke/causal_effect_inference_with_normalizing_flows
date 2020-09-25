@@ -61,10 +61,10 @@ def calc_stats(model, dataset, scaling_data, params):
         return tf.concat([se_factual, se_cfactual], -1)
 
     def calculate_indices(t, t0, t1, y, y0, y1):
-        t0_diff = tf.norm(tf.abs(t - t0), axis=1, keepdims=True) 
-        t1_diff = tf.norm(tf.abs(t - t1), axis=1, keepdims=True) 
-        y0_diff = tf.norm(tf.abs(y - y0), axis=1, keepdims=True) 
-        y1_diff = tf.norm(tf.abs(y - y1), axis=1, keepdims=True) 
+        t0_diff = tf.norm(tf.abs(t - t0), axis=1, keepdims=True)
+        t1_diff = tf.norm(tf.abs(t - t1), axis=1, keepdims=True)
+        y0_diff = tf.norm(tf.abs(y - y0), axis=1, keepdims=True)
+        y1_diff = tf.norm(tf.abs(y - y1), axis=1, keepdims=True)
 
         idx0 = tf.cast(tf.greater(t1_diff, t0_diff), tf.float64)
         idx1 = 1. - idx0
@@ -72,7 +72,7 @@ def calc_stats(model, dataset, scaling_data, params):
         idx_f = tf.cast(tf.greater(y1_diff, y0_diff), tf.float64)
         idx_cf = 1. - idx_f
         """
-        We run into a new problem here, namely that we need to determine 
+        We run into a new problem here, namely that we need to determine
         the indices without exact matches between t and t0, t1.
         Similarly for y and y0, y1
         Since we need to make a split into two pieces we might as well

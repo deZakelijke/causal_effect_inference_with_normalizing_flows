@@ -236,7 +236,6 @@ class Encoder(Model):
         else:
             intermediate_dims = feature_maps // 2
 
-
         self.qt_logits = network(in_dims=x_dims, out_dims=x_dims,
                                  name_tag="qt", n_layers=1,
                                  feature_maps=feature_maps * 8,
@@ -270,7 +269,7 @@ class Encoder(Model):
         if self.debug:
             print("Encoding")
         qt_prob = self.t_activation(self.qt_logits(x, step, training=training))
-        qt = tfd.Independent(self.t_dist(qt_prob), 
+        qt = tfd.Independent(self.t_dist(qt_prob),
                              reinterpreted_batch_ndims=1,
                              name="qt")
         qt_sample = qt.sample()
@@ -292,7 +291,7 @@ class Encoder(Model):
             qy_mean = self.mu_qy_t(tf.concat([hqy, qt_sample], -1), step,
                                    training=training)
         qy_mean = self.y_activation(qy_mean)
-        qy = tfd.Independent(self.y_dist(qy_mean), 
+        qy = tfd.Independent(self.y_dist(qy_mean),
                              reinterpreted_batch_ndims=1,
                              name="qy")
 
@@ -385,8 +384,8 @@ class Decoder(Model):
             print("Decoding")
         x_logits = self.x_logits(z, step, training=training)
         x_cont_mean, x_cont_logvar, x_cat_logits = tf.split(x_logits,
-                                                         self.x_split_dims,
-                                                         axis=-1)
+                                                            self.x_split_dims,
+                                                            axis=-1)
         x_cont_std = softplus(x_cont_logvar)
         x_cat_prob = nn.softmax(tf.reshape(x_cat_logits, (len(z),
                                                           *self.x_cat_dims,
@@ -416,11 +415,13 @@ class Decoder(Model):
 
         """
         # Is this correct? Do we average and sample correctly?
-        in0 = tf.concat([z, tf.tile(tf.expand_dims(t0, 0), [n_samples, 1, 1])], -1)
-        in1 = tf.concat([z, tf.tile(tf.expand_dims(t1, 0), [n_samples, 1, 1])], -1)
+        in0 = tf.concat([z, tf.tile(tf.expand_dims(t0, 0),
+                                    [n_samples, 1, 1])], -1)
+        in1 = tf.concat([z, tf.tile(tf.expand_dims(t1, 0),
+                                    [n_samples, 1, 1])], -1)
         y0 = self.mu_y_t(in0, None, training=False)
         y1 = self.mu_y_t(in1, None, training=False)
-        
+
         y0 = tf.reduce_mean(y0, axis=0)
         y1 = tf.reduce_mean(y1, axis=0)
         return y0, y1

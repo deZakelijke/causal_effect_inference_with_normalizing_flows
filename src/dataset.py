@@ -229,7 +229,6 @@ def IHDP_LARGE(params, path_data="datasets/IHDP_LARGE/", separate_files=False,
     idx_tr, idx_te = train_test_split(np.arange(x.shape[0]), test_size=0.1,
                                       random_state=1)
 
-
     x_cont = x[:, contfeats]
     x_cat = np.array(x[:, binfeats], dtype=int)
     enc = OneHotEncoder(categories='auto', sparse=False)
@@ -388,8 +387,8 @@ def TWINS(params, path_data="datasets/TWINS/",
 
     # we pick either y or y_cf depending on the value of t
     y_predict = np.zeros((len(y), 2, 2))
-    idx_f = (t_predict[:, 0]==t)
-    idx_cf = (t_predict[:, 0]!=t)[:, 0]
+    idx_f = (t_predict[:, 0] == t)
+    idx_cf = (t_predict[:, 0] != t)[:, 0]
     y_predict[idx_f, 0] = y[idx_f]
     y_predict[~idx_f, 1] = y[~idx_f]
     y_predict[~idx_f, 0] = y_cf[~idx_f]
@@ -594,7 +593,8 @@ def test_IHDP():
 
 def test_IHDP_LARGE():
     params = {}
-    train_data, test_data = IHDP_LARGE(params, separate_files=True, file_index=0)
+    train_data, test_data = IHDP_LARGE(params, separate_files=True,
+                                       file_index=0)
 
     for _, data_sample in train_data.batch(5).enumerate():
         for data in data_sample:
