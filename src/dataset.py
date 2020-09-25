@@ -125,7 +125,7 @@ def IHDP(params, path_data="datasets/IHDP/csv/", separate_files=False,
     y_mean = np.mean(tf.concat([y, y_cf], 1))
     y_std = np.std(tf.concat([y, y_cf], 1))
     y = (y - y_mean) / y_std
-    y_cf = (y_cf - y_mean) / y_std
+    y_predict = (y_cf - y_mean) / y_std
 
     mu_0 = np.expand_dims(np.array(mu_0), axis=1)
     mu_1 = np.expand_dims(np.array(mu_1), axis=1)
@@ -256,7 +256,7 @@ def IHDP_LARGE(params, path_data="datasets/IHDP_LARGE/", separate_files=False,
     y_mean = np.mean(tf.concat([y_f, y_cf], 1))
     y_std = np.std(tf.concat([y_f, y_cf], 1))
     y_f = (y_f - y_mean) / y_std
-    y_cf = (y_cf - y_mean) / y_std
+    y_predict = (y_cf - y_mean) / y_std
 
     mu_0 = np.expand_dims(np.array(mu0), axis=1)
     mu_1 = np.expand_dims(np.array(mu1), axis=1)
@@ -535,7 +535,7 @@ def SPACE(params, path_data='datasets/SPACE/', separate_files=None,
     # y_std = np.std(tf.concat([y, y_cf], 1))
     y_std = np.std(y)
     y = (y - y_mean) / y_std
-    # y_cf = (y_cf - y_mean) / y_std
+    y_predict = (y_cf - y_mean) / y_std
     scaling_data = (y_mean, y_std)
     params['scaling_data'] = scaling_data
     y_predict = np.expand_dims(y_predict, -1)
