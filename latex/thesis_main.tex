@@ -6,7 +6,8 @@
 \usepackage{amsmath}
 \usepackage{amsfonts}
 \usepackage{graphicx, color}
-\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage[a4paper,margin=3.5cm]{geometry}
+
 
 \newcommand{\red}[1]{{\color{red}{#1}}}
 
@@ -112,22 +113,27 @@ Dr. Efstratios Gavves% Supervisor's Name
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \chapter{Introduction}
-Various scientific disciplines try to find patters in data. The patters that are usually uncovered are correlations between certain variables and features in the observations. In may fields this is a powerful tool that has resulted in tremendous scientific progress. Especially in AI we can perform a abundance of tasks, such as classification of images, translation of text or even the generation of new music. % citation needed
-But what most scientists actually want to find out is what the causal relations of things are and correlations are merely a way to indicate a possible causal relation. The inherent problem with correlation-based methods is of course that they can never find causal relations.
+Various scientific disciplines try to find patters in data. The patters that are usually uncovered are correlations between certain variables and features in the observations. In may fields this is a powerful tool that has resulted in tremendous scientific progress. Especially in AI we can perform a abundance of tasks by exploiting correlations in data, such as classification of images, translation of text or even the generation of new music \cite{deng2009imagenet} \cite{bahdanau2014neural} \cite{payne2019musenet}.
+But what most scientists actually want to find out is what the causal relations of things are and correlations are merely a way to indicate a possible causal relation. The inherent problem with correlation-based methods is of course that the discovered correlations don't imply causation.
 
-Every class in statistics starts with the phrase: "Correlation is not causation." This mantra tells us that we should never interpret a correlation between a variable $A$ and variable $B$ as $A$ causes $B$. This is very much true, but sometimes we do like to know: does $A$ cause $B$? To answer such questions we need causal inference. 
+Every class in statistics starts with the phrase: "Correlation does not imply causation." This mantra tells us that we should never interpret a correlation between a variable $A$ and variable $B$ as $A$ causes $B$. This is very much true, but sometimes we do like to know: does $A$ cause $B$? To answer such questions we need causal inference. 
 
-Disciplines such as medicine approach this problem through double-blind studies, in which the only difference between groups is whether or not they received a treatment, meaning that any difference between the two trial groups must have been caused by the treatment. Unfortunately the vast majority of problems can only be viewed through observational studies in which there usually is (unobserved) confounding between a variable $A$ and a variable $B$. Isolating the causal effect we are interested in from background variables can be a difficult task, as decades in statistical research has shown.
+Disciplines such as medicine approach this problem through double-blind studies, in which the only difference between groups is whether or not they received a treatment, meaning that any difference between the two trial groups must have been caused by the treatment\cite{gotzsche1989methodology}. Unfortunately the vast majority of problems can only be viewed through observational studies in which there usually is (unobserved) confounding between a variable $A$ and a variable $B$. Isolating the causal effect we are interested in from background variables can be a difficult task, as decades in statistical research has shown.
 
-Fortunately the work by Pearl et al.\cite{pearl2009causal} \cite{pearl1995causal} has yielded a framework in which these causal effects can be modelled in terms of probability densities and in which it is theoretically possible to isolate a direct causal effect of a variable on another variable if there are one ore more unobserved confounding variables. This has led to an abundance of scientific research on how to properly measure and analyse causal effects in the past two decades(citation needed), especially focusing on how to leverage the ever-increasing amount of data that is available to us. 
+Fortunately the work by Pearl et al.\cite{pearl2009causal} \cite{pearl1995causal} has yielded a framework in which these causal effects can be modelled in terms of probability densities and in which it is theoretically possible to isolate a direct causal effect of a variable on another variable if there are one ore more unobserved confounding variables. This has led to a sub-field of scientific research on how to properly measure and analyse causal effects in the past two decades \cite{pearl2003statistics} \cite{hill2011bayesian} \cite{guo2020survey}, especially focusing on how to leverage the ever-increasing amount of data that is available in artificial intelligence research.
 
+In cases where there is latent confounding between the variables of interest, deep learning has most to offer. Therefore we 
+
+In this research we will expand on the use of deep learning and generative modelling in causal effect inference. The focus lies on cases where there is an effect of one variable on another, from which we know or assume that there is latent confounding, but it is impossible to make use of a randomised trial. The contributions are twofold:
+\begin{itemize}
+    \item We propose a model that can learn to model causal effects through data by using Normalising Flows \cite{rezende2016variational}, which we will call Causal Flow.
+    \item To validate the predictive power we introduce a synthetic dataset for causal inference research dubbed SPACE SHAPES.
+\end{itemize}
 
 %Measuring the causal effect of an action or treatment on certain parts of the world and the people in it is a question that form the cornerstone of most sciences\footnote{\label{note:citation}Citation needed}.
-
-
 % Bruggetje naar veel data gebruiken
 
-The area of generative modelling within AI has shown a series of successes in recent years. This area tries to learn the structure within data and uncover the process with which it was generated. Such models have the power to <> the latent variables of the data. That ability is invaluable if we want to want to model latent confounders and be able to estimate causal effects. Using machine learning techniques also indicates that having mode data is useful for making more accurate predictions.
+% The area of generative modelling within AI has shown a series of successes in recent years. This area tries to learn the structure within data and uncover the process with which it was generated. Such models have the power to <> the latent variables of the data. That ability is invaluable if we want to want to model latent confounders and be able to estimate causal effects. Using machine learning techniques also indicates that having mode data is useful for making more accurate predictions.
 
 % VI al in de introductie? Op zich wel lijkt me. Op een gegeven moment switchen we toch naar wat we nou gaan doen. Dus dan komt VI en NF naar voren.
 
@@ -136,6 +142,7 @@ The area of generative modelling within AI has shown a series of successes in re
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Dit hoofdstuk moet uitleggen wat het causality framework van Pearl is en vervolgens overgaan op ons soort probleem. Met een outcome, intervention, latent confounder en daarna de proxy. Hier komt ook dé causale graaf voor het eerst voor en introduceren we de belangrijkste notatie. Metrics komen hier ook naar voren, als we het hebben over de voorspelling die we willen doen. 
 \chapter{Causal effect inference}
 In the discipline of causal inference there are several questions that are commonly of interest. In this context we assume the framework of reasoning about causality as described by Pearl et al. \cite{pearl2009causal}, where relations between events are modelled as a Directed Acyclic Graph (DAG), and the state of each event is defined as a function of all its parents in said graph. What is interesting to know then are of course the structure of graphs and the form and parameters of each connection function. If the true graphs and functions would be know we would be able to precisely predict all causal effects. Of course such a bold claim follows by the observation that the search space of potential DAGs grows exponentially with the number of vertices, growing to $29281$ possible graphs when there are five vertices \cite{robinson1977counting}. Some methods have been developed to address this problem, under some assumptions, but that goes beyond the scope of this research.
 
@@ -157,10 +164,17 @@ The rules of \textit{do}-calculus allow us to quantify the effect of $\bt$ on $\
 \begin{equation}\label{equation:do_operation}
    p(\by | do(\bt)) = \int_{pa_\bt} p(\by | \bt, pa_{\bt}) p(pa_{\bt}) \text{d} pa_\bt
 \end{equation}
-The set $\text{pa}_\bt$ denotes the set of ancestor nodes from $\bt$ that satisfy the backdoor-criterion\footnotemark[\ref{note:citation}], which is only $\bZ$ in the case of left hand side graph in Figure \ref{fig:graph_observed_confounder_and_latent_with_proxy}. The problem is that in most real world scenarios we don't know what $\bZ$ is exactly and how these probabilities are shaped: it is a \textit{latent} confounder\footnotemark[\ref{note:citation}]. Most scientific disciplines that implicitly use this framework, such a double-blind medical trials, circumvent this problem by eliminating all possible latent confounders by making the cause of $\bt$ independent of everything else: a random assignment.
+The set $\text{pa}_\bt$ denotes the set of ancestor nodes from $\bt$ that satisfy the backdoor-criterion\footnotemark[\ref{note:citation}], which is only $\bZ$ in the case of left hand side graph in Figure \ref{fig:graph_observed_confounder_and_latent_with_proxy}. The problem is that in most real world scenarios we don't know what $\bZ$ is exactly and how these probabilities are shaped: it is a \textit{latent} confounder\footnotemark[\ref{note:citation}]. Most scientific disciplines that implicitly use this framework, such a doubl\text{e-}blind medical trials, circumvent this problem by eliminating all possible latent confounders by making the cause of $\bt$ independent of everything else: a random assignment.
 
 But in general this is not possible, and instead the principle of proxy variables is introduced. These proxy variables, denoted with $\bX$, can be anything that can be measured and from which we can assume that it is directly caused by $\bZ$. The right hand side of Figure \ref{fig:graph_observed_confounder_and_latent_with_proxy} represent such a situation. The underlying principle of proxy variables is that it allows us to correct for the latent confounder in an approximate way. There has been extensive research in this area in recent years but most methods either assume that the latent confounder is categorical or 
 % \cite{kuroki2014measurement} \cite{miao2018identifying}
+
+\begin{equation}\label{equation:prediction_of_do_t}
+    \begin{split}
+        p(\by | \bx, do(\bt=t)) &= \int_{\bz} p(\by | \bx, do(\bt=t), \bz) p(\bz | \bx, do(\bt=t)) d\bz\\
+        &= \int_{\bz} p(\by|\bt=t, \bz) p(\bz|\bx) d\bz
+    \end{split}
+\end{equation}
 
 \section{Metrics in causal inference}
 Precision in Estimation of Heterogeneous Effect(PEHE): $PEHE := \frac{1}{N}\sum\limits^N_{i=1}((y_{i1} - y_{i0}) - (\hat{y}_{i1} - \hat{y}_{i0}))^2$, where $y_1$ and $y_0$ correspond to the true outcomes under $t=1$ and $t=0$ respectively, and $\hat{y}_1$ and $\hat{y}_0$ correspond to the outcomes estimated by the model. 
@@ -176,6 +190,7 @@ we also have the CATE. I really don't understand what they are averaging over.
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Hier introduceren we nog niks nieuws.
 \chapter{Generative modelling and variational inference}
 The field of variational inference is concerned with finding the posterior distribution of latent variables $\bz$ of some observed variables $\bx$. The purpose of this is to uncover the structure of the data distribution $p(\bx)$ and to make it possible to generate new samples from that distribution through the sampling of new $\bz$ from the prior\footnotemark[\ref{note:citation}]. The difficulty in this is that in general the posterior can have a complex structure and to uncover this requires us to solve an intractable integral:
 \begin{equation}
@@ -231,7 +246,7 @@ where $\bw \in \mathbb{R}^D$, $\bu \in \mathbb{R}^D$ and $b \in \mathbb{R}$ are 
     \ln p(\bx) = \ln p(\bz_0) - \sum\limits^K_{k=1} \ln \left|1 + \bu_k^T h'(\bw_k^T \bz_{k-1} + b) \right|
 \end{equation}
 
-Each transformation here can be seen as a layer in a neural network that consists of a skip connection and a single-node dense layer followed by an expansion back to the original number of dimensions. The downside of this is the limited transformative capabilities of each mapping in the flow.
+Each transformation here can be seen as a layer in a neural network that consists of a skip connection and a singl\text{e-}node dense layer followed by an expansion back to the original number of dimensions. The downside of this is the limited transformative capabilities of each mapping in the flow.
 
 \subsection{Real-valued Non-Volume Preserving transformations}
 A type of Normalising Flow is the Real-valued Non-Volume Preserving transformations (real NVP) \cite{dinh2016density}. By using so-called coupling layers, this model type encompasses a more powerful type of Normalising Flows. Each transformation in this model consists of two coupling layers, where each coupling layers transforms one half of the current variable vector $\bz_k \in \mathbb{R}^D$ and keeps the other half fixed, done in the following way:
@@ -256,16 +271,26 @@ The simplicity of these equations allow us to choose $s$ and $t$ arbitrarily com
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
+% Hier bespreken we:
+%  - CEVAE
+%  - CEVAE + PF
+%  - Het idee van context
+%  - Het idee van elk ding zijn eigen prior geven
+%  - Samen brengen naar het laatse model
 \chapter{Causal effect inference with generative models}
 The idea of using a generative model in causal effect inference was proposed by Louizos et al. \cite{louizos2017causal}. They leveraged the power of VAEs to make it possible to infer latent confounders from data without any prior knowledge on the confounder itself.
 
 \begin{figure}
     \centering
-\includestandalone[width=0.49\textwidth]{Figures/cevae_encoder_figure}
-    \includestandalone[width=0.49\textwidth]{Figures/cevae_decoder_figure}
-    \caption{The graphical model of the CEVAE with the encoder on the left hand side and the decoder on the right hand side. Grey nodes indicate sampling steps and white nodes indicate deterministic neural networks. In both the encoder and the decoder there is a clear distinction between the two values of $\bt$ for $\by$ and $\bz$ but in practice these are computed in one operation.}%Nog een ref naar formule oid?
-    \label{fig:cevae_graphical_model}
+    \includestandalone[width=0.59\textwidth]{Figures/cevae_encoder_figure}
+    \caption{Graph of the encoder of the Causal VAE. Nodes in white are neural networks and nodes in grey are sampling steps or data input. The $q(\bt|\bx)$ and $q(\by|\bt, \bx)$ are input nodes of the network during training but the values of $\bt$ and $\by$ are sampled during test time.}
+    \label{fig:cevae_encoder_graph}
+\end{figure}
+\begin{figure}
+    \centering
+    \includestandalone[width=0.45\textwidth]{Figures/cevae_decoder_figure}
+    \caption{Graph of the decoder of the causal VAE. Nodes in white are neural networks and nodes in grey are sampling steps.} 
+    \label{fig:cevae_decoder_graph}
 \end{figure}
 
 The objective function of a CEVAE is of the same form as the ELBO in equation  \ref{equation:negative_free_energy}. It is the expectation under the variational distribution of the joint log probability of all variables, minus the log of the variational distribution:
@@ -283,10 +308,11 @@ New definition of the ELBO:
 \end{equation}
 
 
+% Deze moet helemaal opnieuw getekend worden
 \begin{figure}
     \centering
     \includestandalone{Figures/cenf_with_vae}
-    \caption{Simple cenf}
+    \caption{Visualisation of the Causal VAE, augmented with a normalising flow. The encoder part on the left is the same as in Figure \ref{fig:cevae_encoder_graph} and the decoder on the right is the same as in Figure \ref{fig:cevae_decoder_graph}. The flow in the middle can be any type of normalising flow.}
     \label{fig:cenf_with_vae}
 \end{figure}
 
@@ -298,6 +324,97 @@ The immediate problem that we face is that in the simpler datasets $\by$ is just
 \begin{equation}
     \ln p(\by_K|\bt, \bz) := \ln p(\by_0|\bt, \bz) - \sum\limits^K_{k=1} \ln \left | \parfrac{g_k}{\by_{k-1}} \right|
 \end{equation}
+
+
+
+\subsection{Causal Flow}
+The augmentation to the causal VAE described in the previous section allows the model to learn a more complex posterior of the data, but the general structure is the same; the model is still optimising a lower bound of the likelihood and is still limited to modelling the observed variables with parameterised distributions. To alleviate these limitations we propose the causal flow. This model splits Equation \ref{equation:prediction_of_do_t} in two parts, similar to the causal VAE, as can be seen in Figure \ref{fig:causal_flow_with_y_prior}. One part of the model, estimates the value of $\bz$ for a given $\bx$. The second part of the model does the intervention and predicts the outcome value. Both of these halves are modelled by a normalising flow:
+\begin{equation}
+    \bx = f(\bz), \qquad \ln p(\bx) = \ln p(\bz) - \sum \ln \left|\det \parfrac{f(\bz)}{\bz}\right| 
+\end{equation}
+where the function $f$ can be any function that satisfies the criteria for a normalising flow. We optimise this by passing each data point through the inverse of the flow $f^{-1}$ and maximising its likelihood. For the second half we add a new variable to the graph: a prior over $\by$, and we make use of 'context' in a normalising flow \cite{papamakarios2019normalizing} \cite{dinh2016density}. The 'context' of a normalising flow is an additional input to the mapping. It can't be part of either of the two random variables at either end of the mapping. A second constraint is that the 'context' cannot be part of the Jacobian, % something something inverse
+This allows us to model a conditional distribution, such as the one we need here:
+\begin{equation}
+    \by = g(\by_{prior}, \bt, \bz), \qquad \ln p(\by) = \ln p(\by_{prior}) - \sum \ln \left|\det \parfrac{g(\by_{prior}, \bt, \bz)}{\bz}\right| 
+\end{equation}
+
+\begin{figure}
+    \centering
+    \includestandalone[width=0.45\textwidth]{Figures/causal_flow_with_y_prior_training}
+    \qquad
+    \includestandalone[width=0.45\textwidth]{Figures/causal_flow_with_y_prior_testing}
+    \caption{Causal flow model. The model on the left hand side indicates the direction of the flows during training and the model on the right hand side indicates the direction of the flow during testing. Full lines indicate a Normalising Flow between two variables, a dashed line indicates that a variable is used as a context variable in the flow.}
+    \label{fig:causal_flow_with_y_prior}
+\end{figure}
+
+
+% Hier moet de rest van mijn model contribution worden uitgelegd. Het causal VAE gedeelte moet duidelijk hebben dat het eerder werk is. En dan twee secties of wat ik heb toegevoegd. Eentje met de causal VAE+planar flow en eentje met causal flow. Dan hernoem ik H4 naar iets anders. Model misschien? Of causal inference using normalising flows.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{Experiments}
+
+\section{Experimental setup}
+Hier iets over de metrics?
+Wat in ieder geval? Uiltleg dat we een nn trainen voor x epochs en met welke hyperparameters allemaal. Wat hebben we nog meer qua experiment setup? Het doel uiteindelijk is factual en counterfactual voorspellingen doen voor de outcome variable. Moet ik hier de DAG noemen die we gebruiken of is het logischer om dat eerder te doen? Het is eerder een onderdeel van de experimental setup. Dan moet hoofdstuk twee algemener blijven en nog niet in gaan op specifieke instanties van een DAG.
+
+
+
+\section{Datasets}
+We will perform experiments on three datasets. The first dataset has been a widely used dataset to benchmark causal effect inference. The second dataset was proposed by \cite{louizos2017causal} for the causal VAE experiments, and the third dataset is a new dataset we propose for causal effect inference research. Each dataset consists of a set of triplets, where each triplet contains the proxy variable, the factual intervention variable and the factual outcome variable.
+
+\subsection{Infant Health and Development Program}
+The Infant Health and Development Program(IHDP) dataset is a semi-synthetic dataset that was proposed by \cite{hill2011bayesian}. This dataset is based on a randomised controlled trial testing the efficacy of early intervention to enhance the cognitive, behavioural, and health status of low birth weight, premature infants \cite{ramey1992infant}. 
+
+From this original dataset \cite{hill2011bayesian} selected a nonrandom subset to dis-balance the intervention and the outcome, and took the measured covariates of the mothers as proxy variable. This resulted in a dataset of 747 samples with 25-dimensional proxy variables and a binary intervention variable. The outcome variables were simulated, based on these original variables. This allowed a potentially larger dataset by repeating the simulation process multiple times.
+
+\subsection{Twin Births}
+The second dataset is also a semi-synthetic dataset. It is based on a medical trial on the effect of birth weight on infant mortality\cite{almond2005costs}. The randomisation was in this original experiment achieved by only researching twins and the intervention being that one of the twins was born heavier than the other. This results in always having both a factual and counterfactual case, if the assumption that twins are similar enough holds. Fortunately the real outcome of child mortality if very low ($3,5\%$ first year mortality). Therefore \cite{louizos2017causal} et al. made the decision to select only those twins where both weighted less than $2kg$, yielding a dataset of 11984 twins.
+
+\subsection{Space Shapes}
+Lastly we propose a new dataset ourselves. This dataset is a completely synthetic dataset, which has images as a proxy variable instead of a regular feature vector. Each proxy variable consist of a 60 by 60 pixels RGB image which shows six simple shapes, each with a different colour. The intervention variable is a 2-dimensional vector that dictates the steering or movement of the red circle in each image. The outcome variable is the relative distance form the red circle's new position to the centre right of the image. See Figure \ref{fig:space_shapes_sample} for a visualisation of this. 
+
+If we would keep the setup as described up to now, there would be no latent confounding, since the outcome could be directly calculated, given the position of the red circle in the image and the value of the intervention vector. This would reduce most of the prediction task to detecting the red circle in the image and make inference of the latent variables redundant. Therefore we added latent confounding in the following way. Each other shape in the image is assigned a 'gravity' value that is constant for that shap\text{e-}colour combination throughout the dataset. This gravity influences the position of the red circle during the intervention by an amount relative to the distance between the red circle and the other shapes. This entails that the position of the red circle would change even when the intervention would be zero. More details on the exact data generation can be read in Appendix \ref{}.
+
+\begin{figure}
+    \centering
+    \includegraphics{latex/Images/sample_space_shapes_score_left.png}
+    \caption{Sample of the Space Shapes dataset, with the observed variables on the right. The 2-dimensional steering vector is the intervention variable, the score scalar is the outcome variable and the image is the proxy variable. The image on the right is a visualisation of the process that underlies the outcome variable. The 2-dimensional vector is the combined effect of the intervention variable and the latent confounding 
+   'gravity' effects.}
+    \label{fig:space_shapes_sample}
+\end{figure}
+
+The data is inspired on the datasets used by \cite{kipf2019contrastive} and \cite{kumar2019videoflow}, who both propose their own image dataset with moving shapes. The research of \cite{kipf2019contrastive} looks at this from a reinforcement learning perspective, where the image is an initial state and the intervention is considered an action. The goal is also to learn the result of the action but the dataset by Kipf et al. does not contain any latent confounding between the states and actions. The VideoFlow model by Kumar et al. has similar images, but instead of one image and one interventions takes a series of images as input and has as task to predict a (short) sequence of images that could continue the sequence.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{Results}
+
+\renewcommand{\arraystretch}{1.3}
+\begin{table}[]
+    \centering
+    \begin{adjustbox}{center}
+    \begin{tabular}{l||c|c|c||c|c|c||c|c|c|}
+        %  & & IHDP & & & TWINS & & & SPACE &\\
+        & \multicolumn{3}{|c||}{IHDP} & \multicolumn{3}{|c||}{TWINS} & \multicolumn{3}{|c|}{SPACE} \\ 
+         Model & ATE & ITE & PEHE & ATE & ITE & PEHE & ATE & ITE & PEHE \\
+         \hline \hline
+         TARNET & $\mathbf{2.24\text{e-}}1$ & $1.490$ & 2.126 &   $8.3\text{e-}2$ & $6.51\text{e-}1$ & $3.50\text{e-}1$ &     $6.96\text{e-}1$ & 2.191 & 1.241\\
+         \hline
+         CEVAE & $4.18\text{e-}1$ & 1.443 & 2.497 &    $1.09\text{e-}1$ & $\mathbf{3.84\textbf{e-}1}$ & $3.29\text{e-}1$ & $5.43\text{e-}1$ & 1.917 & $6.74\text{e-}1$\\
+         \hline
+         CEVAE + PF & $4.75\text{e-}1$ & $\mathbf{1.379}$ &  2.662 & $1.22\text{e-}1$ & $\mathbf{3.83\text{\text{e-}}1}$ & $3.27\text{e-}1$ & $6.84\text{e-}1$ & 1.913 & $5.55\text{e-}1$ \\
+         \hline
+         NCF & $3.32\text{e-}1$ & $1.796$ & $\mathbf{1.995}$ &    $\mathbf{3.00\text{e-}2}$ & $6.85\text{e-}1$ & $\mathbf{3.16\text{e-}1}$ & \textbf{$\mathbf{5.03\text{e-}2}$} & $\mathbf{1.846}$ & \textbf{$\mathbf{5.15\text{e-}2}$} \\
+    \end{tabular}
+    \end{adjustbox}
+    \caption{The scores of each model on each dataset. The cell in bold indicates the best score in each column}
+    \label{tab:results_experiments}
+\end{table}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{Discussion and conclusion}
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \bibliography{references.bib}

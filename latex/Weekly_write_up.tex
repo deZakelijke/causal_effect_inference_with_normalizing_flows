@@ -51,24 +51,9 @@
 \date{August 2019}
 
 \begin{document}
-% The structured causal world model also predicts the next state/frame based on a state and an action. They don't have latent confounding or a bias over the actions/interventions. Their model can query what would happen if a different action was taken, but the actions in the training set are independent of the states
-
-% Variational Inference versus density estimation. Explanation by Jakub:
-% "They are indeed not the same.
-% The density estimation is about looking for p(x), but the variational inference is a general class of looking for approximate inference.
-% For instance, a VAE could be treated as a density estimator, because it models $p(x) = |E_{z~p(z)}[p(x,z)]$.
-% But variational inference is about looking for a distribution q that is closest (e.g., in the sense of the KL) to p.
-
-% This could be confusing, because VAE uses variational inference, but in principle these are not the same thing."
-
-% So which one do I need? Maybe both? I do want to know p(x,t,y) and I also want to estimate posteriors. So that's what a VAE does
 
 
-
-
-
-
-% \noindent
+\noindent
 % The last idea was as follows:
 % \vspace{0.5cm}
 % \fbox{\parbox{0.8\textwidth}{
@@ -95,128 +80,178 @@
 
 % Because we are using normalising flows we could, after training, also query interesting things like: What is a more likely outcome for this intervention. The weird thing is that with this model we can make counterfactual queries but not regular intervention questions without first having a observation of the outcome of some random intervention. We do have the possibility to sample from $z$ of course. If we can sample from $z$ in such a way that the corresponding $x$ is close to a sample that we are looking for we can still do regular intervention queries. 
 
-% \begin{figure}[h]
-%     \centering
-%     \includestandalone{Figures/bi_headed_causal_flow_with_intervention_context}
-%     \caption{Very rough sketch of my idea. The white bar in the middle represents a concatenation/split operation. Each arrow is a series of coupling layers}
-% \end{figure}
-
-
-
-
 
 
 
 % \noindent
 % We are considering two ideas as an improvement upon the causal VAE. I've listed them here with their positive and negative properties.
+\section{Models}
+Here is a list of the models. The first few are the same as earlier documents I sent and are just here for completeness. The Normalising Causal Flow(NCF) in 1.0.4 is a new-ish model that I haven't discussed with you before, but is based on 1.0.3 and a paper you sent me a while ago.
 
-% \subsubsection*{CEVAE}
-% The CEVAE consist of an encoder and a decoder. The encoder maps from the observed variables to the parameters of the variational latent distribution $q(z|x,t,y)$, which we call $f$. The decoder consist of several functions. One function, $g_1$, from the latent variable to the parameters of the intervention distribution $p(t|z)$, one function, $g_2$, from the latent variable and the intervention variable to the outcome distribution $p(y|t,z)$ and the third function, $g_3$, from the latent variable to the distribution of the proxy variable $p(x|z)$. By setting the input $t$ to a specific value, $g_2$ can be used to do an intervention.
+\subsubsection{CEVAE}
+The CEVAE (Causal effect VAE) consist of an encoder and a decoder. The encoder maps from the observed variables to the parameters of the variational latent distribution $q(z|x,t,y)$, which we call $f$. The decoder maps from a sample of the latent variable back to the parameters of the observed variables. Conditioning on $z$ makes certain variables independent so the decoding is split into three separate networks.One network, $g_1$, maps from the latent variable to the parameters of the intervention distribution $p(t|z)$, one function, $g_2$, from the latent variable and the intervention variable to the outcome distribution $p(y|t,z)$. During training the observed value for the intervention variable is inserted her and during testing it is sampled from $p(t,z)$ The third function, $g_3$, maps from the latent variable to the distribution of the proxy variable $p(x|z)$. By setting the input $t$ to a specific value, $g_2$ can be used to do an intervention.
 
-% \paragraph{Advantages}
-% \begin{itemize}
-%     \item The dimensionality of every function in the model can be different and is unrestricted in the size of the hidden layers
-%     \item  Explicitly models the distribution of the intervention variable
-% \end{itemize}
-% \paragraph{Disadvantages}
-% \begin{itemize}
-%     \item Doesn't model the log likelihood directly
-%     \item Have to define parameterised distributions for all observed variables
-% \end{itemize}
+During testing we don't have values for $t$ and $y$ so to estimate $q(z|x,t,y)$ we need to approximate $t$ and $y$ first. This is done by also training two separate networks that predict $t$ and $y$. The first network takes $x$ as an input and the second network takes $x$ and the predicted $t$ as an input.
 
-% \vspace{1cm}
-% \subsubsection*{Causal flows}
-% There are several factors that need to be considered when designing the causal flow:
-% \begin{itemize}
-%     \item All function of the flow itself have to be invertible, at least in theory.
-%     \item The intervention variable $t$ plays two roles. It is used to infer the latent variable $z$ and it is used \textit{with} $z$ to do the intervention and predict $y$.
-%     \item We have to assume that the dimensionality of $x$, $t$ and $y$ is fixed and probably not a convenient number such as a power of two.
-%     \item The dimensionality of $y$ can be much smaller than that of $x$.
-% \end{itemize}
+\paragraph{Advantages}
+\begin{itemize}
+    \item The dimensionality of every function in the model can be different and is unrestricted in the size of the hidden layers
+    \item  Explicitly models the distribution of the intervention variable $p(t|z)$, which allows us to sample $t$ values from our latent prior and simulate a lot of outcomes.
+\end{itemize}
+\paragraph{Disadvantages}
+\begin{itemize}
+    \item Doesn't model the log likelihood directly
+    \item Have to define parameterised distributions for all observed variables
+    \item Is restricted to a Gaussian distribution for the posterior.
+\end{itemize}
 
-% \subsubsection*{Causal normalising flow with two flows}
-% This model has one flow that maps the observed variables $x, t, y$ to the latent variable $z$ with a function $f$. It also has a second function/flow $g$ that maps from the pair $z,t$ to the outcome variable $y$. The flow $f$ doesn't require the observed variables to have a parameterised distribution. This flow models the joint distribution of all observed variables. The second flow $g$ can, theoretically, perform the intervention. 
+\vspace{1cm}
+\subsubsection{CEVAE + planar flow}
+The second model is our first extension. it is simply the previous model with planar flows added to the end of the encoder to get a more complex posterior. This adds little disadvantage to the model, except that we have to balance more terms in our loss which can make training more difficult if it is already unstable with the CEVAE. 
+\paragraph{Advantages}
+\begin{itemize}
+    \item The dimensionality of every function in the model can be different and is unrestricted in the size of the hidden layers
+    \item  Explicitly models the distribution of the intervention variable $p(t|z)$, which allows us to sample $t$ values from our latent prior and simulate a lot of outcomes.
+    \item Can have an arbitrarily complex posterior.
+\end{itemize}
+\paragraph{Disadvantages}
+\begin{itemize}
+    \item Doesn't model the log likelihood directly
+    \item Have to define parameterised distributions for all observed variables
+\end{itemize}
 
-% Normalising flows require the functions to be invertible, which leads to an odd situation with the function $g$. If it were an invertible function we could use that to get both the latent variable $z$ and the corresponding intervention variable $t$ from just the outcome variable $y$: $g(t,z) = y \leftrightarrow g^{-1}(y) = z, t$. Could such a function exist if there is latent confounding between $t, y$ and $z$?
 
-% \paragraph{Advantages}
-% \begin{itemize}
-%     \item Optimises the log likelihood directly
-%     \item Doesn't require parameterised distributions
-%     \item Models the joint distribution of all observed variables
-% \end{itemize}
-% \paragraph{Disadvantages}
-% \begin{itemize}
-%     \item Unclear/unlikely that $g$ can exist as invertible function.
-%     \item Has the "solvable" issue that the dimensions of $f$ and $g$ are constrained due to the invertibility
-%     \item Doesn't model the marginal distributions of the observed variables
-% \end{itemize}
 
-% \subsubsection*{Causal normalising flow with one two-headed flow}
-% Another possibility of using normalising flows is by using one flow that is divided into three components and where the intervention variable is used as a 'context' variable in the flow. The first part of the flow maps $x$ to an intermediate representation: $f_1(x) = z_x$, the second part maps $y$ to an intermediate representation, while using $t$ as a context variable: $f_2(y;t) = z_y$. The last part combines these two into one latent variable: $f_3(z_x, z_y) = z$. Each function $f_i$ is in itself invertible.
+\subsubsection{Causal flow/CausalRNVP - old version}
+I've left this version in the document for now
+This model completely replaces the previous two models and is based on the RealNVP normalising flow. It consists of three sets of RealNVP coupling layers. The first flow maps the proxy variable $x$ to an intermediate representation. The second flow maps the outcome variable $y$ to an intermediate representation, while using $t$ as a context variable. The two intermediate representations are then concatenated and passed through the third flow to get the latent confounder $z$. The context variable is used by adding it as an additional input in the neural networks in each coupling layers that output the scaling and translation for that coupling layer. This is valid because it can be seen as just adding several bias nodes to the input of the first layer of each network, and these networks are unrestricted in their architecture. See Figure \ref{fig:two_headed_causal_flow} for a rough sketch of the model.
 
-% Using $t$ as context variable means that we no longer view it as a random variable and it is not part of the variable that is being transformed. Looking at the RealNVP and its coupling layers as an example we would have the following:
-% \begin{align}
-%     y_{1:d} &= x_{1:d}\\
-%     y_{d:D} &= x_{d:D} \odot \exp (scale(x_{1:d}, t)) + transl(x_{1:d}, t)
-% \end{align}
-% We leverage the fact that the functions \textit{scale} and \textit{transl} don't have to be invertible and are unrestricted. That is why we can just add $t$ as an input. There are several options on how $t$ can be used within these networks, but that is for another discussion.
+An intervention can be done by simply changing the context variable/intervention variable to a new value and reversing the flow, so it flows from the latent confounder $z$ to the outcome variable $y$.
 
-% \paragraph{Advantages}
-% \begin{itemize}
-%     \item Optimises the log likelihood directly
-%     \item Doesn't require parameterised distributions
-%     \item Can do an intervention by changing $t$ as input of the coupling networks.
-%     \item The two flows $f_1$ and $f_2$ can be different in both dimensionality and architecture.
-% \end{itemize}
-% \paragraph{Disadvantages}
-% \begin{itemize}
-%     \item Only models the joint distribution of $x$ and $y$. We don't model $t$ at all.
-%     \item Although a difference in dimensionality of $x$ and $y$ is not a problem, we do need $y$ to be at least two-dimensional if we want to use coupling layers without modifications. This is not always the case
-% \end{itemize} 
-% The last point could maybe be solved by not using coupling layers. It would need to be replaced by an invertible 1-dimensional function.
 \begin{figure}
     \centering
-    \includestandalone{Figures/causal_graph_one_proxy_one_confounder}
-    \caption{Causal graph}
+    \includestandalone{Figures/bi_headed_causal_flow_with_intervention_context}
+    \caption{Causal Flow/Causal RealNVP}
+    \label{fig:two_headed_causal_flow}
 \end{figure}
 
+\paragraph{Advantages}
+\begin{itemize}
+    \item Optimises the log likelihood directly
+    \item Doesn't require parameterised distributions for the priors
+    \item The two flows $f_1$ and $f_2$ can be different in both dimensionality and architecture.
+\end{itemize}
 
-\noindent
-More general model of the setup with each variable a multivariate Gaussian with full covariance and linear dependence on its parent variables:
+\paragraph{Disadvantages}
+\begin{itemize}
+    \item Only models the joint distribution of $x$ and $y$. We don't model $t$ at all.
+    \item Although a difference in dimensionality of $x$ and $y$ is not a problem, we do need $y$ to be at least two-dimensional if we want to use coupling layers without modifications. This is not always the case
+\end{itemize} 
 
+
+\subsubsection{Normalising Causal Flow}
+This model came to be by combining two ideas. The previous idea of using the intervention as a 'context' variable in the flow is the first part. This gives us a way to do the intervention by passing the/a variable through the flow with a different value for the context variable. The second idea came from the paper Causal Inference with Deep Causal Graphs \cite{parafita2020causal}. The idea I took from this was to give each variable it's own prior. We then make every other variable that is a 'cause' of that variable in the causal graph part of the 'context'. In our case that would make the context of the outcome variable consist of two parts: the intervention variable and the latent confounder. As before, we infer the latent confounder through a normalising flow from our proxy variable. Put formally, we learn the following two distributions during training:
 \begin{align}
-p(\bz) &= \Norm(\bz | \bmu, \bLam\inv)\\
-p(\bx|\bz) &= \Norm(\bx | \bA\bz + \f, \bL\inv)\\
-p(\bt|\bz) &= \Norm(\bt|\bB\bz + \bg, \bM\inv)\\
-p(\by|\bt, \bz) &= \Norm(\by |\bC\bt + \bD\bz + \bh , \bN\inv)
+    \bx &= f(\bz) \\
+    \ln p(\bx) &= \ln p(\bz) - \sum \ln |\det \parfrac{f(\bz)}{\bz}| \\
+    \by &= g(\by_{prior}, \bt, \bz)\\
+    \ln p(\by) &= \ln p(\by_{prior}) - \sum |\det \parfrac{g(\by_{prior}, \bt, \bz)}{\by_{prior}}|
 \end{align}
 
-\noindent
-We want confirm that explicitly modelling the latent variable $\bz$ is needed and that you can only ignore the latent variable if either the proxy variable $\bx$ is a perfect proxy ($\bL^{-1}$ goes to zero) or if the intervention variable $\bt$ is independent of $\bz$ ($\bB=0$). To compare to the simple version of Christos I repeated his calculation with the more general distribution.
-The correct calculation to get the intervention distribution is:
+This seems similar as what we had before, because again we are learning two normalising flows, but now we are unconstrained by any dimensionality issues. This is because primarily we learn a mapping from $\by$ to its prior $\by_{prior}$ instead of a mapping from $\by$ to the latent confounder $\bz$.
+
+The name of the model is somewhat arbitrary and is up for discussion.
+
+\subsubsection{Baseline model: TARNet}
+The Treatment Agnostic Representation Network is a baseline that was proposed by \cite{shalit2017estimating}. It is more of a supervised learning approach that takes the intervention variable as an additional input.
+
+\section*{Datasets}
+
+The three datasets that we use. IHDP is a dataset used in multiple papers, TWINS was introduced by Christos and SPACE is introduced by us. Again, this is the same as last time I emailed this.
+
+\begin{table}[h]
+    \centering
+    \begin{tabular}{c|p{4cm}|p{3.5cm}|p{3.5cm}|p{4cm}}
+        Datasets & Proxy variable & outcome variable & intervention variable & latent confounder \\
+        \hline
+        IHDP & Selection of patient measurements, both continuous and categorical & Health as single real number & Binary treatment assignment & Not known, could be general health characteristics of the patient.\\
+        \hline
+        TWINS & Noisy encoding of gestation variable & Health as binary variable (dead or alive) & Being taller than the other twin (binary) & gestation variable \\ 
+        \hline
+        SPACE & Image of the objects and the 'space ship', location can be noisy.  & Score for the new state & Movement vector of the space ship & Encoding of the location, shape, colour and gravity of the objects.\\
+    \end{tabular}
+    \label{tab:my_label}
+\end{table}
+
+\newpage
+
+\section*{Metrics}
+The two main values that are of interest to predict in most causal inference problems are the Individual Treatment Effect and the Average Treatment Effect:
 \begin{equation}
-\begin{split}
-    p(\by|do(\bt)) &= \int_\bz p(\by |do(\bt), \bz) p(\bz|do(\bt))\\
-    &=\int_\bz p(\by |\bt, \bz) p(\bz)\\
-    &=\int_\bz \Norm(\twovec{\bz}{\by} | \twovec{\bmu}{\bD\bmu + \bC\bt + \bh}, \begin{pmatrix}
-    \bLam\inv & \bLam\inv\bD^T \\ \bD\bLam\inv & \bN\inv + \bD\bLam\inv\bD^T\end{pmatrix})\\
-    &= \Norm(\by | \bD\bmu + \bC\bt + \bh , \bN\inv + \bD\bLam\inv\bD^T)
-\end{split}
+    ITE(x) := \E[\by | \bX=x, do(\bt=1)] - \E[\by | \bX=x, do(\bt=0)], \quad ATE := \E[ITE(x)]
+\end{equation}
+Both are looking at the advantage or gain of doing one intervention over the other. The first one looks at individuals or groups that have the same proxy values $x$. As metrics for scoring our models we have the root mean square error of the ITE and the absolute error of the ATE: 
+\begin{equation}
+    RMSE_{ITE} :=\sqrt{\frac{1}{N} \sum\limits^N_{i=0} (ITE_{pred}(x_i) - ITE_{true}(x_i))^2}
+\end{equation}
+\begin{equation}
+    AbsE_{ATE} := \left| \frac{1}{N} \sum\limits^N_{i=0} (ITE_{pred}(x_i)) - \sum\limits^N_{i=0} (ITE_{true}(x_i)) \right|
 \end{equation}
 
-\noindent
-The incorrect way is the following. We hope to derive that it is the same as above if and only if one of the two conditions are met.
+The third metric that is used in earlier research is the Precision in Estimating of Heterogeneous Effet (PEHE), defined as:
 \begin{equation}
-\begin{split}
-    p_{\text{wrong}}(\by | do(\bt)) &= \int_\bx p(\by |do(\bt), \bx) p(\bx|do(\bt))\\
-    &= \int_\bx p(\by |\bt, \bx) p(\bx)\\
-    &= \int_\bx p(\bx) \frac{p(\by, \bt, \bx)}{p(\bx, \bt)}\\
-    &= \int_\bx p(\bx) \frac{\int_\bz p(\by, \bt, \bx, \bz)}{\int_\bz p(\bx, \bt, \bz)}\\
-\end{split}
+    PEHE := \frac{1}{N} \sum\limits^N_{i=1} \left((y_{it_1} - y_{it_0}) - (\hat{y}_{it_1} - \hat{y}_{it_0}) \right)^2
 \end{equation}
-Unfortunately I got stuck at the inverse of a specific matrix. 
+Here, $y_{t_1}$ and $y_{t_0}$ are the true outcomes under interventions $t_1$ and $t_0$, respectively. The values $\hat{y}_{t_1}$ and $\hat{y}_{t_0}$ correspond to the outcomes estimated for our model. This seems quite similar to the RMSE of the ITE, but the difference lies in the fact that the PEHE requires the actual ground-truth for both the factual and counterfactual outcome, which is only possible with (semi-)simulated datasets. The RMSE of the ITE can be calculated with just the ground truth of the event that actually took place through a law called 'ignorability'. I can't yet explain it well myself, so I just took the formula used by other research to calculate the ITE with just the one ground truth value.
 
+% The net difference between the two is that the ITE averages after taking the difference with the ground truth ITE, so each dataset has an ITE for each sample. The ATE is one score per dataset, from which we calculate the prediction error. The error is the ATE is usually lower because errors can cancel each other out.
+
+% For the SPACE dataset it doesn't make sense to measure this because the intervention variable is continuous, so for the time being we just have the prediction error. I did mention on Monday that the Causal RNVP model seemed to do better, and that was with regard to the root mean squared prediction error/reconstruction error on the outcome variable. However, yesterday and today I was tweaking the weighting of the components of the loss terms for the first two datasets and noticed that decreasing this reconstruction error actually increased the error on the ITE and ATE. Therefore I think I was too hasty in concluding that the Causal RNVP model seemed to perform better. It might be better to postpone that until we have a actual performance metric for continuous interventions.
+% \vspace{1cm}
+
+
+% Possible idea: we rephrase the ITE such that the values that $t$ takes are a bit more justified. We add two distributions for the value of $t$ in both sides of the difference from which $t$ is sampled. In the original case these are both delta distributions, resulting in the original formulation. 
+
+% \begin{equation}
+%     ITE(x) := \E[\by | \bX=x, do(\bt=t_1)] - \E[\by | \bX=x, do(\bt=t_0)], \quad t_1 \sim \delta_1, \quad t_0 \sim \delta_0
+% \end{equation}
+% \noindent
+% This generalisation allows us to simple swap the two delta distributions with two other distributions. These new distributions can be viewed as policies, in reinforcement learning terms. What now remains is picking two distributions that we want to evaluate/compare. This would have to be dataset/problem specific. In the SPACE dataset, for example, we could pick a policy that roughly moves the spaceship towards the goal and one that either moves in a random direction or the opposite direction.
+
+% We could also look at a synthetic 'optimal' policy that should result in the best score, given the latent confounding and compare that with a 'naive' policy that steers straight at the goal but will likely end up somewhere else:
+% \begin{equation}
+%     ITE(x) := \E[\by | \bX=x, do(\bt=t_1)] - \E[\by | \bX=x, do(\bt=t_0)], \quad t_1 \sim p_{optimal}(t), \quad t_0 \sim p_{control}(t)
+% \end{equation}
+
+
+
+\section*{Results}
+The normalising flow model seems to do quite well, though it isn't the best on all metrics in all datasets. 
+
+
+\renewcommand{\arraystretch}{1.3}
+\begin{table}[h]
+    \centering
+    \begin{tabular}{l||c|c|c||c|c|c||c|c|c|}
+        %  & & IHDP & & & TWINS & & & SPACE &\\
+        & \multicolumn{3}{|c||}{IHDP} & \multicolumn{3}{|c||}{TWINS} & \multicolumn{3}{|c|}{SPACE} \\ 
+         Model & ATE & ITE & PEHE & ATE & ITE & PEHE & ATE & ITE & PEHE \\
+         \hline \hline
+         TARNET & $\mathbf{2.24\text{e-}}1$ & $1.490$ & 2.126 &   $8.3\text{e-}2$ & $6.51\text{e-}1$ & $3.50\text{e-}1$ &     $6.96\text{e-}1$ & 2.191 & 1.241\\
+         \hline
+         CEVAE & $4.18\text{e-}1$ & 1.443 & 2.497 &    $1.09\text{e-}1$ & $\mathbf{3.84\textbf{e-}1}$ & $3.29\text{e-}1$ & $5.43\text{e-}1$ & 1.917 & $6.74\text{e-}1$\\
+         \hline
+         CEVAE + PF & $4.75\text{e-}1$ & $\mathbf{1.379}$ &  2.662 & $1.22\text{e-}1$ & $\mathbf{3.83\text{\text{e-}}1}$ & $3.27\text{e-}1$ & $6.84\text{e-}1$ & 1.913 & $5.55\text{e-}1$ \\
+         \hline
+         NCF & $3.32\text{e-}1$ & $2.022$ & $\mathbf{1.995}$ &    $\mathbf{3.00\text{e-}2}$ & $6.85\text{e-}1$ & $\mathbf{3.16\text{e-}1}$ & \textbf{$\mathbf{5.03\text{e-}2}$} & $\mathbf{1.846}$ & \textbf{$\mathbf{5.15\text{e-}2}$} \\
+    \end{tabular}
+    \caption{The scores of each model on each dataset. The cell in bold indicates the best score in each column}
+    \label{tab:results_experiments}
+\end{table}
+
+
+\bibliographystyle{apalike}
+\bibliography{references}
 \end{document}
 
 

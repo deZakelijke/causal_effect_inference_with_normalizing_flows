@@ -1,0 +1,63 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{tikz}
+\usepackage{standalone}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage[a4paper, total={7.5in, 10in}]{geometry}
+\usepackage{hyperref}
+\usepackage{pbox}
+
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric}
+\usepackage{standalone}
+\usepackage{graphicx, color}
+
+
+\begin{document}
+\noindent
+The SPACE dataset is inspired by the SHAPES dataset. Instead of having a random object move we have one object that is the 'space ship'. This is the object who's movement is partially caused by the intervention variable. The intervention variable is now a 2D vector in which direction the 'space ship' moves. What is also added is that each object has a gravity or magnetic force. This influences two things. How the spaceship decides to steer (selection of the intervention variable) and how the spaceship actually moves. The output state can be either the image of the next state or a score that is given to the next state. For example the distance between the new position of the space ship and a goal location in the image.
+
+The colour and shape of objects is an indication of which object is which and therefore the 'gravity' per colour-shape pair is fixed. We can add noise to the colour that is displayed to obfuscate the 'real' gravity an object has.
+
+The value of the intervention variable must in some way be caused by the latent confounder. The most obvious way to do that is to map the whole latent vector to a 2D vector and average that with a vector that points directly at the 'goal' location.
+
+The two versions for this dataset differ in what the outcome variable is, and therefore what the model has to predict in the end. The first version is more aimed at image generation and can be considered harder. The second version only requires the model to generate one scalar (new distance to 'goal') and lends itself more easily for testing a whole set of interventions and finding the intervention that yields the best result. The dataset can easily include a ground truth value for the intervention variable that yields the best new distance to the goal, only to be used during test time to verify the model. The second task seems a bit more interesting as it is actually concerned with a downstream task and not just modelling the causal effect for its own sake. It is also maybe closer to the IHDP dataset and TWINS dataset, where the outcome variable is also one-dimensional.
+
+What still needs to be decided:
+\begin{itemize}
+    \item Actual mapping from latent confounder to the intervention variable
+    \item Predicting second state or predicting score after intervention
+\end{itemize}
+
+Things that can be scaled to increase difficulty of the problem:
+\begin{itemize}
+    \item Noise level in the proxy variable
+    \item Number of objects in the image
+    \item Noise level in the selection of the intervention variable
+    \item Noise level in the actual gravity effect of each object
+\end{itemize}
+% I made an overview of the datasets to make it clear in which cases we a priori expect our model to perform better than other models and in which we don't. The cases where we don't expect our model to do better is cases where:
+% \begin{enumerate}
+%     \item The proxy variable is a perfect proxy
+%     \item The intervention variable is independent from the latent variable
+%     \item The outcome variable is deterministically dependent on the intervention variable and the latent variable (?)
+%     \item The intervention variable is deterministically dependent on the latent variable (?)
+% \end{enumerate}
+
+% Another problem is what we see as counterfactual examples. Is seeing the same state with three of the four possible actions still sufficient? In what cases are states similar enough to count as the same?
+
+\begin{table}[]
+    \centering
+    \begin{tabular}{c|p{4cm}|p{3.5cm}|p{3.5cm}|p{4cm}}
+        Datasets & Proxy variable & outcome variable & intervention variable & latent confounder \\
+        \hline
+        IHDP & Selection of patient measurements, both continuous and categorical & Health as single real number & Binary treatment assignment & Not known, could be general health characteristics of the patient.\\
+        \hline
+        TWINS & Noisy encoding of gestation variable & Health as binary variable (dead or alive) & Being taller than the other twin (binary) & gestation variable \\ 
+        \hline
+        SPACE & Image of the objects and the 'space ship', location can be noisy.  & Score for the new state & Movement vector of the space ship & Encoding of the location, shape, colour and gravity of the objects.\\
+    \end{tabular}
+    \label{tab:my_label}
+\end{table}
+\end{document}

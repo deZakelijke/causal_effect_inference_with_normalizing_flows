@@ -12,43 +12,43 @@
 
 \begin{document}
 \begin{tikzpicture}
-    \node[draw, minimum width=0.7cm, minimum height=3.5cm, rounded corners, label=$p(\bx)$, fill=black!10!white] (x) at (0.5, 0) {};
-    \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners] (x1) at (2.5, 1) {};
-    \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners] (x2) at (2.5, -1) {};
-    \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners] (x11) at (4, 1) {};
-    \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners, label=below:$q(\bt|\bx)$,fill=black!10!white] (qt) at (4, -1) {};
+    \node[draw, minimum width=0.7cm, minimum height=2.5cm, rounded corners, label=$p(\bx)$, fill=black!10!white] (x) at (1, 0) {};
+    \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners] (x1) at (2.3, 0) {};
+    % \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners] (x2) at (2.5, -1) {};
+    % \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners] (x11) at (4, 1) {};
+    \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners, label=above:$q(\bt|\bx)$,fill=black!10!white] (qt) at (4, 0) {};
     
-    \node[draw, circle, inner sep=0.08cm] (switch1) at (5.5, 1) {};
-    \node[draw, circle, inner sep=0.08cm] (switch2) at (5.5, -1) {};
+    % \node[draw, circle, inner sep=0.08cm] (switch1) at (5.5, 1) {};
+    % \node[draw, circle, inner sep=0.08cm] (switch2) at (5.5, -1) {};
     
-    \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners] (x13) at (6.5, 1) {};
-    \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners] (x23) at (6.5, -1) {};
-    \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners, label={$q(\by|\bt \eq 0, \bx)$}, fill=black!10!white] (qyt0) at (8.0, 1) {};
-    \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners, label=below:{$q(\by | \bt=1,\bx)$}, fill=black!10!white] (qyt1) at (8.0, -1) {};
+    \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners] (x13) at (6, 1.5) {};
+    % \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners] (x23) at (6.5, -1) {};
+    \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners, label={$q(\by|\bt, \bx)$}, fill=black!10!white] (qyt) at (7.2, 1.5) {};
+    % \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners, label=below:{$q(\by | \bt=1,\bx)$}, fill=black!10!white] (qyt1) at (8.0, -1) {};
     
-    \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners] (x14) at (9.5, 1) {};
-    \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners] (x24) at (9.5, -1) {};
-    \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners, label={$q(\bz | \by,\bt \eq 0, \bx)$}, fill=black!10!white] (qzt0) at (11.0, 1) {};
-    \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners, label=below:{$q(\bz | \by, \bt=1,\bx)$}, fill=black!10!white] (qzt1) at (11.0, -1) {};
+    % \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners] (x14) at (9.5, 1) {};
+    \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners] (x24) at (8.7, 0) {};
+    \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners, label={$q(\bz | \by,\bt, \bx)$}, fill=black!10!white] (qzt) at (10.0, 0) {};
+    % \node[draw, minimum width=0.7cm, minimum height=1cm, rounded corners, label=below:{$q(\bz | \by, \bt=1,\bx)$}, fill=black!10!white] (qzt1) at (11.0, -1) {};
 
 
     \draw[->] (x) to (x1);
-    \draw[->] (x) to (x2);
-    \draw[->] (x1) to (x11);
-    \draw[->] (x2) to (qt);
-    \draw[->] (qt) to (switch1);
-    \draw[->] (qt) to (switch2);
-    \draw[->] (x11) to (switch1);
-    \draw[->] (x11) to (switch2);
+    \draw[->, out=50, in=180] (x1) to (x13);
+    \draw[->, out=0, in=180] (x1) to (qt);
+    \draw[->, out=-30, in=220] (x1) to (x24);
+    \draw[->, out=0, in=200] (qt) to (x13);
+    \draw[->, out=0, in=180] (qt) to (x24);
+    % \draw[->] (x11) to (switch1);
+    % \draw[->] (x11) to (switch2);
     
-    \draw[->] (switch1) to (x13);
-    \draw[->] (x13) to (qyt0);
-    \draw[->] (qyt0) to (x14);
-    \draw[->] (x14) to (qzt0);
+    % \draw[->] (switch1) to (x13);
+    \draw[->] (x13) to (qyt);
+    \draw[->, out=-15, in=100] (qyt) to (x24);
+    % \draw[->] (x14) to (qzt0);
     
-    \draw[->] (switch2) to (x23);
-    \draw[->] (x23) to (qyt1);
-    \draw[->] (qyt1) to (x24);
-    \draw[->] (x24) to (qzt1);
+    % \draw[->] (switch2) to (x23);
+    % \draw[->] (x23) to (qyt1);
+    % \draw[->] (qyt1) to (x24);
+    \draw[->, out=0, in=180] (x24) to (qzt);
 \end{tikzpicture}
 \end{document}

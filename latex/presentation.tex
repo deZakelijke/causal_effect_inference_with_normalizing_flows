@@ -37,87 +37,58 @@
 	\end{frame}
 	
 	
-	\begin{frame}{What is causal inference?} 
+	\begin{frame}{New dataset} 
 		\begin{figure}
             \centering
-            \includestandalone{Figures/causal_graph_one_proxy_one_confounder}
-            \caption{Causal graph with a latent confounder and observed proxy variable}
+            \includegraphics[scale=0.7]{latex/Figures/sample_space_shapes_with_score.png}
+            \caption{Sample of the dataset. Image on the left is the proxy variable $\bx$, Steering on the left is the intervention variable $\bt$, score on the right is the outcome variable $\by$. Image and direction vector on the right is a visualisation of what 'happens' because of the confounding combined with the intervention variable.}
             \label{fig:graph_observed_confounder_and_latent_with_proxy}
         \end{figure}
-        $$ITE:=\E[\by|\bx, do(\bt=1)] - \E[\by|\bx, do(\bt=0)]$$
 	\end{frame}
 	
-	\begin{frame}{Variational inference and CEVAE}
-		$$p(x) \geq \mathcal{L} = \E_{\bz \sim q(\bz|\bx)}[\ln p(\bx|\bz)] - D_{KL}[q(\bz|\bx) || p(\bz)]$$
+	\begin{frame}{Some considerations I made}
+		\begin{itemize}
+		    \item Keep the outcome variable $\by$ a vector or scalar. Having the possibility of it also being an image itself might deviate a bit too much from earlier work where it is always just a scalar and it makes the code a lot more cumbersome because it needs to take more model options into account.
+		    \item For now more noise to all variables is optional and can be scaled up after adding the technical novelty is done.
+		    \item The causal flow model I designed needs major improvement or we need to come up with something different altogether. 
+		\end{itemize}
 	\end{frame}
 	
-	\begin{frame}{Variational inference and CEVAE}
-		$$p(x) \geq \mathcal{L} = \E_{\bz \sim q(\bz|\bx)}[\ln p(\bx|\bz)] - D_{KL}[q(\bz|\bx) || p(\bz)]$$
-		$$ \mathcal{L} = \E_{\bz \sim q(\bz|\bx)}[\ln p(\bx, \bt, \by|\bz)] - D_{KL}[q(\bz|\bx, \bt, \by) || p(\bz)]$$
+	\begin{frame}{Causal flow model and its problems}
+	    The model is based on the RealNVP. In the RealNVP we have invertible coupling layers:
+	    \begin{align}
+	        \bz_{k+1, 1:d} &= \bz_{k, 1:d} \\
+            \bz_{k+1, d+1:D} &= \bz_{k, d+1:D} \odot \exp \left(s(\bz_{k, 1:d}) \right) + t(\bz_{k, 1:d})
+	    \end{align}
+	    Each layer half of the dimensions is translated and scaled, based on a NN that takes the other half as input, meaning $s(\cdot)$ and $t(\cdot)$ are arbitrary neural networks.
 	\end{frame}
 	
-	\begin{frame}{Variational inference and CEVAE}
-		$$p(x) \geq \mathcal{L} = \E_{\bz \sim q(\bz|\bx)}[\ln p(\bx|\bz)] - D_{KL}[q(\bz|\bx) || p(\bz)]$$
-		$$ \mathcal{L} = \E_{\bz \sim q(\bz|\bx)}[\ln p(\bx, \bt, \by|\bz)] - D_{KL}[q(\bz|\bx, \bt, \by) || p(\bz)]$$
-		$$ \mathcal{L} = \E_{\bz \sim q(\bz|\bx)}[\ln p(\bx|\bz) + \ln p(\bt|\bz) + \ln p(\by|\bt, \bz)] - D_{KL}[q(\bz|\bx, \bt, \by) || p(\bz)]$$
-	\end{frame}
-	
-	\begin{frame}{Normalising Flows}
-	    Change of variable formula:
-	    $$q(\bz') = q(\bz)\left| \det \parfrac{f^{-1}}{\bz'} \right| = q(\bz)\left| \det \parfrac{f}{\bz} \right| ^{-1}$$
+	\begin{frame}{Causal flow model and its problems}
+	    The idea was to use three of these chains of coupling layers. The first one maps the proxy variable $\bx$ to an intermediate representation $\bx_k$. The second one maps the outcome variable $\by$ to an intermediate representation $\by_k$. And for the third one we concatenate $\bx_k$ and $\by_k$ and pass that through the coupling layers to get $\bz$.
 	    
+	    We use the intervention variable $\bt$ as 'context' in the series of coupling layers from $\by$ to $\by_k$. This means that $\bt$ is given as additional input to the networks $s(\cdot)$ and $t(\cdot)$ in each coupling layer between $\by$ and $\by_k$.
 	\end{frame}
 	
-	\begin{frame}{Normalising Flows}
-	    $$q(\bz') = q(\bz)\left| \det \parfrac{f^{-1}}{\bz'} \right| = q(\bz)\left| \det \parfrac{f}{\bz} \right| ^{-1}$$
-	    $$\bz_K = f_K  \circ ... f_1(\bz_0)$$
+	\begin{frame}{Causal flow model and its problems}
+	     During test time we want to do two things: first infer $\bz$ based on $\bx$, and then set $\bt$ to a specific value and infer $\by$ from $\bz$ and $\bt$. The second part is straightforward with this model, but the first part isn't.
+	     
+	     The original CEVAE does this in three steps:
+	     \begin{enumerate}
+	         \item Predict and sample $\bt$ solely on $\bx$
+	         \item Predict and sample $\by$ with $\bx$ and the new $\bt$ value
+	         \item Predict and sample $\bz$ with $\bx$ and the new $\bt$ and $\by$ value
+	     \end{enumerate}
+	     The first two are done with separate networks that aren't really part of the CEVAE and are trained in a supervised way. We could also do this but it doesn't seem elegant. 
 	\end{frame}
 	
-	\begin{frame}{Normalising Flows}
-	    $$q(\bz') = q(\bz)\left| \det \parfrac{f^{-1}}{\bz'} \right| = q(\bz)\left| \det \parfrac{f}{\bz} \right| ^{-1}$$
-	    $$\bz_K = f_K  \circ ... \circ f_1(\bz_0)$$
-	    $$\ln q_K(\bz_K) = \ln q_0(\bz_0) - \sum\limits^K_{k=1} \ln \left|\det \parfrac{f_k}{\bz_{k-1}} \right| $$ 
+	\begin{frame}{Causal flow model and its problems}
+	    I tried to avoid the partial supervised approach in the following way. Instead of predicting $\by$ and $\bt$ from $\bx$, and then using those to predict $\bz$ I selected an array of $n$ evenly spaced values for both $\by$ and $\bt$ within their respective range. The range was determined by taking the min and max of the training data.
+	    Then I took all combinations of $\bt$ and $\by$ values, combined them with $\bx$ and passed them through the coupling layers. This yields a set of $n$ $\bz$ values, which I averaged. 
+	    Then that $\bz$ value was passed through the reverse of the flow, combined with the value of $\bt$ for which we actually wanted to predict the outcome, to make our final prediction of $\by$.
 	\end{frame}
 	
-	\begin{frame}{Normalising flow: new ELBO}
-	     $$\mathcal{L}_{old} = \E_{\bz \sim q(\bz|\bx)}[\ln p(\bx|\bz)] - D_{KL}[q(\bz|\bx) || p(\bz)]$$
-	     $$\mathcal{L}_{new} = \E_{\bz_0 \sim q_0(\bz_0)}[\ln p(\bx| \bz_K) + \ln p(\bz_K) - \ln q(\bz_0) + \sum\limits^K_{k=1}\ln \left|\det \parfrac{f_k}{\bz_{k-1}} \right|]  $$
-	\end{frame}
-	\begin{frame}{Causal inference with Normalising Flows}
-	    \centering
-	    \begin{tikzpicture}
-	    \node[] at (0, 0) (VAE) {VAE};
-	    \node[] at (2, 2) (CEVAE) {CEVAE};
-	    \node[] at (2, -2) (NF) {VAE + NF};
-	    \node[] at (4, 0) (CENF) {CENF};
-	    
-	    \draw[->] (VAE) -- (CEVAE);
-	    \draw[->] (VAE) -- (NF);
-	    \draw[->] (CEVAE) -- (CENF);
-	    \draw[->] (NF) -- (CENF);
-	    
-	    \end{tikzpicture}
+	\begin{frame}{Causal flow model and its problems}
+	    Another problem with the RealNVP-based approach is that if $\by$ is low dimensional the coupling layers are less powerful, since each scaling and translation network has a low dimensional input. It was designed for high dimensional images.
 	\end{frame}
 	
-	\begin{frame}{Causal inference with Normalising Flows}
-	    CEVAE:
-	    $$ \mathcal{L} = \E_{\bz \sim q(\bz|\bx)}[\ln p(\bx, \bt, \by|\bz)] - D_{KL}[q(\bz|\bx, \bt, \by) || p(\bz)]$$
-	    VAE+NF
-	    $$\mathcal{L} = \E_{\bz_0 \sim q_0(\bz_0)}[\ln p(\bx| \bz_K) + \ln p(\bz_K) - \ln q(\bz_0) + \sum\limits^K_{k=1}\ln \left|\det \parfrac{f_k}{\bz_{k-1}} \right|]  $$
-	\end{frame}
-	
-	\begin{frame}{Causal inference with Normalising Flows}
-	    \begin{equation}\begin{split}
-	    \mathcal{L} &= \mathbb{E}_{q_0(\bz_0)}\left[\ln p(\bx, \bt | \bz_K) + \ln p(\bz_K) + \ln p(\by |\bt, \bz_K) - \ln q_0(\bz_0)\right.\\
-	    &\left. + \sum\limits^K_{k=1} \ln \left| \det \parfrac{f_k}{\bz_{k-1}}\right| \right]
-	    \end{split}\end{equation}
-	\end{frame}
-
-    \begin{frame}{Preliminary results}
-        \begin{figure}
-            \centering
-            \includegraphics[scale=0.2]{latex/Figures/Results/metrics_ite.png}
-            \caption{Individual Treatment Effect, root of mean square error}
-        \end{figure}
-    \end{frame}	 
 \end{document}
