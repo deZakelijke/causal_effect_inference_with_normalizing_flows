@@ -283,6 +283,7 @@ def train(params, writer, logdir, train_iteration=0):
         stats_test = calc_stats(model, test_dataset, scaling_data, params)
         print_stats(stats_test, l_step, training=False)
 
+        model.summary()
         return stats_train, stats_test
 
 
