@@ -17,8 +17,10 @@ from evaluation import calc_stats
 from normalizing_causal_flow import NCF
 from tar_net import TARNET
 
-VALID_MODELS = ["CEVAE", "CENF", "CRNVP", "NCF", "TARNET"]
 VALID_DATASETS = ["IHDP", "IHDP_LARGE", "TWINS", "SPACE", "SPACE_NO_GRAV"]
+VALID_MODELS = ["CEVAE", "CENF", "CRNVP", "NCF", "TARNET"]
+VALID_FLOWS = ["affine_coupling"]
+VALID_FLOWS_VARIATIONAL = ["PlanarFlow", "RadialFlow"]
 
 tf.keras.backend.set_floatx('float64')
 
@@ -67,6 +69,11 @@ def parse_arguments():
                         help="Number of nodes in hidden fully connected layers"
                         " or number of filters in convolutional layers. "
                         "(default: 200)")
+    parser.add_argument("--flow_type", type=str, default="affine_coupling",
+                        help="Type of flow functions in pure flow model")
+    parser.add_argument("--flow_type_variational", type=str,
+                        default="PlanarFlow", help="Type of flow function"
+                        " for variational inference model.")
     parser.add_argument("--learning_rate", type=float, default=1e-4,
                         help="Learning rate of the optmiser (default: 1e-4)")
     parser.add_argument("--log_steps", type=int, default=10,
@@ -111,6 +118,20 @@ def parse_arguments():
     if args.model not in VALID_MODELS:
         raise NotImplementedError(f"Model {args.model} is not implemented")
 
+    if args.model == 'CENF':
+        if args.flow_type_variational not in VALID_FLOWS_VARIATIONAL:
+            raise NotImplementedError("Variational flow type invalid. Must be "
+                                      f"one of: {VALID_FLOWS_VARIATIONAL}")
+    else:
+        args.flow_type_variational = ''
+
+    if args.model == 'NCF':
+        if args.flow_type not in VALID_FLOWS:
+            raise NotImplementedError("Flow type invalid. Must be one of: "
+                                      f"{VALID_FLOWS}")
+    else:
+        args.flow_type = ''
+
     args.dataset = args.dataset.upper()
     if args.dataset not in VALID_DATASETS:
         raise NotImplementedError(f"Dataset {args.dataset} is not implemented")
@@ -122,7 +143,7 @@ def parse_arguments():
         args.n_flows = 0
 
     for arg, value in vars(args).items():
-        print(f"Argument: {arg:<16} {value:<5}")
+        print(f"Argument: {arg:<22} {value:<5}")
     print()
 
     return vars(args)
@@ -301,7 +322,15 @@ def main(params):
 
     timestamp = time.strftime("%Y:%m:%d/%X")
     if not params["debug"]:
-        logdir = (f"{params['model_dir']}{params['model']}/"
+        if params['flow_type']:
+            flow_type_dir = params['flow_type'] + '/'
+        elif params['flow_type_variational']:
+            flow_type_dir = params['flow_type_variational'] + '/'
+        else:
+            flow_type_dir = None
+        logdir = (f"{params['model_dir']}"
+                  f"{params['model']}/"
+                  f"{flow_type_dir or ''}"
                   f"{params['dataset']}/"
                   f"{params['learning_rate']}/"
                   f"{timestamp}/"
