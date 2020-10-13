@@ -82,7 +82,7 @@ class RadialFlowLayer(Model):
     @tf.function
     def call(self, z, step, training=False):
         b = -self.a + tf.math.softplus(self.b)
-        with tf.name_scope("planar_flow") as scope:
+        with tf.name_scope("radial_flow") as scope:
             if training and step is not None:
                 tf.summary.histogram(f"flow_{self.flow_nr}/{self.b.name}",
                                      self.b, step=step)
@@ -93,7 +93,7 @@ class RadialFlowLayer(Model):
             diff = z - self.z_0
             r = tf.norm(diff, axis=1, keepdims=True)
             h = 1 / (self.a + r)
-            return z + self.b * h * diff
+            return z + b * h * diff
 
     def logdet_jacobian(self, z):
         b = -self.a + tf.math.softplus(self.b)
@@ -101,8 +101,8 @@ class RadialFlowLayer(Model):
         r = tf.norm(z - self.z_0, axis=1, keepdims=True)
         h = 1 / (self.a + r)
         h_prime = -1 / tf.math.square(self.a + r)
-        b_h = self.b * h
-        ldj = tf.math.pow(1 + b_h, d - 1) * (1 + b_h + self.b * h_prime * r)
+        b_h = b * h
+        ldj = tf.math.pow(1 + b_h, d - 1) * (1 + b_h + b * h_prime * r)
         return ldj
 
 def test_flow():
