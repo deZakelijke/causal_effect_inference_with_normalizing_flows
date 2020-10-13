@@ -16,20 +16,20 @@ class PlanarFlow(Model):
     Singular flows are defined in a separate class in this file.
     """
 
-    def __init__(self, z_dims, nr_flows):
+    def __init__(self, z_dims, n_flows):
         """
         Parameters
         ----------
         z_dims : int
             Number of latent dimensions of the flow.
-        nr_flows : int
+        n_flows : int
             Number of planar flows in the model.
         """
 
         super().__init__()
-        assert nr_flows >= 0 and type(nr_flows) == int,\
+        assert n_flows >= 0 and type(n_flows) == int,\
             "Number of flows must be larger than 0"
-        self.nr_flows = nr_flows
+        self.n_flows = n_flows
         if type(z_dims) == tuple:
             self.first_layer = layers.Flatten()
         else:
@@ -37,7 +37,7 @@ class PlanarFlow(Model):
         z_dims = tf.cast(tf.reduce_prod(z_dims), tf.int32).numpy()
 
         self.flows = []
-        for i in range(nr_flows):
+        for i in range(n_flows):
             next_flow = PlanarFlowLayer(z_dims, flow_nr=i)
             self.flows.append(next_flow)
 
@@ -46,7 +46,7 @@ class PlanarFlow(Model):
         in_shape = z.shape
         z = self.first_layer(z)
         ldj = 0
-        for i in range(self.nr_flows):
+        for i in range(self.n_flows):
             ldj += self.flows[i].logdet_jacobian(z)
             z = self.flows[i](z, step, training=training)
         z = tf.reshape(z, in_shape)
@@ -121,7 +121,7 @@ def test_flow():
     assert out.shape == z.shape
     assert ldj.shape == (batch_size, 1)
 
-    flow = PlanarFlow(z_dims, nr_flows=4)
+    flow = PlanarFlow(z_dims, n_flows=4)
 
     out, ldj = flow(z, step=0, training=True)
     assert out.shape == z.shape

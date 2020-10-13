@@ -6,6 +6,7 @@ from tensorflow.keras import layers, Model
 from tensorflow import math
 from tensorflow_probability import distributions as tfd
 
+
 class RadialFlow(Model):
     """ Radial flow model
 
@@ -72,7 +73,8 @@ class RadialFlowLayer(Model):
         super().__init__()
         self.flow_nr = flow_nr
         initializer = tf.initializers.GlorotNormal()
-        self.z_0 = tf.Variable(initializer([1, z_dims], dtype=tf.dtypes.float64),
+        self.z_0 = tf.Variable(initializer([1, z_dims],
+                                           dtype=tf.dtypes.float64),
                                dtype="float64", name="z_0")
         self.a = tf.Variable(initializer([1, 1], dtype=tf.dtypes.float64),
                              dtype="float64", name="a")
@@ -105,6 +107,7 @@ class RadialFlowLayer(Model):
         ldj = tf.math.pow(1 + b_h, d - 1) * (1 + b_h + b * h_prime * r)
         return ldj
 
+
 def test_flow():
     z_dims = 4
     batch_size = 8
@@ -123,6 +126,7 @@ def test_flow():
     assert ldj.shape == (batch_size, 1)
 
     print("All assertions passed, test successful")
+
 
 if __name__ == "__main__":
     tf.keras.backend.set_floatx('float64')
