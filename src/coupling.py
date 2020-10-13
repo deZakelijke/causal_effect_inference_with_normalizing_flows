@@ -2,6 +2,7 @@ import numpy as np
 import tensorflow as tf
 from fc_net import FC_net
 from res_net import ResNet
+from tensorflow import math
 from tensorflow.keras import Model
 
 
@@ -18,6 +19,7 @@ class CouplingLayers(Model):
         n_layers=3,
         activation='relu',
         architecture_type="FC_net",
+        coupling_type="AffineCoupling",
         context=False,
         context_dims=0,
         debug=False
@@ -45,17 +47,18 @@ class CouplingLayers(Model):
 
         mask = self.get_checkerboard_mask(dims)
         coupling_index = scale_idx * 6
+        coupling = eval(coupling_type)
 
         self.in_couplings = [
-            Coupling(dims, feature_maps,
+            coupling(dims, feature_maps,
                      f"Coupling_layer_{coupling_index + 1}",
                      n_layers, activation, mask, architecture_type, context,
                      context_dims, debug),
-            Coupling(dims, feature_maps,
+            coupling(dims, feature_maps,
                      f"Coupling_layer_{coupling_index + 2}",
                      n_layers, activation, 1 - mask, architecture_type,
                      context, context_dims, debug),
-            Coupling(dims, feature_maps,
+            coupling(dims, feature_maps,
                      f"Coupling_layer_{coupling_index + 3}",
                      n_layers, activation, mask, architecture_type, context,
                      context_dims, debug)
@@ -63,7 +66,7 @@ class CouplingLayers(Model):
 
         if self.is_last_block:
             self.in_couplings.append(
-                Coupling(dims, feature_maps,
+                coupling(dims, feature_maps,
                          f"Coupling_layer_{coupling_index + 4}",
                          n_layers, activation, 1 - mask, architecture_type,
                          context, context_dims, debug)
@@ -75,15 +78,15 @@ class CouplingLayers(Model):
                 mask = self.get_channel_mask(dims)
 
             self.out_couplings = [
-                Coupling(dims, feature_maps,
+                coupling(dims, feature_maps,
                          f"Coupling_layer_{coupling_index + 4}",
                          n_layers, activation, 1 - mask, architecture_type,
                          context, context_dims, debug),
-                Coupling(dims, feature_maps,
+                coupling(dims, feature_maps,
                          f"Coupling_layer_{coupling_index + 5}",
                          n_layers, activation, mask, architecture_type,
                          context, context_dims, debug),
-                Coupling(dims, feature_maps,
+                coupling(dims, feature_maps,
                          f"Coupling_layer_{coupling_index + 6}",
                          n_layers, activation, 1 - mask, architecture_type,
                          context, context_dims, debug)
@@ -97,7 +100,8 @@ class CouplingLayers(Model):
             self.next_couplings = CouplingLayers(dims, name_tag, feature_maps,
                                                  scale_idx + 1, n_scales,
                                                  n_layers, activation,
-                                                 architecture_type, context,
+                                                 architecture_type,
+                                                 coupling_type, context,
                                                  context_dims, debug)
 
     @tf.function
@@ -207,7 +211,7 @@ class CouplingLayers(Model):
         return z
 
 
-class Coupling(Model):
+class AffineCoupling(Model):
     """ Single coupling layer."""
 
     def __init__(
@@ -289,20 +293,147 @@ class Coupling(Model):
                 network_in = z * self.mask
             network_forward = self.nn(network_in, step, training=training)
             log_scale, translation = tf.split(network_forward, 2, axis=-1)
-            log_scale = tf.math.tanh(log_scale)
+            log_scale = math.tanh(log_scale)
 
             if not reverse:
-                scale = tf.math.exp(log_scale)
+                scale = math.exp(log_scale)
                 z = self.mask * z + (1 - self.mask) * (z * scale + translation)
                 ldj += tf.reduce_sum(log_scale * (1 - self.mask),
                                      axis=tf.range(1, tf.rank(log_scale)))
             else:
-                scale = tf.math.exp(-log_scale)
+                scale = math.exp(-log_scale)
                 z = z * self.mask + ((z - translation) * scale)\
                     * (1 - self.mask)
                 ldj -= tf.reduce_sum(log_scale * (1 - self.mask),
                                      axis=tf.range(1, tf.rank(log_scale)))
 
+        return z, ldj
+
+
+class NLSCoupling(Model):
+
+    def __init__(
+        self,
+        in_dims,
+        feature_maps,
+        name_tag,
+        n_layers,
+        activation,
+        mask,
+        architecture_type="FC_net",
+        context=False,
+        context_dims=0,
+        debug=False
+    ):
+        """
+        Parameters
+        ----------
+        in_dims : (int, int, int)
+            The input dimensions of the coupling layers
+
+        feature_maps : int
+            The number of feature_maps used when using ResNet as architecture
+            type. If the architecture type = Fc_net, this variable is used to
+            pass the number of hidden nodes in each hidden layer.
+
+        name_tag : str
+            The name of this coupling layer. Used when printing the model and
+            for logging the weights in tensorboard.
+
+        n_layers : int
+            Either the number of blocks in ResNet atchitectures or the number
+            of hidden layers in FC_net architectures.
+
+        activation : str
+            The non-linear activation function used in the neural networks.
+
+        mask : tensor
+            Mask used to make the split in the input variable.
+        """
+        super().__init__(name=name_tag)
+        self.debug = debug
+        self.mask = mask
+        self.name_tag = name_tag
+        self.context = context
+
+        self.alpha = tf.cast(0.95 * 8. * math.sqrt(3.) / 9., tf.float64)
+        if context and context_dims == 0:
+            raise ValueError("Conxtex dims can't be zero if context is True.")
+
+        if architecture_type == "FC_net":
+            out_dims = in_dims * 5
+            in_dims += context_dims
+            self.nn = FC_net(in_dims=in_dims, out_dims=out_dims,
+                             name_tag=name_tag, n_layers=n_layers,
+                             feature_maps=feature_maps,
+                             activation=activation, debug=debug)
+        if architecture_type == "ResNet":
+            out_dims = in_dims[:-1] + (5 * in_dims[-1], )
+            in_dims = in_dims[:-1] + (in_dims[-1] + context_dims, )
+            self.nn = ResNet(in_dims=in_dims, out_dims=out_dims,
+                             name_tag=name_tag, n_layers=n_layers,
+                             feature_maps=feature_maps,
+                             activation=activation, debug=debug)
+
+        # weights = self.nn.layers[-1].weights
+        # self.nn.layers[-1].set_weights([tf.zeros_like(weights[0]),
+        #                                 tf.zeros_like(weights[1])])
+        # TODO check this
+
+    @tf.function
+    def call(self, z, ldj, step, reverse=False, training=False, t=None):
+        """ Evaluation of a single coupling layer."""
+
+        if self.debug:
+            print(f"Coupling: {self.name_tag}")
+        with tf.name_scope(f"Coupling/{self.name_tag}") as scope:
+            if self.context:
+                network_in = tf.concat([z * self.mask, t], axis=-1)
+            else:
+                network_in = z * self.mask
+            network_forward = self.nn(network_in, step, training=training)
+            a, log_b, c_prime, log_d, f = tf.split(network_forward, 5, axis=-1)
+            b = math.exp(log_b)
+            d = math.exp(log_d)
+            c = math.tanh(c_prime) * self.alpha * b / d
+
+            if not reverse:
+                arg = d * z + f
+                denom = 1. + math.square(arg)
+                z = self.mask * z + (1 - self.mask) * (a + z * b + c / denom)
+                ldj -= tf.reduce_sum(math.log(b - 2. * c * d * arg /
+                                     math.square(denom)),
+                                     axis=tf.range(1, tf.rank(z)))
+                # TODO check sign of ldj
+            else:
+                aa = -b * math.square(d)
+                bb = (z - a) * math.square(d) - 2. * b * d * f
+                cc = (z - a) * 2. * d * f - b * (1. + math.square(f))
+                dd = (z - a) * (1. + math.square(f)) - c
+
+                p = (2. * aa * cc - math.square(bb)) / (3. * math.square(aa))
+                q = (2. * math.pow(bb, 3) - 9. * aa * bb * cc +
+                     27. * math.square(aa) * dd) / (27. * math.pow(aa, 3))
+                p_three = math.sqrt(math.abs(p) / 3.)
+                three_p = math.sqrt(3. / math.abs(p))
+
+                t_1 = -3. * math.abs(q) / (2. * q) * three_p
+                t_2 = 1. / 3. * math.acosh(math.abs(t_1 - 1.) + 1.)
+                t = -2. * math.abs(q) / q * p_three * math.cosh(t_2)
+
+                t_1 = 3. * q / (2. * p) * three_p
+                t_2 = 1. / 3. * math.asinh(t_1)
+                t_pos = -2 * p_three * math.sinh(t_2)
+
+                # TODO fix deze assignment
+                t[p > 0] = t_pos[p > 0]
+                z = self.mask * z + (1 - self.mask) * (t - bb / (3 * aa))
+
+                arg = d * z + f
+                denom = 1 + math.square(arg)
+                ldj += tf.reduce_sum(math.log(b - 2. * c * d * arg /
+                                     math.square(denom)),
+                                     axis=tf.range(1, tf.rank(z)))
         return z, ldj
 
 
@@ -319,7 +450,7 @@ def test_coupling():
     ldj = tf.zeros((batch_size), dtype=tf.float64)
 
     mask = CouplingLayers.get_checkerboard_mask(dims)
-    coupling = Coupling(dims, feature_maps, name_tag, n_layers, activation,
+    coupling = AffineCoupling(dims, feature_maps, name_tag, n_layers, activation,
                         mask, architecture_type="FC_net", debug=True)
     z, ldj_out = coupling(x, ldj, training=True)
     x_recon, ldj_recon = coupling(z, ldj_out, reverse=True, training=True)
@@ -329,7 +460,7 @@ def test_coupling():
                                                  "incorrect")
     tf.debugging.assert_near(ldj_recon, ldj, message="Inverse of ldj is "
                                                      "incorrect")
-    print(coupling.summary())
+    coupling.summary()
 
     feature_maps = 32
     dims = (15, 15, 4)
@@ -338,7 +469,7 @@ def test_coupling():
     ldj = tf.zeros((batch_size), dtype=tf.float64)
 
     mask = CouplingLayers.get_channel_mask(dims)
-    coupling = Coupling(dims, feature_maps, name_tag, n_layers, activation,
+    coupling = AffineCoupling(dims, feature_maps, name_tag, n_layers, activation,
                         mask, architecture_type="ResNet", debug=True)
     z, ldj_out = coupling(x, ldj, 0, training=True)
     x_recon, ldj_recon = coupling(z, ldj_out, 0, reverse=True, training=True)
@@ -348,7 +479,7 @@ def test_coupling():
                                                  "incorrect")
     tf.debugging.assert_near(ldj_recon, ldj, message="Inverse of ldj is "
                                                      "incorrect")
-    print(coupling.summary())
+    coupling.summary()
 
 
 def test_coupling_layers():
@@ -366,8 +497,8 @@ def test_coupling_layers():
     ldj = tf.zeros((batch_size), dtype=tf.float64)
     coupling = CouplingLayers(dims, name_tag, feature_maps, 0, n_scales,
                               n_layers,
-                              activation, "FC_net", True, context_dims,
-                              debug=True)
+                              activation, "FC_net", "NLSCoupling", True,
+                              context_dims, debug=True)
     z, ldj_out = coupling(x, ldj, 0, training=True, t=t)
     x_recon, ldj_recon = coupling(z, ldj_out, 0, reverse=True, training=True,
                                   t=t)
