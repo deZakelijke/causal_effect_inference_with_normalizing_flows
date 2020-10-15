@@ -313,7 +313,8 @@ class AffineCoupling(Model):
 class NLSCoupling(Model):
     """ Implementation of non-linear square coupling function.
 
-    Idea from the paper: https://paperswithcode.com/paper/latent-normalizing-flows-for-discrete
+    Idea from the paper:
+    https://paperswithcode.com/paper/latent-normalizing-flows-for-discrete
     Implementation based on: https://github.com/harvardnlp/TextFlow
     and translated to tensorflow.
 
@@ -388,13 +389,13 @@ class NLSCoupling(Model):
     @tf.function
     def call(self, z, ldj, step, reverse=False, training=False, t=None):
         """ Evaluation of a single coupling layer.
-        
+
         The forward function is simply evaluatinf the function
         f(x) = a + bx + c / (1 + dx + f)^2
         The parameters a, b, c, and f are outputs of a neural network.
 
         The reverse requres solving the root of a cubic polynomial. Procedure
-        come from: 
+        come from:
         'The use of hyperbolic cosines in solving cubic polynomials'
         which describes three cases, two of which are applied here. The case
         with three real roots, which coincide here, and the case with one
@@ -488,8 +489,9 @@ def test_coupling():
     ldj = tf.zeros((batch_size), dtype=tf.float64)
 
     mask = CouplingLayers.get_channel_mask(dims)
-    coupling = AffineCoupling(dims, feature_maps, name_tag, n_layers, activation,
-                        mask, architecture_type="ResNet", debug=True)
+    coupling = AffineCoupling(dims, feature_maps, name_tag, n_layers,
+                              activation,
+                              mask, architecture_type="ResNet", debug=True)
     z, ldj_out = coupling(x, ldj, 0, training=True)
     x_recon, ldj_recon = coupling(z, ldj_out, 0, reverse=True, training=True)
     tf.debugging.assert_near(x, z, message="Coupling does not init close "
