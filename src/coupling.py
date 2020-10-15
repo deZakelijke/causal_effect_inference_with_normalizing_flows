@@ -311,7 +311,13 @@ class AffineCoupling(Model):
 
 
 class NLSCoupling(Model):
+    """ Implementation of non-linear square coupling function.
 
+    Idea from the paper: https://paperswithcode.com/paper/latent-normalizing-flows-for-discrete
+    Implementation based on: https://github.com/harvardnlp/TextFlow
+    and translated to tensorflow.
+
+    """
     def __init__(
         self,
         in_dims,
@@ -356,7 +362,7 @@ class NLSCoupling(Model):
         self.name_tag = name_tag
         self.context = context
 
-        self.alpha = tf.cast(0.95 * 8. * math.sqrt(3.) / 9., tf.float64)
+        self.alpha = tf.cast(8. * math.sqrt(3.) / 9. - 0.05, tf.float64)
         if context and context_dims == 0:
             raise ValueError("Conxtex dims can't be zero if context is True.")
 
@@ -375,14 +381,25 @@ class NLSCoupling(Model):
                              feature_maps=feature_maps,
                              activation=activation, debug=debug)
 
-        # weights = self.nn.layers[-1].weights
-        # self.nn.layers[-1].set_weights([tf.zeros_like(weights[0]),
-        #                                 tf.zeros_like(weights[1])])
-        # TODO check this
+        weights = self.nn.layers[-1].weights
+        self.nn.layers[-1].set_weights([tf.zeros_like(weights[0]),
+                                        tf.zeros_like(weights[1])])
 
     @tf.function
     def call(self, z, ldj, step, reverse=False, training=False, t=None):
-        """ Evaluation of a single coupling layer."""
+        """ Evaluation of a single coupling layer.
+        
+        The forward function is simply evaluatinf the function
+        f(x) = a + bx + c / (1 + dx + f)^2
+        The parameters a, b, c, and f are outputs of a neural network.
+
+        The reverse requres solving the root of a cubic polynomial. Procedure
+        come from: 
+        'The use of hyperbolic cosines in solving cubic polynomials'
+        which describes three cases, two of which are applied here. The case
+        with three real roots, which coincide here, and the case with one
+        real root and no turning points.
+        """
 
         if self.debug:
             print(f"Coupling: {self.name_tag}")
@@ -399,6 +416,7 @@ class NLSCoupling(Model):
 
             if not reverse:
                 arg = d * z + f
+                # TODO mask z
                 denom = 1. + math.square(arg)
                 z = self.mask * z + (1 - self.mask) * (a + z * b + c / denom)
                 ldj -= tf.reduce_sum(math.log(b - 2. * c * d * arg /
@@ -411,13 +429,13 @@ class NLSCoupling(Model):
                 cc = (z - a) * 2. * d * f - b * (1. + math.square(f))
                 dd = (z - a) * (1. + math.square(f)) - c
 
-                p = (2. * aa * cc - math.square(bb)) / (3. * math.square(aa))
+                p = (3. * aa * cc - math.square(bb)) / (3. * math.square(aa))
                 q = (2. * math.pow(bb, 3) - 9. * aa * bb * cc +
                      27. * math.square(aa) * dd) / (27. * math.pow(aa, 3))
                 p_three = math.sqrt(math.abs(p) / 3.)
                 three_p = math.sqrt(3. / math.abs(p))
 
-                t_1 = -3. * math.abs(q) / (2. * q) * three_p
+                t_1 = -3. * math.abs(q) / (2. * p) * three_p
                 t_2 = 1. / 3. * math.acosh(math.abs(t_1 - 1.) + 1.)
                 t = -2. * math.abs(q) / q * p_three * math.cosh(t_2)
 
@@ -425,9 +443,10 @@ class NLSCoupling(Model):
                 t_2 = 1. / 3. * math.asinh(t_1)
                 t_pos = -2 * p_three * math.sinh(t_2)
 
-                # TODO fix deze assignment
-                t[p > 0] = t_pos[p > 0]
-                z = self.mask * z + (1 - self.mask) * (t - bb / (3 * aa))
+                # t[p > 0] = t_pos[p > 0]
+                t_out = t_pos * tf.cast(p > 0, tf.float64)
+                t_out += t * tf.cast(p <= 0, tf.float64)
+                z = self.mask * z + (1 - self.mask) * (t_out - bb / (3 * aa))
 
                 arg = d * z + f
                 denom = 1 + math.square(arg)
@@ -450,10 +469,10 @@ def test_coupling():
     ldj = tf.zeros((batch_size), dtype=tf.float64)
 
     mask = CouplingLayers.get_checkerboard_mask(dims)
-    coupling = AffineCoupling(dims, feature_maps, name_tag, n_layers, activation,
-                        mask, architecture_type="FC_net", debug=True)
-    z, ldj_out = coupling(x, ldj, training=True)
-    x_recon, ldj_recon = coupling(z, ldj_out, reverse=True, training=True)
+    coupling = NLSCoupling(dims, feature_maps, name_tag, n_layers, activation,
+                           mask, architecture_type="FC_net", debug=True)
+    z, ldj_out = coupling(x, ldj, 0, training=True)
+    x_recon, ldj_recon = coupling(z, ldj_out, 0, reverse=True, training=True)
     tf.debugging.assert_near(x, z, message="Coupling does not init close "
                                            "to identity.")
     tf.debugging.assert_near(x, x_recon, message="Inverse of coupling "
