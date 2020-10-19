@@ -19,7 +19,7 @@ from tar_net import TARNET
 
 VALID_DATASETS = ["IHDP", "IHDP_LARGE", "TWINS", "SPACE", "SPACE_NO_GRAV"]
 VALID_MODELS = ["CEVAE", "CENF", "CRNVP", "NCF", "TARNET"]
-VALID_FLOWS = ["affine_coupling"]
+VALID_FLOWS = ["AffineCoupling", "NLSCoupling"]
 VALID_FLOWS_VARIATIONAL = ["PlanarFlow", "RadialFlow"]
 
 tf.keras.backend.set_floatx('float64')
