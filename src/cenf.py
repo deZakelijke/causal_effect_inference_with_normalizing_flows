@@ -10,6 +10,7 @@ from tensorflow_probability import distributions as tfd
 from cevae import CEVAE, Encoder, Decoder
 from evaluation import calc_stats
 from planar_flow import PlanarFlow
+from radial_flow import RadialFlow
 from utils import get_log_prob, get_analytical_KL_divergence
 
 
@@ -34,6 +35,7 @@ class CENF(CEVAE):
         feature_maps=256,
         architecture_type="FC_net",
         log_steps=10,
+        flow_type_variational="PlanarFlow",
         debug=False,
         **_
     ):
@@ -58,7 +60,8 @@ class CENF(CEVAE):
             log_steps=log_steps,
             debug=debug
         )
-        self.z_flow = PlanarFlow(z_dims, n_flows)
+        flow = eval(flow_type_variational)
+        self.z_flow = flow(z_dims, n_flows)
 
     @tf.function
     def call(self, x, t, y, step, training=False):

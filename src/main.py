@@ -279,7 +279,6 @@ def train(params, writer, logdir, train_iteration=0):
                 avg_loss += loss_value
                 optimizer.apply_gradients(zip(grads,
                                               model.trainable_variables))
-                break
             if epoch % params["log_steps"] == 0:
                 test_dataset = test_dataset.shuffle(len_dataset)
                 print(f"Epoch: {epoch}, average training loss: "

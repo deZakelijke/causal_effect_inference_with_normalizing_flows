@@ -45,7 +45,8 @@ class SpaceShapesGenerator():
     instace will actually have a score of zero.
     """
 
-    def __init__(self,
+    def __init__(
+        self,
         width=6,
         height=6,
         num_objects=5,
@@ -73,14 +74,18 @@ class SpaceShapesGenerator():
         for _, c, s in zip(range(num_objects), color_weights, shape_weights):
             obj_factor.append(c * s)
 
-        self.object_gravity = random.standard_normal((1, num_objects)) * np.array(obj_factor)
+        self.object_gravity = random.standard_normal((1, num_objects)) *\
+            np.array(obj_factor)
         self.save_path = "datasets/SPACE/"
         self.goal = np.array([[(height - 1) / 2, (width - 1)]])
         print(f"Gravities: {self.object_gravity[0]}")
 
-    def generate_data(self, n_obj_train=5, nr_samples=100, render=False, save=False, **_):
+    def generate_data(self, n_obj_train=5, nr_samples=100, render=False,
+                      save=False, **_):
 
-        self.test_indices = [0].append(random.choice(range(1, self.num_objects), n_obj_train))
+        self.test_indices = [0].append(random.choice(range(1,
+                                                           self.num_objects),
+                                                     n_obj_train))
 
         prior_data = random.standard_normal((nr_samples, self.prior_dims))
         object_gravity = np.tile(self.object_gravity, (nr_samples, 1))
@@ -158,11 +163,11 @@ class SpaceShapesGenerator():
 
         if save:
             with h5py.File(f"{self.save_path}space_data_t_predict.hdf5", "w")\
-            as f:
+                    as f:
                 dset = f.create_dataset("Space_dataset_t_predict",
                                         data=steering_predict)
             with h5py.File(f"{self.save_path}space_data_y_predict.hdf5", "w")\
-            as f:
+                    as f:
                 dset = f.create_dataset("Space_dataset_y_predict",
                                         data=score_predict)
 
@@ -196,9 +201,9 @@ class SpaceShapesGenerator():
 
     def render(self, object_positions, indices_to_render=None):
         """ Render scence for particular state
-            
+
         Create an image as a numpy array and paint the specific shapes at
-        specific locations. Only the objects that are indicated are 
+        specific locations. Only the objects that are indicated are
         draw. The resolution is ten by ten pixels for each position in the
         2D grid.
 
