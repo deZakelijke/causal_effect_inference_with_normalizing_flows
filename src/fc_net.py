@@ -68,7 +68,7 @@ class FC_net(Model):
             for i in range(len(self.nn_layers)):
                 x = self.nn_layers[i](x)
                 name = self.nn_layers[i].name
-                if training and step is not None:
+                if training and step is not None and step % 50 == 0:
                     tf.summary.histogram(f"{name}/weight",
                                          self.nn_layers[i].weights[0],
                                          step=step)

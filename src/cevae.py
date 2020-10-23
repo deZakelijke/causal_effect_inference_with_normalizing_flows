@@ -137,8 +137,8 @@ class CEVAE(Model):
         variational_t = self.t_loss(t, qt_prob)
         variational_y = self.y_loss(y, qy_mean)
 
-        if step is not None and step % (self.log_steps * 5) == 0:
-            l_step = step // (self.log_steps * 5)
+        if step is not None and step % (self.log_steps * 10) == 0:
+            l_step = step // (self.log_steps * 10)
             if self.architecture_type == "ResNet":
                 with tf.device("cpu:0"):
                     tf.summary.image("reconstructed_proxy",

@@ -85,7 +85,7 @@ class RadialFlowLayer(Model):
     def call(self, z, step, training=False):
         b = -self.a + tf.math.softplus(self.b)
         with tf.name_scope("radial_flow") as scope:
-            if training and step is not None:
+            if training and step is not None and step % 50 == 0:
                 tf.summary.histogram(f"flow_{self.flow_nr}/{self.b.name}",
                                      self.b, step=step)
                 tf.summary.histogram(f"flow_{self.flow_nr}/{self.a.name}",

@@ -184,8 +184,8 @@ class NCF(Model):
         if self.debug:
             print("Calculating loss")
 
-        if step is not None and step % (self.log_steps * 5) == 0:
-            l_step = step // (self.log_steps * 5)
+        if step is not None and step % (self.log_steps * 10) == 0:
+            l_step = step // (self.log_steps * 10)
             tf.summary.scalar("partial_loss/bpd_z",
                               tf.reduce_mean(bpd_z), step=l_step)
             tf.summary.scalar("partial_loss/bpd_y",
