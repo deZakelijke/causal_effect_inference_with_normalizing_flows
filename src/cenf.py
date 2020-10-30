@@ -60,6 +60,7 @@ class CENF(CEVAE):
             log_steps=log_steps,
             debug=debug
         )
+        self.log_steps = log_steps
         flow = eval(flow_type_variational)
         self.z_flow = flow(z_dims, n_flows)
 
@@ -68,14 +69,14 @@ class CENF(CEVAE):
         if self.debug:
             print("Starting forward pass CENF")
 
-        encoder_params = self.encode(x, t, y, step, training=training)
+        encoder_params = self.encoder(x, t, y, step, training=training)
         _, _, qz_mean, qz_std = encoder_params
         qz = tf.random.normal(qz_mean.shape, dtype=tf.float64)
         qz = qz * qz_std + qz_mean
 
         qz_k, ldj = self.z_flow(qz, step, training=training)
 
-        decoder_params = self.decode(qz_k, t, step, training=training)
+        decoder_params = self.decoder(qz_k, t, step, training=training)
         return encoder_params, qz_k, ldj, decoder_params
 
     @tf.function
@@ -83,66 +84,25 @@ class CENF(CEVAE):
              step):
         if self.debug:
             print("Calculating loss")
-        x_cat, x_cont, t, _, y, *_ = features
-        qt_prob, qy_mean, qz_mean, qz_std = encoder_params
-        x_cat_prob, x_cont_mean, x_cont_std, t_prob, y_mean = decoder_params
-        x_cat = tf.reshape(x_cat, (len(x_cat), *self.x_cat_dims,
-                                   self.category_sizes))
-
-        # distortion_x = CategoricalCrossentropy()(x_cat, x_cat_prob) \
-        #     - get_log_prob(x_cont, 'N', mean=x_cont_mean,
-        #                    std=x_cont_std)
-        distortion_x_cat = CategoricalCrossentropy()(x_cat, x_cat_prob)
-        # distortion_x_cont = -get_log_prob(x_cont, 'N', mean=x_cont_mean,
-        #                                   std=x_cont_std)
-        distortion_x_cont = MeanSquaredError()(x_cont, x_cont_mean)
-        distortion_x = distortion_x_cat + distortion_x_cont
-        distortion_t = self.t_loss(t, t_prob)
-        distortion_y = self.y_loss(y, y_mean)
-
-        rate = get_analytical_KL_divergence(qz_mean, qz_std)
-
-        variational_t = self.t_loss(t, qt_prob)
-        variational_y = self.y_loss(y, qy_mean)
+        encoder_loss = self.encoder.loss(features, encoder_params, step)
+        decoder_loss = self.decoder.loss(features, decoder_params, step)
 
         if step is not None and step % (self.log_steps * 10) == 0:
             l_step = step // (self.log_steps * 10)
-            if self.architecture_type == "ResNet":
-                with tf.device("cpu:0"):
-                    tf.summary.image("reconstructed_proxy",
-                                     x_cont_mean, step=l_step, max_outputs=4)
-            tf.summary.scalar("partial_loss/distortion_x",
-                              tf.reduce_mean(distortion_x), step=l_step)
-            tf.summary.scalar("partial_loss/distortion_t",
-                              tf.reduce_mean(distortion_t), step=l_step)
-            tf.summary.scalar("partial_loss/distortion_y",
-                              tf.reduce_mean(distortion_y), step=l_step)
-            tf.summary.scalar("partial_loss/rate_z",
-                              tf.reduce_mean(rate), step=l_step)
             tf.summary.scalar("partial_loss/ldj",
                               tf.reduce_mean(-ldj_z), step=l_step)
-            tf.summary.scalar("partial_loss/variational_t",
-                              tf.reduce_mean(variational_t), step=l_step)
-            tf.summary.scalar("partial_loss/variational_y",
-                              tf.reduce_mean(variational_y), step=l_step)
 
-        elbo_local = -(self.annealing_factor * rate +
-                       distortion_x +
-                       distortion_t +
-                       1.2 * distortion_y +
-                       variational_t +
-                       variational_y -
-                       ldj_z)
+        elbo_local =  encoder_loss + decoder_loss + ldj_z
         elbo = tf.reduce_mean(input_tensor=elbo_local)
         return -elbo
 
     def do_intervention(self, x, t0, t1, nr_samples):
-        *_, qz_mean, qz_std = self.encode(x, None, None, None, training=False)
+        *_, qz_mean, qz_std = self.encoder(x, None, None, None, training=False)
         qz = tf.random.normal((nr_samples, *qz_mean.shape), dtype=tf.float64)
         z = qz * qz_std + qz_mean
         z_k, ldj = self.z_flow(z, None, training=False)
 
-        y0, y1 = self.decode.do_intervention(z_k, t0, t1, nr_samples)
+        y0, y1 = self.decoder.do_intervention(z_k, t0, t1, nr_samples)
         return y0, y1
 
 
