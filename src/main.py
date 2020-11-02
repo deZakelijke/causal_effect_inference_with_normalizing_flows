@@ -15,10 +15,14 @@ from contextlib import nullcontext
 from dataset import IHDP, IHDP_LARGE, TWINS, SHAPES, SPACE, SPACE_NO_GRAV
 from evaluation import calc_stats
 from normalizing_causal_flow import NCF
+from planar_flow import PlanarFlow
+from radial_flow import RadialFlow
+from sylvester_flow import SylvesterFlow
 from tar_net import TARNET
 
 VALID_DATASETS = ["IHDP", "IHDP_LARGE", "TWINS", "SPACE", "SPACE_NO_GRAV"]
-VALID_MODELS = ["CEVAE", "CENF", "CRNVP", "NCF", "TARNET"]
+VALID_MODELS = ["CEVAE", "CRNVP", "NCF", "PlanarFlow", "RadialFlow",
+                "SylvesterFlow", "TARNET"]
 VALID_FLOWS = ["AffineCoupling", "NLSCoupling"]
 VALID_FLOWS_VARIATIONAL = ["PlanarFlow", "RadialFlow"]
 
@@ -71,9 +75,6 @@ def parse_arguments():
                         "(default: 200)")
     parser.add_argument("--flow_type", type=str, default="affine_coupling",
                         help="Type of flow functions in pure flow model")
-    parser.add_argument("--flow_type_variational", type=str,
-                        default="PlanarFlow", help="Type of flow function"
-                        " for variational inference model.")
     parser.add_argument("--learning_rate", type=float, default=1e-4,
                         help="Learning rate of the optmiser (default: 1e-4)")
     parser.add_argument("--log_steps", type=int, default=10,
@@ -115,15 +116,17 @@ def parse_arguments():
                              "and underscore")
 
     args.model = args.model.upper()
-    if args.model not in VALID_MODELS:
+    if args.model.lower() not in [i.lower() for i in VALID_MODELS]:
         raise NotImplementedError(f"Model {args.model} is not implemented")
-
-    if args.model == 'CENF':
-        if args.flow_type_variational not in VALID_FLOWS_VARIATIONAL:
-            raise NotImplementedError("Variational flow type invalid. Must be "
-                                      f"one of: {VALID_FLOWS_VARIATIONAL}")
     else:
-        args.flow_type_variational = ''
+        args.model = [i for i in VALID_MODELS if i.lower() == args.model.lower()][0]
+
+    # if args.model == 'CENF':
+    #     if args.flow_type_variational not in VALID_FLOWS_VARIATIONAL:
+    #         raise NotImplementedError("Variational flow type invalid. Must be "
+    #                                   f"one of: {VALID_FLOWS_VARIATIONAL}")
+    # else:
+    #     args.flow_type_variational = ''
 
     if args.model == 'NCF':
         if args.flow_type not in VALID_FLOWS:

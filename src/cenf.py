@@ -73,6 +73,7 @@ class CENF(CEVAE):
         # qz_k, ldj = self.z_flow(qz, step, training=training)
         z_shape = qz.shape
         ldj = 0.0
+        qz = self.flow_start_layer(qz)
         for i in range(self.n_flows):
             ldj += self.z_flows[i].logdet_jacobian(qz)
             qz =self.z_flows[i](qz, step, training=training)
