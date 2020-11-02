@@ -9,8 +9,6 @@ from tensorflow_probability import distributions as tfd
 
 from cevae import CEVAE, Encoder, Decoder
 from evaluation import calc_stats
-from planar_flow import PlanarFlow
-from radial_flow import RadialFlow
 from utils import get_log_prob, get_analytical_KL_divergence
 
 
@@ -61,20 +59,24 @@ class CENF(CEVAE):
             debug=debug
         )
         self.log_steps = log_steps
-        flow = eval(flow_type_variational)
-        self.z_flow = flow(z_dims, n_flows)
 
     @tf.function
     def call(self, x, t, y, step, training=False):
         if self.debug:
-            print("Starting forward pass CENF")
+            print(f"Starting forward pass {self.name_tag}")
 
         encoder_params = self.encoder(x, t, y, step, training=training)
         _, _, qz_mean, qz_std = encoder_params
         qz = tf.random.normal(qz_mean.shape, dtype=tf.float64)
         qz = qz * qz_std + qz_mean
 
-        qz_k, ldj = self.z_flow(qz, step, training=training)
+        # qz_k, ldj = self.z_flow(qz, step, training=training)
+        z_shape = qz.shape
+        ldj = 0.0
+        for i in range(self.n_flows):
+            ldj += self.z_flows[i].logdet_jacobian(qz)
+            qz =self.z_flows[i](qz, step, training=training)
+        qz_k = tf.reshape(qz, z_shape)
 
         decoder_params = self.decoder(qz_k, t, step, training=training)
         return encoder_params, qz_k, ldj, decoder_params
@@ -100,7 +102,13 @@ class CENF(CEVAE):
         *_, qz_mean, qz_std = self.encoder(x, None, None, None, training=False)
         qz = tf.random.normal((nr_samples, *qz_mean.shape), dtype=tf.float64)
         z = qz * qz_std + qz_mean
-        z_k, ldj = self.z_flow(z, None, training=False)
+
+        z_shape = z.shape
+        ldj = 0.0
+        for i in range(self.n_flows):
+            ldj += self.z_flows[i].logdet_jacobian(z)
+            z =self.z_flows[i](z, None, training=False)
+        z_k = tf.reshape(z, z_shape)
 
         y0, y1 = self.decoder.do_intervention(z_k, t0, t1, nr_samples)
         return y0, y1

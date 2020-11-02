@@ -6,8 +6,9 @@ from tensorflow.keras import layers, Model
 from tensorflow import math
 from tensorflow_probability import distributions as tfd
 
+from cenf import CENF
 
-class PlanarFlow(Model):
+class PlanarFlow(CENF):
     """ Planar flow model
 
     Combines several Planar Flows, as described in
@@ -16,7 +17,26 @@ class PlanarFlow(Model):
     Singular flows are defined in a separate class in this file.
     """
 
-    def __init__(self, z_dims, n_flows):
+    def __init__(
+        self,
+        x_dims=30,
+        x_cat_dims=10,
+        x_cont_dims=10,
+        t_dims=2,
+        t_type='Categorical',
+        y_dims=1,
+        y_type='Normal',
+        z_dims=32,
+        category_sizes=2,
+        n_flows=2,
+        name_tag="Planar flow",
+        feature_maps=256,
+        architecture_type="FC_net",
+        log_steps=10,
+        flow_type_variational="PlanarFlow",
+        debug=False,
+        **_
+    ):
         """
         Parameters
         ----------
@@ -26,31 +46,37 @@ class PlanarFlow(Model):
             Number of planar flows in the model.
         """
 
-        super().__init__()
+        super().__init__(
+            x_dims=x_dims,
+            x_cat_dims=x_cat_dims,
+            x_cont_dims=x_cont_dims,
+            t_dims=t_dims,
+            t_type=t_type,
+            y_dims=y_dims,
+            y_type=y_type,
+            z_dims=z_dims,
+            category_sizes=category_sizes,
+            name_tag=name_tag,
+            feature_maps=feature_maps,
+            architecture_type=architecture_type,
+            log_steps=log_steps,
+            debug=debug
+        )
+
+        self.name_tag = name_tag
         assert n_flows >= 0 and type(n_flows) == int,\
             "Number of flows must be larger than 0"
         self.n_flows = n_flows
         if type(z_dims) == tuple:
-            self.first_layer = layers.Flatten()
+            self.flow_start_layer = layers.Flatten()
         else:
-            self.first_layer = tf.identity
+            self.flow_start_layer = tf.identity
         z_dims = tf.cast(tf.reduce_prod(z_dims), tf.int32).numpy()
 
-        self.flows = []
+        self.z_flows = []
         for i in range(n_flows):
             next_flow = PlanarFlowLayer(z_dims, flow_nr=i)
-            self.flows.append(next_flow)
-
-    @tf.function
-    def call(self, z, step, training=False):
-        in_shape = z.shape
-        z = self.first_layer(z)
-        ldj = 0
-        for i in range(self.n_flows):
-            ldj += self.flows[i].logdet_jacobian(z)
-            z = self.flows[i](z, step, training=training)
-        z = tf.reshape(z, in_shape)
-        return z, ldj
+            self.z_flows.append(next_flow)
 
 
 class PlanarFlowLayer(Model):
