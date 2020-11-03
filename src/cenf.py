@@ -76,7 +76,7 @@ class CENF(CEVAE):
         qz = self.flow_start_layer(qz)
         for i in range(self.n_flows):
             ldj += self.z_flows[i].logdet_jacobian(qz)
-            qz =self.z_flows[i](qz, step, training=training)
+            qz = self.z_flows[i](qz, step, training=training)
         qz_k = tf.reshape(qz, z_shape)
 
         decoder_params = self.decoder(qz_k, t, step, training=training)
@@ -95,7 +95,7 @@ class CENF(CEVAE):
             tf.summary.scalar("partial_loss/ldj",
                               tf.reduce_mean(-ldj_z), step=l_step)
 
-        elbo_local =  encoder_loss + decoder_loss + ldj_z
+        elbo_local = encoder_loss + decoder_loss + ldj_z
         elbo = tf.reduce_mean(input_tensor=elbo_local)
         return -elbo
 
@@ -108,7 +108,7 @@ class CENF(CEVAE):
         ldj = 0.0
         for i in range(self.n_flows):
             ldj += self.z_flows[i].logdet_jacobian(z)
-            z =self.z_flows[i](z, None, training=False)
+            z = self.z_flows[i](z, None, training=False)
         z_k = tf.reshape(z, z_shape)
 
         y0, y1 = self.decoder.do_intervention(z_k, t0, t1, nr_samples)

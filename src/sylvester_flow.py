@@ -13,6 +13,7 @@ from cenf import CENF
 from cevae import Encoder
 from utils import get_analytical_KL_divergence
 
+
 class SylvesterFlow(CENF):
     """ Sylvester flow model
 
@@ -213,7 +214,7 @@ class SylvesterEncoder(Encoder):
         self.householder_maps = householder_maps
         self.diag_idx = tf.range(z_dims)
         self.eye = tf.eye(z_dims, batch_shape=[1])
-        
+
         triu_mask = tf.ones((z_dims, z_dims), dtype=tf.float64)
         triu_mask = triu_mask - tf.linalg.band_part(triu_mask, -1, 0)
         self.triu_mask = tf.reshape(triu_mask, [1, z_dims, z_dims, 1])
@@ -223,7 +224,7 @@ class SylvesterEncoder(Encoder):
         self.tri_map = layers.Dense(z_dims * z_dims * n_flows)
         self.diag_map1 = layers.Dense(z_dims * n_flows, activation='tanh')
         self.diag_map2 = layers.Dense(z_dims * n_flows, activation='tanh')
-                                  
+
     @tf.function
     def call(self, x, t, y, step, training=False):
         if self.debug:
@@ -315,3 +316,11 @@ class SylvesterEncoder(Encoder):
                               tf.reduce_mean(variational_y), step=l_step)
         encoder_loss = -(rate + variational_t + variational_y)
         return encoder_loss
+
+
+def test_sylvester_flow():
+    pass
+
+
+if __name__ == "__main__":
+    test_sylvester_flow()

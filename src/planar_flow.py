@@ -8,6 +8,7 @@ from tensorflow_probability import distributions as tfd
 
 from cenf import CENF
 
+
 class PlanarFlow(CENF):
     """ Planar flow model
 
