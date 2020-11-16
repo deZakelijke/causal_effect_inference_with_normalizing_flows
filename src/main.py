@@ -24,7 +24,6 @@ VALID_DATASETS = ["IHDP", "IHDP_LARGE", "TWINS", "SPACE", "SPACE_NO_GRAV"]
 VALID_MODELS = ["CEVAE", "CRNVP", "NCF", "PlanarFlow", "RadialFlow",
                 "SylvesterFlow", "TARNET"]
 VALID_FLOWS = ["AffineCoupling", "NLSCoupling"]
-VALID_FLOWS_VARIATIONAL = ["PlanarFlow", "RadialFlow"]
 
 tf.keras.backend.set_floatx('float64')
 
@@ -66,7 +65,7 @@ def parse_arguments():
                         " off summary writer and print a lott of stuff.")
     parser.add_argument("--epochs", type=int, default=100,
                         help="Number of training iterations (default: 100)")
-    parser.add_argument("--experiment_name", type=str,
+    parser.add_argument("--experiment_name", type=str, default="",
                         help="Name of experiment used for results folder. "
                         "Disabled in debug mode")
     parser.add_argument("--feature_maps", type=int, default=200,
@@ -103,12 +102,12 @@ def parse_arguments():
 
     if args.debug:
         tf.random.set_seed(0)
-        args.experiment_name = ""
         args.log_steps = 1
     else:
         os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
         logging.getLogger("tensorflow").setLevel(logging.ERROR)
-        if args.experiment_name is None:
+        if args.experiment_name is None or\
+           args.experiment_name == "":
             raise ValueError("Experiment name is required if debug mode is "
                              "disabled")
         if not re.match(r'^[A-Za-z0-9_]+$', args.experiment_name):
@@ -134,7 +133,8 @@ def parse_arguments():
         raise NotImplementedError(f"Dataset {args.dataset} is not implemented")
 
     if not args.mode == "train":
-        raise NotImplementedError("Only training mode is implemented")
+        # raise NotImplementedError("Only training mode is implemented")
+        pass
 
     if args.model == "cevae" or args.model == "tarnet":
         args.n_flows = 0
@@ -200,12 +200,12 @@ def set_inputs(model, dataset):
     model._set_inputs(tf.concat([data[0], data[1]], -1), data[2], data[4])
 
 
-def load_weights(model_dir, model, dataset, learning_rate, model):
-    path = (f"{model_dir}{model}/{dataset}/{learning_rate}/")
-    experiment_dir = [dir_name[0] for dir_name in os.walk(path) if
+def load_weights(model_dir, model_name, dataset, learning_rate, model):
+    path = (f"{model_dir}{model_name}/{dataset}/{learning_rate}/")
+    experiment_dir = [dir_name for dir_name in os.walk(path) if
                       dir_name[1] and
-                      dir_name[1][0] == params['experiment_name']]
-    experiment_dir = os.path.join(expeiment_dir[0], experiment_dir[1][0])
+                      dir_name[1][0] == params['experiment_name']][0]
+    experiment_dir = os.path.join(experiment_dir[0], experiment_dir[1][0])
     experiment_name = os.path.join(experiment_dir, "model_0")
     model.load_weights(experiment_name)
 
@@ -253,6 +253,7 @@ def train(params, writer, logdir, train_iteration=0):
     len_dataset = cardinality(test_dataset)
 
     model = eval(params['model'])(**params)
+    model.encoder.annealing_factor = 1.1
     set_inputs(model, train_dataset)
 
     optimizer = tf.keras.optimizers.Adam(learning_rate=params["learning_rate"])
@@ -287,7 +288,7 @@ def train(params, writer, logdir, train_iteration=0):
                 print_stats(stats, l_step, training=False)
                 if not params["debug"]:
                     model.save_weights(f"{logdir}/model_{train_iteration}")
-            model.annealing_factor = max(1, model.annealing_factor * 1.2)
+            # model.encoder.annealing_factor = max(1, model.encoder.annealing_factor * 1.2)
 
         print(f"Epoch: {epoch}, average loss: "
               f"{(avg_loss / tf.dtypes.cast(len_epoch, tf.float64)):.4f}")
@@ -336,21 +337,33 @@ def test(params, writer, logdir):
     debug = params['debug']
     cardinality = tf.data.experimental.cardinality
     data = eval(params['dataset'])
-    train_dataset, test_dataset = data(params,
-                                       separate_files=params['separate_files'],
-                                       file_index=train_iteration,
-                                       test=True)
+    dataset, _ = data(params, ratio=0.00001,
+                            separate_files=params['separate_files'], test=True)
     scaling_data = params['scaling_data']
 
-    len_dataset = cardinality(train_dataset)
-    len_dataset = cardinality(test_dataset)
+    len_dataset = cardinality(dataset)
+    len_epoch = cardinality(dataset.batch(params["batch_size"]))
 
     model = eval(params['model'])(**params)
-    set_inputs(model, train_dataset)
-    dataset_name = 
-    load_weights(params['model_dir'], params['model'], params['dataset'],
+    set_inputs(model, dataset)
+    dataset_name =  params['dataset']
+    load_weights(params['model_dir'], params['model'], dataset_name,
                  params['learning_rate'], model)
-
+    print("Testing dataset")    
+    with writer.as_default() if writer is not None else nullcontext():
+        dataset = dataset.shuffle(len_dataset)
+        stats = calc_stats(model, dataset, scaling_data, params)
+        print_stats(stats, 0, training=False)
+        # avg_loss = 0
+        # for step, features in train_dataset.batch(params['batch_size'])\
+        #         .enumerate():
+        #     step = tf.constant(step)
+        #     x = tf.concat([features[0], features[1]], -1)
+        #     t = features[2]
+        #     y = features[4]
+        #     output = model(x, t, y, step, training=False)
+        #     loss = model.loss(features, *output, step)
+        #     avg_loss += loss
 
 def main(params):
     """ Main execution.
@@ -383,7 +396,6 @@ def main(params):
 
     if params['mode'] == 'test':
         test(params, writer, logdir)
-
 
     elif params['mode'] == 'train':
         if params["separate_files"]:
