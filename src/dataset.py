@@ -498,7 +498,7 @@ def SHAPES(params, path_data="datasets/SHAPES/", separate_files=None,
 
 
 def SPACE(params, path_data='datasets/SPACE/', separate_files=None,
-          file_index=None):
+          file_index=None, test=False):
     """ """
     params["x_dims"] = (60, 60, 3)
     params["x_cat_dims"] = (60, 60, 0)
@@ -511,15 +511,20 @@ def SPACE(params, path_data='datasets/SPACE/', separate_files=None,
     params["category_sizes"] = 0
     params['architecture_type'] = 'ResNet'
 
-    with h5py.File(f"{path_data}space_data_x.hdf5", "r") as f:
+    if test:
+        prefix = "test_set"
+    else:
+        prefix = None
+
+    with h5py.File(f"{path_data}{prefix}space_data_x.hdf5", "r") as f:
         x = np.array(f['Space_dataset_x'])
-    with h5py.File(f"{path_data}space_data_t.hdf5", "r") as f:
+    with h5py.File(f"{path_data}{prefix}space_data_t.hdf5", "r") as f:
         t = np.array(f['Space_dataset_t'])
-    with h5py.File(f"{path_data}space_data_t_predict.hdf5", "r") as f:
+    with h5py.File(f"{path_data}{prefix}space_data_t_predict.hdf5", "r") as f:
         t_predict = np.array(f['Space_dataset_t_predict'])
-    with h5py.File(f"{path_data}space_data_y.hdf5", "r") as f:
+    with h5py.File(f"{path_data}{prefix}space_data_y.hdf5", "r") as f:
         y = np.array(f['Space_dataset_y'])
-    with h5py.File(f"{path_data}space_data_y_predict.hdf5", "r") as f:
+    with h5py.File(f"{path_data}{prefix}space_data_y_predict.hdf5", "r") as f:
         y_predict = np.array(f['Space_dataset_y_predict'])
 
     idx_tr, idx_te = train_test_split(np.arange(x.shape[0]), test_size=0.1,

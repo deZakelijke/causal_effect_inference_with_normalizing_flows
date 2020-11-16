@@ -206,10 +206,8 @@ def set_inputs(model, dataset):
     model._set_inputs(tf.concat([data[0], data[1]], -1), data[2], data[4])
 
 
-def load_weights(params, model):
-    path = (f"{params['model_dir']}{params['model']}/"
-            f"{params['dataset']}/"
-            f"{params['learning_rate']}/")
+def load_weights(model_dir, model, dataset, learning_rate, model):
+    path = (f"{model_dir}{model}/{dataset}/{learning_rate}/")
     experiment_dir = [dir_name[0] for dir_name in os.walk(path) if
                       dir_name[1] and
                       dir_name[1][0] == params['experiment_name']]
@@ -310,8 +308,54 @@ def train(params, writer, logdir, train_iteration=0):
         return stats_train, stats_test
 
 
-def test(params):
-    raise NotImplementedError("Test mode not implemented yet.")
+def test(params, writer, logdir):
+    """
+    We select an experiment based on an earlier experiment name, which sort of implies
+    that those have to be unique for each model and dataset combination. We just assume
+    that that is the case. We do have to add something to differentiate the dataset
+    because we need the training dataset to identify the trained model and a test dataset
+    for the test model.
+
+    How do we want to log this? It doesn't really yield a graph because the dataset is
+    constant. We could still make a graph but over different batches or something?
+
+
+    Parameters
+    ----------
+    params : dict
+        Dictionary of all settings needed to define the training procedure.
+        Use the parse_arguments() function to generate a dictionary with the
+        required fileds
+
+    writer : tensorflow.summary.writer
+        The writer opbject to which all results and logs are written.
+        Can be None
+
+    logdir : str
+        Directory in which to save the model
+
+    Returns
+    -------
+    stats : tuple
+        Tuple of the statistics that were calculated after the last epoch.
+    """
+    debug = params['debug']
+    cardinality = tf.data.experimental.cardinality
+    data = eval(params['dataset'])
+    train_dataset, test_dataset = data(params,
+                                       separate_files=params['separate_files'],
+                                       file_index=train_iteration,
+                                       test=True)
+    scaling_data = params['scaling_data']
+
+    len_dataset = cardinality(train_dataset)
+    len_dataset = cardinality(test_dataset)
+
+    model = eval(params['model'])(**params)
+    set_inputs(model, train_dataset)
+    dataset_name = 
+    load_weights(params['model_dir'], params['model'], params['dataset'],
+                 params['learning_rate'], model)
 
 
 def main(params):
@@ -319,49 +363,55 @@ def main(params):
 
     Creates logging and writer, and launches selected training.
     """
-
     repetitions = 100 if params["dataset"] == "IHDP_LARGE" else 10
 
     timestamp = time.strftime("%Y:%m:%d/%X")
     if not params["debug"]:
         if params['flow_type']:
             flow_type_dir = params['flow_type'] + '/'
-        elif params['flow_type_variational']:
-            flow_type_dir = params['flow_type_variational'] + '/'
         else:
             flow_type_dir = None
+        if params['mode'] == 'test':
+            experiment_name = f"test/params['experiment_name']"
+        else:
+            experiment_name = params['experiment_name']
         logdir = (f"{params['model_dir']}"
                   f"{params['model']}/"
                   f"{flow_type_dir or ''}"
                   f"{params['dataset']}/"
                   f"{params['learning_rate']}/"
                   f"{timestamp}/"
-                  f"{params['experiment_name']}")
+                  f"{experiment_name}")
         writer = tf.summary.create_file_writer(logdir)
     else:
         logdir = None
         writer = None
 
-    if params["separate_files"]:
-        total_stats_train = []
-        total_stats_test = []
-        for i in range(repetitions):
-            stats_train, stats_test = train(params, writer, logdir, i)
-            total_stats_train.append(stats_train)
-            total_stats_test.append(stats_test)
-        total_stats_train = np.array(total_stats_train)
-        total_stats_test = np.array(total_stats_test)
-        print("Final average results")
-        if not params['debug']:
-            with writer.as_default():
-                print_stats(total_stats_train.mean(0),
-                            params['epochs'] * repetitions //
-                            params['log_steps'] + 1, training=True)
-                print_stats(total_stats_test.mean(0),
-                            params['epochs'] * repetitions //
-                            params['log_steps'] + 1, training=False)
-    else:
-        train(params, writer, logdir)
+    if params['mode'] == 'test':
+        test(params, writer, logdir)
+
+
+    elif params['mode'] == 'train':
+        if params["separate_files"]:
+            total_stats_train = []
+            total_stats_test = []
+            for i in range(repetitions):
+                stats_train, stats_test = train(params, writer, logdir, i)
+                total_stats_train.append(stats_train)
+                total_stats_test.append(stats_test)
+            total_stats_train = np.array(total_stats_train)
+            total_stats_test = np.array(total_stats_test)
+            print("Final average results")
+            if not params['debug']:
+                with writer.as_default():
+                    print_stats(total_stats_train.mean(0),
+                                params['epochs'] * repetitions //
+                                params['log_steps'] + 1, training=True)
+                    print_stats(total_stats_test.mean(0),
+                                params['epochs'] * repetitions //
+                                params['log_steps'] + 1, training=False)
+        else:
+            train(params, writer, logdir)
 
 
 if __name__ == "__main__":

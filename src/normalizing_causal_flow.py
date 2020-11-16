@@ -66,6 +66,7 @@ class NCF(Model):
 
         if x_dims == int and x_dims % 4 != 0:
             n_scales = 2
+
         self.flow_xz = CouplingLayers(x_dims,
                                       "flow_xz",
                                       feature_maps,
