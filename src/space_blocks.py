@@ -51,8 +51,6 @@ class SpaceShapesGenerator():
         height=6,
         n_objects=5,
         prior_dims=64,
-        color_scale_factor=2,
-        shape_scale_factor=2,
         seed=None,
         **_
     ):
@@ -62,7 +60,29 @@ class SpaceShapesGenerator():
         self.prior_dims = prior_dims
         self.num_colors = min(4, self.n_objects)
         self.colors = get_colors(num_colors=self.num_colors)
+        self.save_path = "datasets/SPACE/"
 
+    def load_priors(self, path="datasets/SPACE/", file_prefix=''):
+        self.save_path = path
+        path = f"{self.save_path}{file_prefix}space_data"
+        with h5py.File(f"{path}_priors.hdf5", "r") as f:
+            self.intervention_map = np.array(f['intervention_map'])
+            self.position_map = np.array(f['position_map'])
+            self.object_gravity = np.array(f['object_gravity'])
+            remaining_data = np.array(f['remaining_data'])
+
+        self.width = remaining_data[0]
+        self.height = remaining_data[1]
+        self.n_objects = remaining_data[2]
+        self.prior_dims = remaining_data[3]
+        self.num_colors = remaining_data[4]
+        self.colors = get_colors(num_colors=self.num_colors)
+        self.goal = np.array([[(self.height - 1) / 2, (self.width - 1)]])
+        print(f"Gravities: {self.object_gravity[0]}")
+
+    def set_priors(self, color_scale_factor=2, shape_scale_factor=2,
+                   load_priors=False, save=False, file_prefix=''):
+        path = f"{self.save_path}{file_prefix}space_data"
         self.intervention_map = random.standard_normal((prior_dims +
                                                         n_objects, 2)) * 0.5
         self.position_map = random.standard_normal((prior_dims + n_objects,
@@ -77,12 +97,22 @@ class SpaceShapesGenerator():
 
         self.object_gravity = random.standard_normal((1, n_objects)) *\
             np.array(obj_factor)
-        self.save_path = "datasets/SPACE/"
+
+        if save:
+            remaining_data = np.array([self.width, self.height, self.n_objects,
+                                       self.prior_dims, self.num_colors])
+            with h5py.File(f"{path}_priors.hdf5", "w") as f:
+                f.create_dataset("intervention_map", data=intervention_map)
+                f.create_dataset("position_map", data=position_map)
+                f.create_dataset("object_gravity", data=object_gravity)
+                f.create_dataset("remaining_data", data=remaining_data)
+
         self.goal = np.array([[(height - 1) / 2, (width - 1)]])
         print(f"Gravities: {self.object_gravity[0]}")
 
     def generate_data(self, n_obj_train=5, n_samples=100, render=False,
                       save=False, file_prefix='', **_):
+        path = f"{self.save_path}{file_prefix}space_data"
 
         obj_indices = np.concatenate(([0], np.random.choice(
             range(1, self.n_objects), n_obj_train - 1,
@@ -100,12 +130,12 @@ class SpaceShapesGenerator():
         rendering = np.array([self.render(objects, obj_indices) for objects in
                               object_positions])
         if save:
-            with h5py.File(f"{self.save_path}{file_prefix}space_data_x.hdf5", "w") as f:
+            with h5py.File(f"{path}_x.hdf5", "w") as f:
                 dset = f.create_dataset("Space_dataset_x", data=rendering)
 
         steering = prior_data @ self.intervention_map
         if save:
-            with h5py.File(f"{self.save_path}{file_prefix}space_data_t.hdf5", "w") as f:
+            with h5py.File(f"{path}_t.hdf5", "w") as f:
                 dset = f.create_dataset("Space_dataset_t", data=steering)
 
         move_result = self.move_spaceship(object_positions.copy(),
@@ -127,7 +157,7 @@ class SpaceShapesGenerator():
         print()
 
         if save:
-            with h5py.File(f"{self.save_path}{file_prefix}space_data_y.hdf5", "w") as f:
+            with h5py.File(f"{path}_y.hdf5", "w") as f:
                 dset = f.create_dataset("Space_dataset_y", data=score)
 
         if render:
@@ -163,11 +193,11 @@ class SpaceShapesGenerator():
         score_predict = np.concatenate((score_0, score_1), axis=1)
 
         if save:
-            with h5py.File(f"{self.save_path}{file_prefix}space_data_t_predict.hdf5", "w")\
+            with h5py.File(f"{path}_t_predict.hdf5", "w")\
                     as f:
                 dset = f.create_dataset("Space_dataset_t_predict",
                                         data=steering_predict)
-            with h5py.File(f"{self.save_path}{file_prefix}space_data_y_predict.hdf5", "w")\
+            with h5py.File(f"{path}_y_predict.hdf5", "w")\
                     as f:
                 dset = f.create_dataset("Space_dataset_y_predict",
                                         data=score_predict)
