@@ -119,14 +119,8 @@ def parse_arguments():
     if args.model.lower() not in [i.lower() for i in VALID_MODELS]:
         raise NotImplementedError(f"Model {args.model} is not implemented")
     else:
-        args.model = [i for i in VALID_MODELS if i.lower() == args.model.lower()][0]
-
-    # if args.model == 'CENF':
-    #     if args.flow_type_variational not in VALID_FLOWS_VARIATIONAL:
-    #         raise NotImplementedError("Variational flow type invalid. Must be "
-    #                                   f"one of: {VALID_FLOWS_VARIATIONAL}")
-    # else:
-    #     args.flow_type_variational = ''
+        args.model = [i for i in VALID_MODELS if
+                      i.lower() == args.model.lower()][0]
 
     if args.model == 'NCF':
         if args.flow_type not in VALID_FLOWS:

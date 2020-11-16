@@ -8,6 +8,7 @@ from tensorflow_probability import distributions as tfd
 
 from cenf import CENF
 
+
 class RadialFlow(CENF):
     """ Radial flow model
 
@@ -62,7 +63,7 @@ class RadialFlow(CENF):
             log_steps=log_steps,
             debug=debug
         )
-        
+
         self.name_tag = name_tag
         assert n_flows >= 0 and type(n_flows) == int,\
             "Number of flows must be larger than 0"
