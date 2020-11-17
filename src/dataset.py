@@ -12,8 +12,8 @@ from tensorflow.keras.losses import CategoricalCrossentropy, MeanSquaredError
 from tensorflow_probability import distributions as tfd
 
 
-def IHDP(params, path_data="datasets/IHDP/csv/", separate_files=False,
-         file_index=None):
+def IHDP(params, path_data="datasets/IHDP/csv/", ratio=0.1,
+         separate_files=False, file_index=None):
     """ Tensorflow Dataset generator for the IHDP dataset.
 
     Parameters
@@ -97,7 +97,7 @@ def IHDP(params, path_data="datasets/IHDP/csv/", separate_files=False,
             x_bin = x[:, binfeats]
             x_cont = x[:, contfeats]
 
-    idx_tr, idx_te = train_test_split(np.arange(x.shape[0]), test_size=0.1,
+    idx_tr, idx_te = train_test_split(np.arange(x.shape[0]), test_size=ratio,
                                       random_state=1)
     x_cont = np.array(x_cont)
     x_bin = np.array(x_bin, dtype=int)
@@ -283,7 +283,7 @@ def IHDP_LARGE(params, path_data="datasets/IHDP_LARGE/", separate_files=False,
     return train_set, test_set
 
 
-def TWINS(params, path_data="datasets/TWINS/",
+def TWINS(params, path_data="datasets/TWINS/", ratio=0.1,
           separate_files=None, file_index=None):
     """Tensorflow Dataset generator for the TWINS dataset.
 
@@ -397,8 +397,8 @@ def TWINS(params, path_data="datasets/TWINS/",
     mu_1 = np.expand_dims(data_y[indices, 1], axis=1)
     mu_0 = np.expand_dims(data_y[indices, 0], axis=1)
 
-    idx_tr, idx_te = train_test_split(np.arange(x_cat.shape[0]), test_size=0.1,
-                                      random_state=1)
+    idx_tr, idx_te = train_test_split(np.arange(x_cat.shape[0]),
+                                      test_size=ratio, random_state=1)
     train_set = tf.data.Dataset.from_tensor_slices(((x_cat[idx_tr],
                                                      x_cont[idx_tr],
                                                      t[idx_tr],
@@ -420,8 +420,8 @@ def TWINS(params, path_data="datasets/TWINS/",
     return train_set, test_set
 
 
-def SHAPES(params, path_data="datasets/SHAPES/", separate_files=None,
-           file_index=None):
+def SHAPES(params, path_data="datasets/SHAPES/", ratio=0.1,
+           separate_files=None, file_index=None):
     """ Loader for she shapes dataset.
 
     This dataset is used as a sanity check for the model. It doesn't have
@@ -497,7 +497,7 @@ def SHAPES(params, path_data="datasets/SHAPES/", separate_files=None,
     return train_set, test_set
 
 
-def SPACE(params, path_data='datasets/SPACE/', separate_files=None,
+def SPACE(params, path_data='datasets/SPACE/', ratio=0.1, separate_files=None,
           file_index=None, test=False):
     """ """
     params["x_dims"] = (60, 60, 3)
@@ -527,7 +527,7 @@ def SPACE(params, path_data='datasets/SPACE/', separate_files=None,
     with h5py.File(f"{path_data}{prefix}space_data_y_predict.hdf5", "r") as f:
         y_predict = np.array(f['Space_dataset_y_predict'])
 
-    idx_tr, idx_te = train_test_split(np.arange(x.shape[0]), test_size=0.1,
+    idx_tr, idx_te = train_test_split(np.arange(x.shape[0]), test_size=ratio,
                                       random_state=1)
 
     x_cont = x

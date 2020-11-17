@@ -319,8 +319,27 @@ class SylvesterEncoder(Encoder):
 
 
 def test_sylvester_flow():
-    pass
+    flow = SylvesterFlow(
+        x_dims=30,
+        x_cat_dims=10,
+        x_cont_dims=10,
+        t_dims=2,
+        t_type='Categorical',
+        y_dims=1,
+        y_type='Normal',
+        z_dims=32,
+        category_sizes=2,
+        n_flows=2,
+        householder_maps=8,
+        name_tag="Sylvester flow",
+        feature_maps=256,
+        architecture_type="FC_net",
+        log_steps=10,
+        flow_type_variational="PlanarFlow",
+        debug=False
+    )
 
 
 if __name__ == "__main__":
+    tf.keras.backend.set_floatx('float64')
     test_sylvester_flow()

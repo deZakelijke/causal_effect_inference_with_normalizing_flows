@@ -192,6 +192,8 @@ class Encoder(Model):
         network = eval(architecture_type)
         # self.architecture_type = architecture_type
 
+        self.annealing_factor = 1.
+
         if architecture_type == "ResNet":
             intermediate_dims = feature_maps * 2
         else:
@@ -199,7 +201,7 @@ class Encoder(Model):
 
         self.qt_logits = network(in_dims=x_dims, out_dims=x_dims,
                                  name_tag="qt", n_layers=1,
-                                 feature_maps=feature_maps * 8,
+                                 feature_maps=feature_maps,
                                  squeeze=True, squeeze_dims=t_dims,
                                  debug=debug)
 
@@ -210,11 +212,11 @@ class Encoder(Model):
 
         self.mu_qy_t = FC_net(in_dims=intermediate_dims + t_dims,
                               out_dims=y_dims,
-                              name_tag="mu_qy_t", n_layers=3,
+                              name_tag="mu_qy_t", n_layers=2,
                               feature_maps=feature_maps, debug=debug)
         self.qz_t = FC_net(in_dims=intermediate_dims + y_dims + t_dims,
                            out_dims=z_dims * 2,
-                           name_tag="qz_t", n_layers=4,
+                           name_tag="qz_t", n_layers=2,
                            feature_maps=feature_maps, debug=debug)
 
     @tf.function
@@ -265,7 +267,7 @@ class Encoder(Model):
                               tf.reduce_mean(variational_t), step=l_step)
             tf.summary.scalar("partial_loss/variational_y",
                               tf.reduce_mean(variational_y), step=l_step)
-        encoder_loss = -(rate + variational_t + variational_y)
+        encoder_loss = -(rate * self.annealing_factor + variational_t + variational_y)
         return encoder_loss
 
 
@@ -329,12 +331,12 @@ class Decoder(Model):
                                 unsqueeze=True, squeeze_dims=intermediate_dims,
                                 coord_conv=False, debug=debug)
         self.t_logits = FC_net(in_dims=z_dims, out_dims=z_dims, name_tag="t",
-                               n_layers=1, feature_maps=feature_maps * 4,
+                               n_layers=1, feature_maps=feature_maps,
                                squeeze=True, squeeze_dims=t_dims,
                                debug=self.debug)
 
         self.mu_y_t = FC_net(in_dims=z_dims + t_dims, out_dims=y_dims,
-                             name_tag="mu_y_t", n_layers=3,
+                             name_tag="mu_y_t", n_layers=2,
                              feature_maps=feature_maps, debug=debug)
 
     @tf.function
