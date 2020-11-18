@@ -1,0 +1,61 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{tikz}
+\usepackage{standalone}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage[a4paper, total={7.5in, 10in}]{geometry}
+\usepackage{hyperref}
+\usepackage{pbox}
+
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric}
+\usepackage{standalone}
+\usepackage{graphicx, color}
+
+
+\begin{document}
+
+\section*{Research questions}
+The research questions that we hope to answer or partially answer:
+\begin{itemize}
+    \item To what extent can the true direct causal effect between two variables be recovered from data when there is a latent confounder between the two variables, through the use of a proxy variable?
+    \item Is the proposed causal flow model $<$better$>$ at estimating causal effects from data? What aspect of the causal process is better learned by the flow-bases model compared to the VAE-based model and other benchmarks?
+    \item How do certain types of normalising flows influence the predictive power of the causal flow?
+    \item In what way does the Space Shapes dataset give insights in the performance of causal inference models?
+\end{itemize}
+
+\section*{Hyperparameters of the experiments}
+
+Hyperparameters for the normalising flows
+\begin{enumerate}
+    \item Type of flow layers for the causal VAE: planar flow, radial flow, householder flow layers
+    \item Type of flow layers for direct likelihood estimation: coupling flow with affine layers, coupling flow with nonlinear squared flow, (inverse autoregressive flow could be an option but is in practice quite similar to RealNVP-based flow if the transformations are affine.)
+    \item Depth of flow/number of flow layers
+    \item Depth of networks that parameterise the flows or that parameterise the distributions in the CEVAE
+    \item The architecture that underlie the normalising flow transformations. For the first two datasets these are MLPs with BatchNorm and for the SPACE dataset it is a resnet with conv layers. Might be a bit redundant to vary that?
+\end{enumerate}
+
+\noindent
+Hyperparameters of the SPACE dataset. Some part of the gravity has to stay related to object properties, so only changing the gravity but keeping other things fixed is not an option. Most other hyperparameters would be a form of distributional shift that we want the model to be able to generalise toward.
+\begin{enumerate}
+    \item Amount of pixel noise, so far set to zero
+    \item Adding a colour/shape combination that wasn't in the training set. Would require some fixed relation between the amount of gravity and a colour or shape
+    \item Changing size of shapes in test set
+    \item Change the amount of objects in a scene
+    \item Have a combination of objects in the scene that were never shown together in the training set.
+\end{enumerate}
+
+\noindent
+And of course the obvious hyperparameters. I don't think we should do a sweep over these:
+\begin{enumerate}
+    \item Learning rate: set to $1*10^{-3}$ for all experiments
+    \item Optimiser: set to Adam, with other parameters default
+    \item Batch size: set to largest power of two that fits in the GPU
+    \item Number of filters in conv layers: set to 32
+    \item Number of hidden nodes in linear layers: set to 200, as done by Louizos et al. in the CEVAE paper
+    \item Number of samples taken in sample steps: Set to 1 during training and set to 100 during testing. Didn't seem to influence results a lot.
+\end{enumerate}
+
+
+\end{document}
