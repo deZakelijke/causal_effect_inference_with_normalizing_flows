@@ -74,6 +74,8 @@ def parse_arguments():
                         "(default: 200)")
     parser.add_argument("--flow_type", type=str, default="affine_coupling",
                         help="Type of flow functions in pure flow model")
+    parser.add_argument("--gclip", action="store_true", default=False,
+                        help="Turn on gradient clipping to a maximum of |1|")
     parser.add_argument("--learning_rate", type=float, default=1e-4,
                         help="Learning rate of the optmiser (default: 1e-4)")
     parser.add_argument("--log_steps", type=int, default=10,
@@ -183,7 +185,7 @@ def print_stats(stats, index, training=False):
                       step=index)
 
 
-def grad(model, features, step, debug):
+def grad(model, features, gradient_clipping, step, debug):
     with tf.GradientTape() as tape:
         x = tf.concat([features[0], features[1]], -1)
         t = features[2]
@@ -192,7 +194,10 @@ def grad(model, features, step, debug):
         loss = model.loss(features, *output, step)
     if debug:
         print(f"Forward pass complete, step: {step}")
-    return loss, tape.gradient(loss, model.trainable_variables)
+    gradients = tape.gradient(loss, model.trainable_variables)
+    if gradient_clipping:
+        gradients = [(tf.clip_by_value(grad, -1.0, 1.0)) for grad in gradients]
+    return loss, gradients
 
 
 def set_inputs(model, dataset):
@@ -253,7 +258,7 @@ def train(params, writer, logdir, train_iteration=0):
     len_dataset = cardinality(test_dataset)
 
     model = eval(params['model'])(**params)
-    model.encoder.annealing_factor = 1.1
+    # model.encoder.annealing_factor = 1.1
     set_inputs(model, train_dataset)
 
     optimizer = tf.keras.optimizers.Adam(learning_rate=params["learning_rate"])
@@ -271,7 +276,8 @@ def train(params, writer, logdir, train_iteration=0):
             for step, features in train_dataset.batch(params["batch_size"])\
                     .enumerate(step_start):
                 step = tf.constant(step)
-                loss_value, grads = grad(model, features, step, debug)
+                loss_value, grads = grad(model, features, params['gclip'],
+                                         step, debug)
                 avg_loss += loss_value
                 optimizer.apply_gradients(zip(grads,
                                               model.trainable_variables))
@@ -347,7 +353,11 @@ def test(params, writer, logdir):
     model = eval(params['model'])(**params)
     set_inputs(model, dataset)
     dataset_name =  params['dataset']
-    load_weights(params['model_dir'], params['model'], dataset_name,
+    if params['model'] == "NCF":
+        model_name = f"{params['model']}/{params['flow_type']}"
+    else:
+        model_name = params['model']
+    load_weights(params['model_dir'], model_name, dataset_name,
                  params['learning_rate'], model)
     print("Testing dataset")    
     with writer.as_default() if writer is not None else nullcontext():

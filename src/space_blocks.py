@@ -77,41 +77,45 @@ class SpaceShapesGenerator():
         self.prior_dims = remaining_data[3]
         self.num_colors = remaining_data[4]
         self.colors = get_colors(num_colors=self.num_colors)
+
+        self.scale = 10.
         self.goal = np.array([[(self.height - 1) / 2, (self.width - 1)]])
         print(f"Gravities: {self.object_gravity[0]}")
 
     def set_priors(self, color_scale_factor=2, shape_scale_factor=2,
-                   load_priors=False, save=False, file_prefix=''):
+                   save=False, file_prefix=''):
         path = f"{self.save_path}{file_prefix}space_data"
-        self.intervention_map = random.standard_normal((prior_dims +
-                                                        n_objects, 2)) * 0.5
-        self.position_map = random.standard_normal((prior_dims + n_objects,
-                                                    width * height))
+        self.intervention_map = random.standard_normal((self.prior_dims +
+                                                        self.n_objects, 2)) * .5
+        self.position_map = random.standard_normal((self.prior_dims +
+                                                    self.n_objects,
+                                                    self.width * self.height))
         self.scale = 10.
 
         color_weights = cycle(np.linspace(1., color_scale_factor, 8))
         shape_weights = cycle(np.linspace(1., shape_scale_factor, 3))
         obj_factor = []
-        for _, c, s in zip(range(n_objects), color_weights, shape_weights):
+        for _, c, s in zip(range(self.n_objects), color_weights, shape_weights):
             obj_factor.append(c * s)
 
-        self.object_gravity = random.standard_normal((1, n_objects)) *\
+        self.object_gravity = random.standard_normal((1, self.n_objects)) *\
             np.array(obj_factor)
 
         if save:
             remaining_data = np.array([self.width, self.height, self.n_objects,
                                        self.prior_dims, self.num_colors])
             with h5py.File(f"{path}_priors.hdf5", "w") as f:
-                f.create_dataset("intervention_map", data=intervention_map)
-                f.create_dataset("position_map", data=position_map)
-                f.create_dataset("object_gravity", data=object_gravity)
+                f.create_dataset("intervention_map", data=self.intervention_map)
+                f.create_dataset("position_map", data=self.position_map)
+                f.create_dataset("object_gravity", data=self.object_gravity)
                 f.create_dataset("remaining_data", data=remaining_data)
 
-        self.goal = np.array([[(height - 1) / 2, (width - 1)]])
+        self.goal = np.array([[(self.height - 1) / 2, (self.width - 1)]])
         print(f"Gravities: {self.object_gravity[0]}")
 
     def generate_data(self, n_obj_train=5, n_samples=100, render=False,
-                      save=False, file_prefix='', **_):
+                      save=False, file_prefix='', size_noise_flag=False,
+                      render_confounding=False):
         path = f"{self.save_path}{file_prefix}space_data"
 
         obj_indices = np.concatenate(([0], np.random.choice(
@@ -127,8 +131,11 @@ class SpaceShapesGenerator():
                                                      self.width))
         object_positions = self.set_positions(position_probs)
         # Iterate over number of samples
-        rendering = np.array([self.render(objects, obj_indices) for objects in
+        rendering = np.array([self.render(objects, obj_indices, size_noise_flag) for objects in
                               object_positions])
+        if render_confounding:
+            pass
+
         if save:
             with h5py.File(f"{path}_x.hdf5", "w") as f:
                 dset = f.create_dataset("Space_dataset_x", data=rendering)
@@ -140,7 +147,7 @@ class SpaceShapesGenerator():
 
         move_result = self.move_spaceship(object_positions.copy(),
                                           object_gravity, steering)
-
+        tmp = move_result[1] == 0
         dist_to_goal = np.linalg.norm(move_result[0][:, 0] - self.goal, axis=1)
         score = self.calc_score(dist_to_goal)
 
@@ -149,9 +156,16 @@ class SpaceShapesGenerator():
             print(score[np.where(score > self.scale)])
             raise ValueError("Some scores are out of bounds")
 
-        if render:
+        if render or render_confounding:
             plt.subplot(121)
             plt.imshow(rendering[0])
+            # plt.annotate('', fontsize=20, xy=(.25, .25),
+            #              arrowprops=dict(width=5.,
+            #                              headwidth=5.,
+            #                              headlength=5.,
+            #                              shrink=0.05,
+            #                              linewidth=5,
+            #                              color='red'))
             plt.title(f"Steering: {np.around(steering[0], 2)}\n"
                       f"Score: {score[0]:.2f}")
         print()
@@ -160,8 +174,8 @@ class SpaceShapesGenerator():
             with h5py.File(f"{path}_y.hdf5", "w") as f:
                 dset = f.create_dataset("Space_dataset_y", data=score)
 
-        if render:
-            rendering = np.array([self.render(objects, obj_indices) for objects
+        if render or render_confounding:
+            rendering = np.array([self.render(objects, obj_indices, size_noise_flag) for objects
                                   in move_result[0]])
             plt.subplot(122)
             plt.imshow(rendering[0])
@@ -208,6 +222,9 @@ class SpaceShapesGenerator():
         distances = object_positions[:, 1:] -\
             np.expand_dims(object_positions[:, 0], 1)
         weighted_distances = distances * np.expand_dims(object_gravity, -1)
+        print(f"Total gravities: {np.sum(weighted_distances, axis=1)}")
+        print(weighted_distances)
+        print(steering)
         direction = (steering + np.sum(weighted_distances, axis=1)) / 2
         new_pos = np.around(object_positions[:, 0] + direction)
         new_dist = np.linalg.norm(object_positions[:, 1:] -
@@ -230,7 +247,7 @@ class SpaceShapesGenerator():
         c = np.any(new_pos > 5.0, axis=1)
         return a | b | c
 
-    def render(self, object_positions, object_indices, indices_to_render=None):
+    def render(self, object_positions, object_indices, size_noise_flag=False):
         """ Render scence for particular state
 
         Create an image as a numpy array and paint the specific shapes at
@@ -254,19 +271,30 @@ class SpaceShapesGenerator():
         im : numpy array
             Float array of (10*widh, 10*height, 3) of pixel values.
         """
+        print(object_indices)
         im = np.zeros((self.width * 10, self.height * 10, 3), dtype=float)
+        if size_noise_flag:
+            size_noise = np.round(np.random.normal(scale=1.5, size=len(object_positions)))
+            size_noise[size_noise < -2.] = -2.
+        else:
+            size_noise = np.zeros((len(object_positions)))
+
         for idx, pos in enumerate(object_positions):
             if idx not in object_indices:
                 continue
+            # print(idx)
             if idx % 3 == 0:
                 rr, cc = skimage.draw.circle(
-                    pos[0] * 10 + 5, pos[1] * 10 + 5, 5, im.shape)
+                    pos[0] * 10 + 5, pos[1] * 10 + 5,
+                    5 + size_noise[idx], im.shape)
                 im[rr, cc, :] = self.colors[idx % self.num_colors][:3]
             elif idx % 3 == 1:
-                rr, cc = triangle(pos[0] * 10, pos[1] * 10, 10, im.shape)
+                rr, cc = triangle(pos[0] * 10, pos[1] * 10,
+                                  10 + size_noise[idx], im.shape)
                 im[rr, cc, :] = self.colors[idx % self.num_colors][:3]
             else:
-                rr, cc = square(pos[0] * 10, pos[1] * 10, 10, im.shape)
+                rr, cc = square(pos[0] * 10, pos[1] * 10,
+                                10 + size_noise[idx], im.shape)
                 im[rr, cc, :] = self.colors[idx % self.num_colors][:3]
         return im
 
@@ -295,7 +323,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Space shapes generator")
     parser.add_argument("--height", type=int, default=6,
                         help="Height of the grid")
-    parser.add_argument("--n_objects", type=int, default=7,
+    parser.add_argument("--n_objects", type=int, default=8,
                         help="Total number of objects in the grid in both"
                         " training samples and test samples")
     parser.add_argument("--n_obj_train", type=int, default=6,
@@ -304,14 +332,26 @@ if __name__ == "__main__":
                         help="Number of samples to generate")
     parser.add_argument("--render", action="store_true", default=False,
                         help="Render and display the first sample")
+    parser.add_argument("--render_confounding", action="store_true",
+                        default=False, help="Addition to the rendering. "
+                        "Also shows the gravity per object and its total"
+                        " direction and magnitude")
     parser.add_argument("--save", action="store_true", default=False,
                         help="Save generated data to file")
     parser.add_argument("--width", type=int, default=6,
                         help="Width of the grid")
-    args = vars(parser.parse_args())
+    args = parser.parse_args()
 
-    generator = SpaceShapesGenerator(**args)
+    generator = SpaceShapesGenerator(width=args.width, height=args.height,
+                                     n_objects=args.n_objects)
+    generator.load_priors()
 
-    generator.generate_data(**args)
-    args['n_obj_train'] = 6
-    generator.generate_data(file_prefix="test_set", **args)
+    # generator.set_priors(save=args.save)
+
+    generator.generate_data(n_obj_train=args.n_obj_train, render=args.render,
+                            n_samples=args.n_samples, save=args.save)
+    # args.n_obj_train = 8
+    # generator.generate_data(n_obj_train=args.n_obj_train,
+    #                         n_samples=args.n_samples, save=args.save,
+    #                         file_prefix="test_set_more_obj_",
+    #                         size_noise_flag=False)

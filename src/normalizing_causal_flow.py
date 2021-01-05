@@ -31,7 +31,7 @@ class NCF(Model):
         feature_maps=32,
         n_scales=3,
         n_layers=3,
-        activation="relu",
+        activation="elu",
         architecture_type="FC_net",
         log_steps=10,
         debug=False,
