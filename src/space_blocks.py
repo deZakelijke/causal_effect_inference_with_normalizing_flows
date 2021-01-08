@@ -226,12 +226,9 @@ class SpaceShapesGenerator():
         """
         distances = object_positions[:, 1:] -\
             np.expand_dims(object_positions[:, 0], 1)
-        weighted_distances = distances * np.expand_dims(object_gravity, -1)
+        weighted_distances = distances * np.expand_dims(object_gravity[:, 1:], -1)
         weighted_distances = weighted_distances
-        print(f"Total gravities: {np.sum(weighted_distances, axis=1)}")
-        print(weighted_distances)
-        print(steering)
-        direction = (steering + np.sum(weighted_distances, axis=1)) / 2
+        direction = steering + np.sum(weighted_distances, axis=1) / 3
         new_pos = np.around(object_positions[:, 0] + direction)
         new_dist = np.linalg.norm(object_positions[:, 1:] -
                                   np.expand_dims(new_pos, 1), axis=-1)
@@ -277,7 +274,6 @@ class SpaceShapesGenerator():
         im : numpy array
             Float array of (10*widh, 10*height, 3) of pixel values.
         """
-        print(object_indices)
         im = np.zeros((self.width * 10, self.height * 10, 3), dtype=float)
         if size_noise_flag:
             size_noise = np.round(np.random.normal(scale=1.5, size=len(object_positions)))
