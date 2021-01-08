@@ -114,13 +114,13 @@ class PlanarFlowLayer(Model):
         u = self.u + (-1 + math.softplus(uw) - uw) * self.w / norm_w
 
         with tf.name_scope("planar_flow") as scope:
-            if training and step is not None and step % 50 == 0:
-                tf.summary.histogram(f"flow_{self.flow_nr}/{self.b.name}",
-                                     self.b, step=step)
-                tf.summary.histogram(f"flow_{self.flow_nr}/{self.w.name}",
-                                     self.w, step=step)
-                tf.summary.histogram(f"flow_{self.flow_nr}/{self.u.name}",
-                                     self.u, step=step)
+            # if training and step is not None and step % 50 == 0:
+            #     tf.summary.histogram(f"flow_{self.flow_nr}/{self.b.name}",
+            #                          self.b, step=step)
+            #     tf.summary.histogram(f"flow_{self.flow_nr}/{self.w.name}",
+            #                          self.w, step=step)
+            #     tf.summary.histogram(f"flow_{self.flow_nr}/{self.u.name}",
+            #                          self.u, step=step)
             h1 = tf.tanh(z @ self.w + self.b)
             return z + h1 @ tf.transpose(u)
 

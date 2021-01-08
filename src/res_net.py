@@ -176,8 +176,8 @@ class ResNet(Model):
             x = self.activation(x)
             x = self.out_layers(x)
 
-            if training and step is not None and step % 50 == 0:
-                self.log_weights(step)
+            # if training and step is not None and step % 50 == 0:
+            #     self.log_weights(step)
 
         return x
 
@@ -303,8 +303,8 @@ class ResidualConvBlock(Model):
                 h = self.nn_layers[i](h, training=training)
                 h = self.activation(h)
                 h = self.nn_layers[i + 1](h, training=training)
-            if training and step is not None and step % 50 == 0:
-                self.log_weights(step)
+            # if training and step is not None and step % 50 == 0:
+            #     self.log_weights(step)
         return x + h
 
     def log_weights(self, step):
