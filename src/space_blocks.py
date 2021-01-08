@@ -84,6 +84,12 @@ class SpaceShapesGenerator():
 
     def set_priors(self, color_scale_factor=2, shape_scale_factor=2,
                    save=False, file_prefix=''):
+        """
+        It has to be more clearly defined if n_objects does or does not
+        include the space ship itself.
+
+        As the hyperparameter it does seem to include it?
+        """
         path = f"{self.save_path}{file_prefix}space_data"
         self.intervention_map = random.standard_normal((self.prior_dims +
                                                         self.n_objects, 2)) * .5
@@ -114,8 +120,7 @@ class SpaceShapesGenerator():
         print(f"Gravities: {self.object_gravity[0]}")
 
     def generate_data(self, n_obj_train=5, n_samples=100, render=False,
-                      save=False, file_prefix='', size_noise_flag=False,
-                      render_confounding=False):
+                      save=False, file_prefix='', size_noise_flag=False):
         path = f"{self.save_path}{file_prefix}space_data"
 
         obj_indices = np.concatenate(([0], np.random.choice(
@@ -123,30 +128,34 @@ class SpaceShapesGenerator():
             replace=False)))
 
         prior_data = random.standard_normal((n_samples, self.prior_dims))
-        object_gravity = np.tile(self.object_gravity, (n_samples, 1))
+        object_gravity = np.tile(self.object_gravity[0, obj_indices],
+                                 (n_samples, 1))
         prior_data = np.concatenate((prior_data, object_gravity), axis=1)
 
-        position_probs = softmax(prior_data @ self.position_map, axis=1)
+        map_indices = np.concatenate((range(self.prior_dims),
+                                      [i + self.prior_dims for i in obj_indices]))
+        position_map = self.position_map[map_indices]
+
+        position_probs = softmax(prior_data @ position_map, axis=1)
         position_probs = np.reshape(position_probs, (n_samples, self.height,
                                                      self.width))
-        object_positions = self.set_positions(position_probs)
+        object_positions = self.set_positions(position_probs, obj_indices)
         # Iterate over number of samples
         rendering = np.array([self.render(objects, obj_indices, size_noise_flag) for objects in
                               object_positions])
-        if render_confounding:
-            pass
 
         if save:
             with h5py.File(f"{path}_x.hdf5", "w") as f:
                 dset = f.create_dataset("Space_dataset_x", data=rendering)
 
-        steering = prior_data @ self.intervention_map
+        steering = prior_data @ self.intervention_map[map_indices]
         if save:
             with h5py.File(f"{path}_t.hdf5", "w") as f:
                 dset = f.create_dataset("Space_dataset_t", data=steering)
 
         move_result = self.move_spaceship(object_positions.copy(),
-                                          object_gravity, steering)
+                                          object_gravity, steering,
+                                          obj_indices)
         tmp = move_result[1] == 0
         dist_to_goal = np.linalg.norm(move_result[0][:, 0] - self.goal, axis=1)
         score = self.calc_score(dist_to_goal)
@@ -156,16 +165,9 @@ class SpaceShapesGenerator():
             print(score[np.where(score > self.scale)])
             raise ValueError("Some scores are out of bounds")
 
-        if render or render_confounding:
+        if render:
             plt.subplot(121)
             plt.imshow(rendering[0])
-            # plt.annotate('', fontsize=20, xy=(.25, .25),
-            #              arrowprops=dict(width=5.,
-            #                              headwidth=5.,
-            #                              headlength=5.,
-            #                              shrink=0.05,
-            #                              linewidth=5,
-            #                              color='red'))
             plt.title(f"Steering: {np.around(steering[0], 2)}\n"
                       f"Score: {score[0]:.2f}")
         print()
@@ -174,7 +176,7 @@ class SpaceShapesGenerator():
             with h5py.File(f"{path}_y.hdf5", "w") as f:
                 dset = f.create_dataset("Space_dataset_y", data=score)
 
-        if render or render_confounding:
+        if render:
             rendering = np.array([self.render(objects, obj_indices, size_noise_flag) for objects
                                   in move_result[0]])
             plt.subplot(122)
@@ -189,9 +191,11 @@ class SpaceShapesGenerator():
         steering_1 = random.normal(loc=(0, 2), size=steering.shape)
 
         move_result_0 = self.move_spaceship(object_positions.copy(),
-                                            object_gravity, steering_0)
+                                            object_gravity, steering_0,
+                                            obj_indices)
         move_result_1 = self.move_spaceship(object_positions.copy(),
-                                            object_gravity, steering_1)
+                                            object_gravity, steering_1,
+                                            obj_indices)
         dist_to_goal_0 = np.linalg.norm(move_result_0[0][:, 0] - self.goal,
                                         axis=1)
         dist_to_goal_1 = np.linalg.norm(move_result_1[0][:, 0] - self.goal,
@@ -216,12 +220,14 @@ class SpaceShapesGenerator():
                 dset = f.create_dataset("Space_dataset_y_predict",
                                         data=score_predict)
 
-    def move_spaceship(self, object_positions, object_gravity, steering):
+    def move_spaceship(self, object_positions, object_gravity, steering,
+                       obj_indices):
         """
         """
         distances = object_positions[:, 1:] -\
             np.expand_dims(object_positions[:, 0], 1)
         weighted_distances = distances * np.expand_dims(object_gravity, -1)
+        weighted_distances = weighted_distances
         print(f"Total gravities: {np.sum(weighted_distances, axis=1)}")
         print(weighted_distances)
         print(steering)
@@ -298,14 +304,19 @@ class SpaceShapesGenerator():
                 im[rr, cc, :] = self.colors[idx % self.num_colors][:3]
         return im
 
-    def set_positions(self, position_probs):
-        """ Generate positions of the objects in the grid."""
+    def set_positions(self, position_probs, obj_indices):
+        """ Generate positions of the objects in the grid.
+        
+        The position of an object is indepentent of its colour and
+        shape, given the priors and position probabilities.
+
+        """
         positions = product(range(self.height), range(self.width))
         positions = np.array([i for i in positions])
         position_idx = []
         for prob in position_probs:
             position_idx.append(random.choice(len(positions),
-                                              self.n_objects + 1,
+                                              len(obj_indices),
                                               replace=False,
                                               p=prob.flatten()))
         position_idx = np.array(position_idx)
@@ -332,10 +343,6 @@ if __name__ == "__main__":
                         help="Number of samples to generate")
     parser.add_argument("--render", action="store_true", default=False,
                         help="Render and display the first sample")
-    parser.add_argument("--render_confounding", action="store_true",
-                        default=False, help="Addition to the rendering. "
-                        "Also shows the gravity per object and its total"
-                        " direction and magnitude")
     parser.add_argument("--save", action="store_true", default=False,
                         help="Save generated data to file")
     parser.add_argument("--width", type=int, default=6,
@@ -350,8 +357,3 @@ if __name__ == "__main__":
 
     generator.generate_data(n_obj_train=args.n_obj_train, render=args.render,
                             n_samples=args.n_samples, save=args.save)
-    # args.n_obj_train = 8
-    # generator.generate_data(n_obj_train=args.n_obj_train,
-    #                         n_samples=args.n_samples, save=args.save,
-    #                         file_prefix="test_set_more_obj_",
-    #                         size_noise_flag=False)
