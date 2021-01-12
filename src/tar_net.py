@@ -36,6 +36,7 @@ class TARNET(Model):
         """
 
         super().__init__(name=name_tag)
+        self.log_2 = tf.math.log(tf.constant(2., dtype=tf.float64))
         self.debug = debug
         self.category_sizes = category_sizes
         self.t_dims = t_dims
@@ -94,7 +95,8 @@ class TARNET(Model):
             l_step = step // (self.log_steps * 5)
             tf.summary.scalar("partial_loss/distortion_y",
                               loss, step=l_step)
-        return loss
+        bpd = loss / (tf.size(y[0], out_type=tf.float64) * self.log_2)
+        return bpd
 
     def do_intervention(self, x, t0, t1, n_samples):
         intermediate_vec = self.x_network(x, None, training=False)
