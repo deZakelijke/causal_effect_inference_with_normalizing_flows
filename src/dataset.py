@@ -512,7 +512,8 @@ def SPACE(params, path_data='datasets/SPACE/', ratio=0.1, separate_files=None,
     params['architecture_type'] = 'ResNet'
 
     if test:
-        prefix = "test_set"
+        prefix = "fixed_gravity_"
+        # prefix = ''
     else:
         prefix = None
 

@@ -17,7 +17,8 @@ from evaluation import calc_stats
 from normalizing_causal_flow import NCF
 from planar_flow import PlanarFlow
 from radial_flow import RadialFlow
-from sylvester_flow import SylvesterFlow
+# from sylvester_flow import SylvesterFlow
+# TODO encoder fixen
 from tar_net import TARNET
 
 VALID_DATASETS = ["IHDP", "IHDP_LARGE", "TWINS", "SPACE", "SPACE_NO_GRAV"]
@@ -389,7 +390,7 @@ def main(params):
         else:
             flow_type_dir = None
         if params['mode'] == 'test':
-            experiment_name = f"test/params['experiment_name']"
+            experiment_name = f"test/{params['experiment_name']}"
         else:
             experiment_name = params['experiment_name']
         logdir = (f"{params['model_dir']}"

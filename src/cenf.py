@@ -7,7 +7,9 @@ from tensorflow.keras.activations import softplus
 from tensorflow.keras.losses import CategoricalCrossentropy, MeanSquaredError
 from tensorflow_probability import distributions as tfd
 
-from cevae import CEVAE, Encoder, Decoder
+from cevae import CEVAE
+from decoder import DecoderCategorical, DecoderContinuous
+from encoder import EncoderCategorical, EncoderContinuous
 from evaluation import calc_stats
 from utils import get_log_prob, get_analytical_KL_divergence
 

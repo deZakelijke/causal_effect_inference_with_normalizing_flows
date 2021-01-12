@@ -351,5 +351,8 @@ if __name__ == "__main__":
 
     # generator.set_priors(save=args.save)
 
-    generator.generate_data(n_obj_train=args.n_obj_train, render=args.render,
-                            n_samples=args.n_samples, save=args.save)
+    generator.generate_data(n_obj_train=args.n_obj_train,
+                            render=args.render,
+                            n_samples=args.n_samples,
+                            save=args.save,
+                            file_prefix="fixed_gravity_")
