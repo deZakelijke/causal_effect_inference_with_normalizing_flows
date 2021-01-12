@@ -99,7 +99,12 @@ class CENF(CEVAE):
 
         elbo_local = encoder_loss + decoder_loss + ldj_z
         elbo = tf.reduce_mean(input_tensor=elbo_local)
-        return -elbo
+        bpd = -elbo / ((tf.size(features[0][0], out_type=tf.float64) + 
+                        tf.size(features[1][0], out_type=tf.float64) +
+                        tf.size(features[2][0], out_type=tf.float64) +
+                        tf.size(features[4][0], out_type=tf.float64)) *
+                       self.log_2)
+        return bpd
 
     def do_intervention(self, x, t0, t1, nr_samples):
         *_, qz_mean, qz_std = self.encoder(x, None, None, None, training=False)
