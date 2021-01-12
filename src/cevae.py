@@ -49,6 +49,7 @@ class CEVAE(Model):
         ----------
         """
         super().__init__(name=name_tag)
+        self.log_2 = tf.math.log(tf.constant(2., dtype=tf.float64))
         self.debug = debug
         # self.category_sizes = category_sizes
         # self.t_dims = t_dims
@@ -129,7 +130,12 @@ class CEVAE(Model):
 
         elbo_local = encoder_loss + decoder_loss
         elbo = tf.reduce_mean(elbo_local)
-        return -elbo
+        bpd = -elbo / ((tf.size(features[0][0], out_type=tf.float64) + 
+                        tf.size(features[1][0], out_type=tf.float64) +
+                        tf.size(features[2][0], out_type=tf.float64) +
+                        tf.size(features[4][0], out_type=tf.float64)) *
+                       self.log_2)
+        return bpd
 
     def do_intervention(self, x, t0, t1, n_samples):
         """ Perform two interventions to compare downstream.
