@@ -44,6 +44,7 @@ class NCF(Model):
         """
 
         super().__init__(name=name_tag)
+        self.log_2 = tf.math.log(tf.constant(2., dtype=tf.float64))
         self.debug = debug
         self.log_steps = log_steps
         self.x_dims = x_dims
@@ -191,13 +192,11 @@ class NCF(Model):
             tf.summary.scalar("partial_loss/distortion_y",
                               tf.reduce_mean(log_px), step=l_step)
 
-        bpd_x = -log_px / (tf.size(z[0], out_type=tf.float64) * self.log_2)
-        bpd_y = -log_py / (tf.size(y[0], out_type=tf.float64) * self.log_2)
-        bpd = -(log_px + log_py) / (tf.size(
-
-            ))
-        loss = tf.reduce_mean(bpd_z + bpd_y)
-        return loss
+        bpd = -tf.reduce_mean(log_px + log_py) / \
+               ((tf.size(features[0][0], out_type=tf.float64) +
+                 tf.size(features[1][0], out_type=tf.float64) +
+                 tf.size(features[2][0], out_type=tf.float64)) * self.log_2)
+        return bpd
 
     def do_intervention(self, x, t0, t1, n_samples):
         ldj = tf.zeros(x.shape[0], dtype=tf.float64)
