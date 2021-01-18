@@ -169,7 +169,6 @@ class NCF(Model):
         z, ldj_xz = self.flow_xz(x, ldj_xz, step, training=training)
         log_pz = self.log_prior(z)
         log_px = log_pz + ldj_xz
-        bpd_z = -log_px / (tf.size(z[0], out_type=tf.float64) * self.log_2)
 
         f_z = self.flatten(z)
         projected_z = self.z_proj(f_z)
@@ -177,22 +176,26 @@ class NCF(Model):
         y_prior, ldj_y = self.flow_y(y, ldj_y, step,
                                      training=training, t=context)
         log_py = self.log_prior(y_prior) + ldj_y
-        bpd_y = -log_py / (tf.size(y[0], out_type=tf.float64) * self.log_2)
-        return bpd_z, bpd_y, z
+        return log_px, log_py, z
 
     @tf.function
-    def loss(self, features, bpd_z, bpd_y, z, step):
+    def loss(self, features, log_px, log_py, z, step):
         """ Loss function of the model. """
         if self.debug:
             print("Calculating loss")
 
         if step is not None and step % (self.log_steps * 10) == 0:
             l_step = step // (self.log_steps * 10)
-            tf.summary.scalar("partial_loss/bpd_z",
-                              tf.reduce_mean(bpd_z), step=l_step)
-            tf.summary.scalar("partial_loss/bpd_y",
-                              tf.reduce_mean(bpd_y), step=l_step)
+            tf.summary.scalar("partial_loss/distortion_x",
+                              tf.reduce_mean(log_px), step=l_step)
+            tf.summary.scalar("partial_loss/distortion_y",
+                              tf.reduce_mean(log_px), step=l_step)
 
+        bpd_x = -log_px / (tf.size(z[0], out_type=tf.float64) * self.log_2)
+        bpd_y = -log_py / (tf.size(y[0], out_type=tf.float64) * self.log_2)
+        bpd = -(log_px + log_py) / (tf.size(
+
+            ))
         loss = tf.reduce_mean(bpd_z + bpd_y)
         return loss
 

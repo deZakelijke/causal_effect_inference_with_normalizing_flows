@@ -13,7 +13,7 @@ from tensorflow_probability import distributions as tfd
 
 
 def IHDP(params, path_data="datasets/IHDP/csv/", ratio=0.1,
-         separate_files=False, file_index=None):
+         separate_files=False, file_index=None, test=False):
     """ Tensorflow Dataset generator for the IHDP dataset.
 
     Parameters
@@ -514,8 +514,9 @@ def SPACE(params, path_data='datasets/SPACE/', ratio=0.1, separate_files=None,
     if test:
         prefix = "fixed_gravity_"
         # prefix = ''
+        # prefix = "test_set_size_noise_"
     else:
-        prefix = None
+        prefix = ''
 
     with h5py.File(f"{path_data}{prefix}space_data_x.hdf5", "r") as f:
         x = np.array(f['Space_dataset_x'])

@@ -123,7 +123,7 @@ class SylvesterFlow(CENF):
         qz_k = tf.reshape(qz, z_shape)
 
         decoder_params = self.decoder(qz_k, t, step, training=training)
-        return encoder_params, qz_k, ldj, decoder_params
+        return encoder_params, qz_k, ldj * 0.001, decoder_params
 
     @staticmethod
     def tanh_deriv(x):
