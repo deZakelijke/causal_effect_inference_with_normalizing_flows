@@ -17,8 +17,7 @@ from evaluation import calc_stats
 from normalizing_causal_flow import NCF
 from planar_flow import PlanarFlow
 from radial_flow import RadialFlow
-# from sylvester_flow import SylvesterFlow
-# TODO encoder fixen
+from sylvester_flow import SylvesterFlow
 from tar_net import TARNET
 
 VALID_DATASETS = ["IHDP", "IHDP_LARGE", "TWINS", "SPACE", "SPACE_NO_GRAV"]

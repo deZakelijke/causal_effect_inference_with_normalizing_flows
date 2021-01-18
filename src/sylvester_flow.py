@@ -10,7 +10,7 @@ from tensorflow import nn
 from tensorflow_probability import distributions as tfd
 
 from cenf import CENF
-from cevae import Encoder
+from encoder import Encoder, EncoderCategorical, EncoderContinuous
 from utils import get_analytical_KL_divergence
 
 
@@ -78,16 +78,6 @@ class SylvesterFlow(CENF):
         z_dims = tf.cast(tf.reduce_prod(z_dims), tf.int32).numpy()
         self.z_dims = z_dims
 
-        if t_type == "Categorical":
-            t_loss = CategoricalCrossentropy()
-            t_dist = lambda x: tfd.OneHotCategorical(probs=x,
-                                                     dtype=tf.float64)
-            t_activation = nn.softmax
-        else:
-            t_loss = MeanSquaredError()
-            t_dist = lambda x: tfd.Normal(x, scale=tf.ones_like(x))
-            t_activation = lambda x: x
-
         if y_type == "Categorical":
             y_loss = CategoricalCrossentropy()
             y_dist = lambda x: tfd.OneHotCategorical(probs=x,
@@ -98,11 +88,22 @@ class SylvesterFlow(CENF):
             y_dist = lambda x: tfd.Normal(x, scale=tf.ones_like(x))
             y_activation = lambda x: x
 
-        self.encoder = SylvesterEncoder(x_dims, t_dims, t_dist, t_loss,
-                                        t_activation, y_dims, y_dist, y_loss,
-                                        y_activation, z_dims, "Encoder",
-                                        feature_maps, architecture_type,
-                                        n_flows, householder_maps, debug)
+        if t_type == "Categorical":
+            self.encoder = SylvesterEncoderCategorical(x_dims, t_dims, y_dims,
+                                                       y_dist, y_loss,
+                                                       y_activation, z_dims,
+                                                       "Encoder", feature_maps,
+                                                       architecture_type,
+                                                       n_flows,
+                                                       householder_maps, debug)
+        else:
+            self.encoder = SylvesterEncoderContinuous(x_dims, t_dims, y_dims,
+                                                      y_dist, y_loss,
+                                                      y_activation, z_dims,
+                                                      "Encoder", feature_maps,
+                                                      architecture_type,
+                                                      n_flows,
+                                                      householder_maps, debug)
 
     @tf.function
     def call(self, x, t, y, step, training=False):
@@ -167,49 +168,9 @@ class SylvesterFlow(CENF):
         return y0, y1
 
 
-class SylvesterEncoder(Encoder):
-    """ Special encoder for the Sylvester flow.
-
-    This encoder also outputs the Q and R values for each layer of the
-    sylvester flow.
-    """
-    def __init__(
-        self,
-        x_dims=30,
-        t_dims=2,
-        t_dist=None,
-        t_loss=None,
-        t_activation=None,
-        y_dims=1,
-        y_dist=None,
-        y_loss=None,
-        y_activation=None,
-        z_dims=32,
-        name_tag="no_name",
-        feature_maps=200,
-        architecture_type="FC_net",
-        n_flows=4,
-        householder_maps=8,
-        debug=False
-    ):
-
-        super().__init__(
-            x_dims=x_dims,
-            t_dims=t_dims,
-            t_dist=t_dist,
-            t_loss=t_loss,
-            t_activation=t_activation,
-            y_dims=y_dims,
-            y_dist=y_dist,
-            y_loss=y_loss,
-            y_activation=y_activation,
-            z_dims=z_dims,
-            name_tag=name_tag,
-            feature_maps=feature_maps,
-            architecture_type=architecture_type,
-            debug=debug
-        )
-
+class SylvesterEncoder:
+    
+    def create_extra_layers(self, z_dims, n_flows, householder_maps):
         self.n_flows = n_flows
         self.householder_maps = householder_maps
         self.diag_idx = tf.range(z_dims)
@@ -225,12 +186,207 @@ class SylvesterEncoder(Encoder):
         self.diag_map1 = layers.Dense(z_dims * n_flows, activation='tanh')
         self.diag_map2 = layers.Dense(z_dims * n_flows, activation='tanh')
 
+    def batch_construct_orthogonal(self, Q):
+        """ Batch construction of orthogonal matrix"""
+        Q = tf.reshape(Q, [-1, self.z_dims])
+        norm = tf.norm(Q, axis=1, keepdims=True)
+        v = Q / norm
+        vvT = tf.einsum('ij,ik->ijk', v, v)
+
+        amat = self.eye = vvT
+        amat = tf.reshape(amat, [-1, self.householder_maps,
+                                 self.z_dims, self.z_dims])
+
+        tmp = amat[:, 0]
+        for k in tf.range(1, self.householder_maps):
+            tmp = amat[:, k] @ tmp
+        Q = tf.reshape(tmp, [-1, self.n_flows, self.z_dims, self.z_dims])
+        return Q
+
+    @tf.function
+    def loss(self, features, encoder_params, step):
+        x_cat, x_cont, t, _, y, *_ = features
+        qt_prob, qy_mean, qz_mean, qz_std, _, _, _, _, = encoder_params
+        rate = get_analytical_KL_divergence(qz_mean, qz_std)
+        variational_t = self.t_loss(t, qt_prob)
+        variational_y = self.y_loss(y, qy_mean)
+        if step is not None and step % (self.log_steps * 10) == 0:
+            l_step = step // (self.log_steps * 10)
+            tf.summary.scalar("partial_loss/rate_z",
+                              tf.reduce_mean(rate), step=l_step)
+            tf.summary.scalar("partial_loss/variational_t",
+                              tf.reduce_mean(variational_t), step=l_step)
+            tf.summary.scalar("partial_loss/variational_y",
+                              tf.reduce_mean(variational_y), step=l_step)
+        encoder_loss = -(rate + variational_t + variational_y)
+        return encoder_loss
+
+
+class SylvesterEncoderCategorical(SylvesterEncoder, EncoderCategorical):
+    """ Special encoder for the Sylvester flow.
+
+    This encoder also outputs the Q and R values for each layer of the
+    sylvester flow.
+    """
+    def __init__(
+        self,
+        x_dims=30,
+        t_dims=2,
+        y_dims=1,
+        y_dist=None,
+        y_loss=None,
+        y_activation=None,
+        z_dims=32,
+        name_tag="no_name",
+        feature_maps=200,
+        architecture_type="FC_net",
+        n_flows=4,
+        householder_maps=8,
+        debug=False,
+        **kwargs
+    ):
+
+        super().__init__(
+            x_dims=x_dims,
+            t_dims=t_dims,
+            y_dims=y_dims,
+            y_dist=y_dist,
+            y_loss=y_loss,
+            y_activation=y_activation,
+            z_dims=z_dims,
+            name_tag=name_tag,
+            feature_maps=feature_maps,
+            architecture_type=architecture_type,
+            n_flows=n_flows,
+            householder_maps=householder_maps,
+            debug=debug,
+        )
+
+        self.create_extra_layers(z_dims, n_flows, householder_maps)
+        self.xyt_map = layers.Dense(z_dims * t_dims)
+
     @tf.function
     def call(self, x, t, y, step, training=False):
         if self.debug:
             print("Encoding")
-        qt_prob = self.t_activation(self.qt_logits(x, step, training=training))
-        qt = tfd.Independent(self.t_dist(qt_prob),
+        qt_prob = nn.softmax(self.qt_logits(x, step, training=training))
+        qt = tfd.Independent(tfd.OneHotCategorical(probs=qt_prob,
+                                                   dtype=tf.float64),
+                             reinterpreted_batch_ndims=1,
+                             name="qt")
+        qt_sample = qt.sample()
+
+        hqy = self.hqy(x, step, training=training)
+        mu_qy_t = self.mu_qy_t(hqy, step, training=training)
+        mu_qy_t = tf.reshape(mu_qy_t, (len(x), self.y_dims, self.t_dims))
+        shape = tf.concat([[len(x)],
+                           tf.ones(tf.rank(mu_qy_t) - 2, dtype=tf.int32),
+                           [qt_sample.shape[-1]]], axis=0)
+
+        if training:
+            t = tf.reshape(t, shape)
+            qy_mean = tf.reduce_sum(t * mu_qy_t, axis=-1)
+        else:
+            qt_sample = tf.reshape(qt_sample, shape)
+            qy_mean = tf.reduce_sum(qt_sample * mu_qy_t, axis=-1)
+        qy_mean = self.y_activation(qy_mean)
+        qy = tfd.Independent(self.y_dist(qy_mean),
+                             reinterpreted_batch_ndims=1,
+                             name='qy')
+
+        if training:
+            xy = tf.concat([hqy, y], -1)
+        else:
+            xy = tf.concat([hqy, qy.sample()], -1)
+
+        qz_t = self.qz_t(xy, step, training=training)
+        qz_t = tf.reshape(qz_t, (len(x), self.z_dims * 2, self.t_dims))
+        qz_mean, qz_std = tf.split(qz_t, 2, axis=-2)
+
+        xyt = tf.reshape(self.xyt_map(xy), (-1, self.z_dims, self.t_dims))
+
+        if training:
+            qz_mean = tf.reduce_sum(t * qz_mean, axis=-1)
+            qz_std = tf.reduce_sum(t * softplus(qz_std), axis=-1)
+            xyt = tf.reduce_sum(t * xyt, axis=-1)
+        else:
+            qz_mean = tf.reduce_sum(qt_sample * qz_mean, axis=-1)
+            qz_std = tf.reduce_sum(qt_sample * softplus(qz_std), axis=-1)
+            xyt = tf.reduce_sum(qt_sample * xyt, axis=-1)
+
+        triangular = self.tri_map(xyt)
+        diag1 = self.diag_map1(xyt)
+        diag2 = self.diag_map2(xyt)
+
+        triangular = tf.reshape(triangular,
+                                [-1, self.z_dims, self.z_dims, self.n_flows])
+        diag1 = tf.reshape(diag1, [-1, self.z_dims, self.n_flows])
+        diag2 = tf.reshape(diag2, [-1, self.z_dims, self.n_flows])
+
+        R1 = triangular * self.triu_mask
+        R2 = tf.transpose(triangular, perm=[0, 2, 1, 3]) * self.triu_mask
+
+        R1 = tf.transpose(tf.linalg.set_diag(tf.transpose(R1, [0, 3, 1, 2]),
+                                             tf.transpose(diag1, [0, 2, 1])),
+                          [0, 2, 3, 1])
+        R2 = tf.transpose(tf.linalg.set_diag(tf.transpose(R2, [0, 3, 1, 2]),
+                                             tf.transpose(diag2, [0, 2, 1])),
+                          [0, 2, 3, 1])
+
+        Q = self.Q_map(xyt)
+        Q = self.batch_construct_orthogonal(Q)
+
+        b = self.b_map(xyt)
+        b = tf.reshape(b, [-1, self.z_dims, self.n_flows])
+        return qt_prob, qy_mean, qz_mean, qz_std, R1, R2, Q, b
+
+
+class SylvesterEncoderContinuous(SylvesterEncoder, EncoderContinuous):
+    """ Special encoder for the Sylvester flow.
+
+    This encoder also outputs the Q and R values for each layer of the
+    sylvester flow.
+    """
+    def __init__(
+        self,
+        x_dims=30,
+        t_dims=2,
+        y_dims=1,
+        y_dist=None,
+        y_loss=None,
+        y_activation=None,
+        z_dims=32,
+        name_tag="no_name",
+        feature_maps=200,
+        architecture_type="FC_net",
+        n_flows=4,
+        householder_maps=8,
+        debug=False,
+        **kwargs
+    ):
+
+        super().__init__(
+            x_dims=x_dims,
+            t_dims=t_dims,
+            y_dims=y_dims,
+            y_dist=y_dist,
+            y_loss=y_loss,
+            y_activation=y_activation,
+            z_dims=z_dims,
+            name_tag=name_tag,
+            feature_maps=feature_maps,
+            architecture_type=architecture_type,
+            debug=debug,
+        )
+
+        self.create_extra_layers(z_dims, n_flows, householder_maps)
+
+    @tf.function
+    def call(self, x, t, y, step, training=False):
+        if self.debug:
+            print("Encoding")
+        qt_prob = self.qt_logits(x, step, training=training)
+        qt = tfd.Independent(tfd.Normal(qt_prob, scale=tf.ones_like(qt_prob)),
                              reinterpreted_batch_ndims=1,
                              name="qt")
         qt_sample = qt.sample()
@@ -281,41 +437,6 @@ class SylvesterEncoder(Encoder):
         b = self.b_map(xyt)
         b = tf.reshape(b, [-1, self.z_dims, self.n_flows])
         return qt_prob, qy_mean, qz_mean, qz_std, R1, R2, Q, b
-
-    def batch_construct_orthogonal(self, Q):
-        """ Batch construction of orthogonal matrix"""
-        Q = tf.reshape(Q, [-1, self.z_dims])
-        norm = tf.norm(Q, axis=1, keepdims=True)
-        v = Q / norm
-        vvT = tf.einsum('ij,ik->ijk', v, v)
-
-        amat = self.eye = vvT
-        amat = tf.reshape(amat, [-1, self.householder_maps,
-                                 self.z_dims, self.z_dims])
-
-        tmp = amat[:, 0]
-        for k in tf.range(1, self.householder_maps):
-            tmp = amat[:, k] @ tmp
-        Q = tf.reshape(tmp, [-1, self.n_flows, self.z_dims, self.z_dims])
-        return Q
-
-    @tf.function
-    def loss(self, features, encoder_params, step):
-        x_cat, x_cont, t, _, y, *_ = features
-        qt_prob, qy_mean, qz_mean, qz_std, _, _, _, _, = encoder_params
-        rate = get_analytical_KL_divergence(qz_mean, qz_std)
-        variational_t = self.t_loss(t, qt_prob)
-        variational_y = self.y_loss(y, qy_mean)
-        if step is not None and step % (self.log_steps * 10) == 0:
-            l_step = step // (self.log_steps * 10)
-            tf.summary.scalar("partial_loss/rate_z",
-                              tf.reduce_mean(rate), step=l_step)
-            tf.summary.scalar("partial_loss/variational_t",
-                              tf.reduce_mean(variational_t), step=l_step)
-            tf.summary.scalar("partial_loss/variational_y",
-                              tf.reduce_mean(variational_y), step=l_step)
-        encoder_loss = -(rate + variational_t + variational_y)
-        return encoder_loss
 
 
 def test_sylvester_flow():

@@ -26,7 +26,8 @@ class Encoder(Model):
         t_loss=None,
         y_loss=None,
         name_tag="no_name",
-        debug=False
+        debug=False,
+        **kwargs
     ):
         """
         Parameters
@@ -78,7 +79,7 @@ class EncoderCategorical(Encoder):
         name_tag="no_name",
         feature_maps=200,
         architecture_type="FC_net",
-        debug=False
+        debug=False,
     ):
         """
         Parameters
@@ -90,7 +91,7 @@ class EncoderCategorical(Encoder):
             t_loss=CategoricalCrossentropy(),
             y_loss=y_loss,
             name_tag=name_tag,
-            debug=debug
+            debug=debug,
         )
         self.t_dims = t_dims
         self.y_dims = y_dims

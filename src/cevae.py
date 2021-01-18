@@ -42,7 +42,7 @@ class CEVAE(Model):
         architecture_type="FC_net",
         log_steps=10,
         debug=False,
-        **_
+        **kwargs
     ):
         """
         Parameters
