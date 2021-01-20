@@ -257,8 +257,6 @@ class SylvesterEncoderCategorical(SylvesterEncoder, EncoderCategorical):
             name_tag=name_tag,
             feature_maps=feature_maps,
             architecture_type=architecture_type,
-            n_flows=n_flows,
-            householder_maps=householder_maps,
             debug=debug,
         )
 
