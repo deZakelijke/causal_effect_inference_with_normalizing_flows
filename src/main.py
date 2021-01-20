@@ -148,7 +148,7 @@ def parse_arguments():
     return vars(args)
 
 
-def print_stats(stats, index, training=False):
+def print_stats(stats, index, training=False, loss=None):
     """ Prints the statistics and puts them in Tensorboard.
 
     Prints the tuple of statistics in a readable format and passes them to the
@@ -171,7 +171,7 @@ def print_stats(stats, index, training=False):
     else:
         prefix = "test"
 
-    print(f"Dataset: {prefix}\nAverage ite: {stats[0]:.4f}, "
+    print(f"\nDataset: {prefix}\nAverage ite: {stats[0]:.4f}, "
           f"abs ate: {stats[1]:.4f}, "
           f"pehe: {stats[2]:.4f},\n"
           f"y_error factual: {stats[3][0]:.4f}, "
@@ -183,6 +183,17 @@ def print_stats(stats, index, training=False):
     tf.summary.scalar(f"metrics/{prefix}/y_factual", stats[3][0], step=index)
     tf.summary.scalar(f"metrics/{prefix}/y_counterfactual", stats[3][1],
                       step=index)
+
+    if loss is not None:
+        ite_ratio = stats[0] / loss
+        ate_ratio = stats[1] / loss
+        pehe_ratio = stats[2] / loss
+        print(f"Ratios of stats vs loss on {prefix} set:\n"
+              f"ITE ratio: {ite_ratio}\n"
+              f"ATE ratio: {ate_ratio}\nPEHE ratio: {pehe_ratio}")
+        tf.summary.scalar(f"ratios/{prefix}/ite_ratio", ite_ratio, step=index)
+        tf.summary.scalar(f"ratios/{prefix}/ate_ratio", ate_ratio, step=index)
+        tf.summary.scalar(f"ratios/{prefix}/pehe_ratio", pehe_ratio, step=index)
 
 
 def grad(model, features, gradient_clipping, step, debug):
@@ -281,27 +292,30 @@ def train(params, writer, logdir, train_iteration=0):
                 avg_loss += loss_value
                 optimizer.apply_gradients(zip(grads,
                                               model.trainable_variables))
+            avg_loss /= tf.cast(len_epoch, tf.float64)
+
             if epoch % params["log_steps"] == 0:
                 test_dataset = test_dataset.shuffle(len_dataset)
-                print(f"Epoch: {epoch}, average training loss: "
-                      f"{(avg_loss / tf.cast(len_epoch, tf.float64)):.4f}")
+                print(f"Epoch: {epoch}, average training loss: {avg_loss:.4f}")
                 l_step = (epoch + global_log_step) // params['log_steps']
-                tf.summary.scalar("metrics/train/loss", loss_value,
+                tf.summary.scalar("metrics/train/loss", avg_loss,
                                   step=l_step)
+
                 stats = calc_stats(model, train_dataset, scaling_data, params)
-                print_stats(stats, l_step, training=True)
+                print_stats(stats, l_step, training=True, loss=loss_value)
+
                 stats = calc_stats(model, test_dataset, scaling_data, params)
-                print_stats(stats, l_step, training=False)
+                print_stats(stats, l_step, training=False, loss=loss_value)
                 if not params["debug"]:
                     model.save_weights(f"{logdir}/model_{train_iteration}")
-            # model.encoder.annealing_factor = max(1, model.encoder.annealing_factor * 1.2)
 
-        print(f"Epoch: {epoch}, average loss: "
-              f"{(avg_loss / tf.dtypes.cast(len_epoch, tf.float64)):.4f}")
+        print(f"Epoch: {epoch}, average loss: {avg_loss:.4f}")
         l_step = (epoch + global_log_step + 1) // params['log_steps']
         tf.summary.scalar("metrics/train/loss", loss_value, step=l_step)
+
         stats_train = calc_stats(model, train_dataset, scaling_data, params)
         print_stats(stats_train, l_step, training=True)
+
         stats_test = calc_stats(model, test_dataset, scaling_data, params)
         print_stats(stats_test, l_step, training=False)
 
@@ -364,16 +378,7 @@ def test(params, writer, logdir):
         dataset = dataset.shuffle(len_dataset)
         stats = calc_stats(model, dataset, scaling_data, params)
         print_stats(stats, 0, training=False)
-        # avg_loss = 0
-        # for step, features in train_dataset.batch(params['batch_size'])\
-        #         .enumerate():
-        #     step = tf.constant(step)
-        #     x = tf.concat([features[0], features[1]], -1)
-        #     t = features[2]
-        #     y = features[4]
-        #     output = model(x, t, y, step, training=False)
-        #     loss = model.loss(features, *output, step)
-        #     avg_loss += loss
+
 
 def main(params):
     """ Main execution.
