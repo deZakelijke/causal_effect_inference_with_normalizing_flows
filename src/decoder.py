@@ -51,8 +51,11 @@ class Decoder(Model):
                                    self.category_sizes))
     
         distortion_x_cat = CategoricalCrossentropy()(x_cat, x_cat_prob)
-        # Use relu to set nans to zero
-        distortion_x_cont = nn.relu(MeanSquaredError()(x_cont, x_cont_mean))
+        distortion_x_cont = MeanSquaredError()(x_cont, x_cont_mean)
+        # Remove nans
+        distortion_x_cont = tf.where(distortion_x_cont!=distortion_x_cont,
+                                     tf.cast(0.0, dtype=tf.float64),
+                                     distortion_x_cont)
         distortion_x = distortion_x_cat + distortion_x_cont
         distortion_t = self.t_loss(t, t_prob)
         distortion_y = self.y_loss(y, y_mean)

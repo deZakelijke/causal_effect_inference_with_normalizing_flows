@@ -188,9 +188,9 @@ class NCF(Model):
         if step is not None and step % (self.log_steps * 10) == 0:
             l_step = step // (self.log_steps * 10)
             tf.summary.scalar("partial_loss/distortion_x",
-                              tf.reduce_mean(log_px), step=l_step)
+                              -tf.reduce_mean(log_px), step=l_step)
             tf.summary.scalar("partial_loss/distortion_y",
-                              tf.reduce_mean(log_px), step=l_step)
+                              -tf.reduce_mean(log_px), step=l_step)
 
         bpd = -tf.reduce_mean(log_px + log_py) / \
                ((tf.size(features[0][0], out_type=tf.float64) +
