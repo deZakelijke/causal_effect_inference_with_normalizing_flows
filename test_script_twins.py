@@ -1,12 +1,12 @@
 import os
 
 BATCH_SIZE = 32
-DATASET = "IHDP"
-EPOCHS = 250
+DATASET = "TWINS"
+EPOCHS = 200
 EXP_NAME = "test_script"
 FEATURE_MAPS = 200
 LEARNING_RATE = 0.00001
-LOG_STEPS=25
+LOG_STEPS=20
 N_FLOWS = 4
 
 
@@ -23,8 +23,7 @@ for model in MODELS:
               f"--flow_type AffineCoupling "\
               f"--learning_rate {LEARNING_RATE} "\
               f"--model {model} "\
-              f"--n_flows {N_FLOWS} "\
-              "--separate_files"
+              f"--n_flows {N_FLOWS} "
     os.system(command)
 
 command = "python3.7 src/main.py "\
@@ -36,7 +35,6 @@ command = "python3.7 src/main.py "\
           f"--flow_type NLSCoupling "\
           f"--learning_rate {LEARNING_RATE} "\
           f"--model {model} "\
-          f"--n_flows {N_FLOWS} "\
-          "--separate_files"
+          f"--n_flows {N_FLOWS} "
 os.system(command)
     
