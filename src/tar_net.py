@@ -91,8 +91,8 @@ class TARNET(Model):
         distortion_y = self.y_loss(y, y_pred)
         loss = tf.reduce_mean(distortion_y)
 
-        if step is not None and step % (self.log_steps * 5) == 0:
-            l_step = step // (self.log_steps * 5)
+        if step is not None and step % (self.log_steps * 10) == 0:
+            l_step = step // (self.log_steps * 10)
             tf.summary.scalar("partial_loss/distortion_y",
                               loss, step=l_step)
         bpd = loss / (tf.size(y[0], out_type=tf.float64) * self.log_2)
