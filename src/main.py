@@ -96,6 +96,9 @@ def parse_arguments():
     parser.add_argument("--n_samples", type=int, default=100,
                         help="Number of samples to draw when performing an"
                         "intervention, if sampling is used (default: 100)")
+    parser.add_argument("--path_dataset", type=str, default="",
+                        help="Pass the path of the dataset folder if not "
+                        "using default path.")
     parser.add_argument("--separate_files", action="store_true", default=False,
                         help="Switch to training the model on each data file "
                         "separately instead of everything at once")
@@ -259,10 +262,15 @@ def train(params, writer, logdir, train_iteration=0):
 
     debug = params['debug']
     cardinality = tf.data.experimental.cardinality
-    data = eval(params['dataset'])
-    train_dataset, test_dataset = data(params,
-                                       separate_files=params['separate_files'],
-                                       file_index=train_iteration)
+    data_loader = eval(params['dataset'])
+    if params["path_dataset"] is "":
+        data = data_loader(params, separate_files=params['separate_files'],
+                           file_index=train_iteration)
+    else:
+        data = data_loader(params, path_data=params['path_dataset'],
+                           separate_files=params['separate_files'],
+                           file_index=train_iteration)
+    train_dataset, test_dataset = data
     scaling_data = params['scaling_data']
 
     len_dataset = cardinality(train_dataset)
@@ -356,9 +364,17 @@ def test(params, writer, logdir):
     """
     debug = params['debug']
     cardinality = tf.data.experimental.cardinality
-    data = eval(params['dataset'])
-    dataset, _ = data(params, ratio=0.00001,
-                            separate_files=params['separate_files'], test=True)
+    data_loader = eval(params['dataset'])
+    if params["path_dataset"] is None:
+        dataset, _ = data_loader(params, ratio=0.00001, test=True,
+                                 separate_files=params['separate_files'],
+                                 file_index=train_iteration)
+    else:
+        dataset, _ = data_loader(params, ratio=0.00001, test=True,
+                                 path_data=params['path_dataset'],
+                                 separate_files=params['separate_files'],
+                                 file_index=train_iteration)
+    
     scaling_data = params['scaling_data']
 
     len_dataset = cardinality(dataset)
