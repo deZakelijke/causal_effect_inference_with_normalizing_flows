@@ -2,6 +2,7 @@
 notes.txt
 bin/
 images/
+logs/
 
 # Folder with all datasets
 datasets/
