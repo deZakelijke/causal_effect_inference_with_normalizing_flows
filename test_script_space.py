@@ -1,19 +1,25 @@
-import os
+import subprocess
 
 BATCH_SIZE = 16
-DATASET = "TWINS"
+DATASET = "SPACE"
 EPOCHS = 100
-EXP_NAME = "test_script_original_data_4_flows"
-FEATURE_MAPS = 32
+EXP_NAME = "test_script_second_data_2_flows_fmaps_16"
+FEATURE_MAPS = 16
 LEARNING_RATE = 0.0001
 LOG_STEPS=10
-N_FLOWS = 4
+N_FLOWS = 2
+LOG_DIR = "logs/"
+N_SAMPLES = 20
 
 
 MODELS = ["TARNET", "CEVAE", "PlanarFlow", "RadialFlow", "SylvesterFlow", "NCF"]
 FLOW_TYPE = ["AffineCoupling", "NLSCoupling"]
 
 for model in MODELS:
+    # if model == "SylvesterFlow":
+    #     n_samples = 20
+    # else:
+    #     n_samples = 100
     command = "python3.7 src/main.py "\
               f"--batch_size {BATCH_SIZE} "\
               f"--dataset {DATASET} "\
@@ -23,8 +29,18 @@ for model in MODELS:
               f"--flow_type AffineCoupling "\
               f"--learning_rate {LEARNING_RATE} "\
               f"--model {model} "\
-              f"--n_flows {N_FLOWS} "
-    os.system(command)
+              f"--n_flows {N_FLOWS} "\
+              f"--n_samples {n_samples}"
+    process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE)
+    stdout, stderr = process.communicate()
+    stdout = str(stdout, 'utf-8')
+    stderr = str(stderr, 'utf-8')
+    with open(f"{LOG_DIR}SPACE_stdout_{EXP_NAME}.txt", "a") as f:
+        f.write(f"\n\n{stdout}\n")
+    with open(f"{LOG_DIR}SPACE_stderr_{EXP_NAME}.txt", "a") as f:
+        f.write(f"{model}\n")
+        f.write(f"\n\n{stderr}\n")
 
 command = "python3.7 src/main.py "\
           f"--batch_size {BATCH_SIZE} "\
@@ -36,5 +52,13 @@ command = "python3.7 src/main.py "\
           f"--learning_rate {LEARNING_RATE} "\
           f"--model {model} "\
           f"--n_flows {N_FLOWS} "
-os.system(command)
-    
+process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE,
+                           stderr=subprocess.PIPE)
+stdout, stderr = process.communicate()
+stdout = str(stdout, 'utf-8')
+stderr = str(stderr, 'utf-8')
+with open(f"{LOG_DIR}SPACE_stdout_{EXP_NAME}.txt", "a") as f:
+    f.write(f"\n\n{stdout}\n")
+with open(f"{LOG_DIR}SPACE_stderr_{EXP_NAME}.txt", "a") as f:
+    f.write(f"{model}\n")
+    f.write(f"\n\n{stderr}\n")
