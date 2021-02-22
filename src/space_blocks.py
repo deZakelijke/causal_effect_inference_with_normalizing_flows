@@ -120,7 +120,7 @@ class SpaceShapesGenerator():
         print(f"Gravities: {self.object_gravity[0]}")
 
     def generate_data(self, n_obj_train=5, n_samples=100, render=False,
-                      save=False, file_prefix='', size_noise_flag=False):
+                      save=False, file_prefix='', size_noise_flag=0.0):
         path = f"{self.save_path}{file_prefix}space_data"
 
         obj_indices = np.concatenate(([0], np.random.choice(
@@ -250,7 +250,7 @@ class SpaceShapesGenerator():
         c = np.any(new_pos > 5.0, axis=1)
         return a | b | c
 
-    def render(self, object_positions, object_indices, size_noise_flag=False):
+    def render(self, object_positions, object_indices, size_noise_flag=0.0):
         """ Render scence for particular state
 
         Create an image as a numpy array and paint the specific shapes at
@@ -276,7 +276,8 @@ class SpaceShapesGenerator():
         """
         im = np.zeros((self.width * 10, self.height * 10, 3), dtype=float)
         if size_noise_flag:
-            size_noise = np.round(np.random.normal(scale=1.5, size=len(object_positions)))
+            size_noise = np.round(np.random.normal(scale=size_noise_flag,
+                                                   size=len(object_positions)))
             size_noise[size_noise < -2.] = -2.
         else:
             size_noise = np.zeros((len(object_positions)))
@@ -341,18 +342,23 @@ if __name__ == "__main__":
                         help="Render and display the first sample")
     parser.add_argument("--save", action="store_true", default=False,
                         help="Save generated data to file")
+    parser.add_argument("--size_noise", type=float, default=0.0,
+                        help="Ratio to distort the size of each object with. "\
+                             "This value corresponds to the std of the distortion.")
     parser.add_argument("--width", type=int, default=6,
                         help="Width of the grid")
     args = parser.parse_args()
 
     generator = SpaceShapesGenerator(width=args.width, height=args.height,
                                      n_objects=args.n_objects)
-    generator.load_priors()
+    file_prefix = "second_set_"
+    generator.load_priors(file_prefix=file_prefix)
 
-    # generator.set_priors(save=args.save)
-
+    # generator.set_priors(save=args.save, file_prefix=file_prefix)
+    file_prefix = f"test_second_set_n_obj_{args.n_obj_train}_"
     generator.generate_data(n_obj_train=args.n_obj_train,
                             render=args.render,
                             n_samples=args.n_samples,
                             save=args.save,
-                            file_prefix="fixed_gravity_")
+                            file_prefix=file_prefix,
+                            size_noise_flag=args.size_noise)

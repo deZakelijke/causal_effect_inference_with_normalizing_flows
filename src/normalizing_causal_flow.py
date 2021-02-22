@@ -165,7 +165,7 @@ class NCF(Model):
 
         ldj_xz = tf.zeros(x.shape[0], dtype=tf.float64)
         ldj_y = tf.zeros(y.shape[0], dtype=tf.float64)
-        x = self.dequantize(x)
+        # x = self.dequantize(x)
 
         z, ldj_xz = self.flow_xz(x, ldj_xz, step, training=training)
         log_pz = self.log_prior(z)
@@ -200,7 +200,7 @@ class NCF(Model):
 
     def do_intervention(self, x, t0, t1, n_samples):
         ldj = tf.zeros(x.shape[0], dtype=tf.float64)
-        x = self.dequantize(x)
+        # x = self.dequantize(x)
         z, ldj_xz = self.flow_xz(x, ldj, None, training=False)
         ldj = tf.zeros(x.shape[0] * n_samples, dtype=tf.float64)
         f_z = self.flatten(z)

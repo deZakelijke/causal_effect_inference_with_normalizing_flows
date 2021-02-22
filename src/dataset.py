@@ -512,11 +512,11 @@ def SPACE(params, path_data='datasets/SPACE/', ratio=0.1, separate_files=None,
     params['architecture_type'] = 'ResNet'
 
     if test:
-        prefix = "fixed_gravity_"
-        # prefix = ''
+        # prefix = "fixed_gravity_"
+        prefix = ''
         # prefix = "test_set_size_noise_"
     else:
-        prefix = ''
+        prefix = 'second_set_'
 
     with h5py.File(f"{path_data}{prefix}space_data_x.hdf5", "r") as f:
         x = np.array(f['Space_dataset_x'])

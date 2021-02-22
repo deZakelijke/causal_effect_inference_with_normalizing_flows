@@ -365,15 +365,13 @@ def test(params, writer, logdir):
     debug = params['debug']
     cardinality = tf.data.experimental.cardinality
     data_loader = eval(params['dataset'])
-    if params["path_dataset"] is None:
+    if params["path_dataset"] is "":
         dataset, _ = data_loader(params, ratio=0.00001, test=True,
-                                 separate_files=params['separate_files'],
-                                 file_index=train_iteration)
+                                 separate_files=params['separate_files'])
     else:
         dataset, _ = data_loader(params, ratio=0.00001, test=True,
                                  path_data=params['path_dataset'],
-                                 separate_files=params['separate_files'],
-                                 file_index=train_iteration)
+                                 separate_files=params['separate_files'])
     
     scaling_data = params['scaling_data']
 
